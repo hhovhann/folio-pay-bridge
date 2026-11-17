@@ -1,5 +1,5 @@
 # Build on Amazon Linux 2023 with Corretto 17, run on the same base without the JDK.
-FROM amazoncorretto:17-al2023 AS build
+FROM amazoncorretto:26-al2023 AS build
 # The AL2023 image ships without tar and gzip, which the Maven wrapper needs to unpack Maven.
 RUN dnf install -y tar gzip && dnf clean all
 WORKDIR /src
@@ -9,7 +9,7 @@ RUN ./mvnw -q -B dependency:go-offline
 COPY src src
 RUN ./mvnw -q -B package -DskipTests
 
-FROM amazoncorretto:17-al2023-headless
+FROM amazoncorretto:26-al2023-headless
 # A fixed non-root user id: the headless image has no useradd, and the app needs no home directory.
 USER 10001:10001
 WORKDIR /app
