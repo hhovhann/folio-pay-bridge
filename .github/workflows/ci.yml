@@ -11,7 +11,7 @@ jobs:
         with: { distribution: corretto, java-version: '17', cache: maven }
       - run: ./mvnw -B verify
       - run: python3 tools/check_specs.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: surefire-reports, path: target/surefire-reports }
   image:
