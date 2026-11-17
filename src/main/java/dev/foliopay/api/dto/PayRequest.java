@@ -1,0 +1,25 @@
+package dev.foliopay.api.dto;
+
+import dev.foliopay.domain.model.Money;
+import dev.foliopay.service.PaymentService.PaymentCommand;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
+
+public record PayRequest(
+    @Schema(description = "Client-chosen key. Repeating it returns the first result; never charges twice.", example = "order-7731-attempt-1")
+    @NotBlank @Size(max = 100) @Pattern(regexp = "(?!link:|post:|shadow-)[A-Za-z0-9:_.-]+", message = "must be letters, digits and : _ . - and not start with a reserved prefix") String idempotencyKey,
+    @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String bookingRef,
+    @NotBlank @Pattern(regexp = "[A-Za-z0-9._-]{1,64}") String folioId,
+    @NotBlank @Pattern(regexp = "tok_[a-f0-9]{32}") String token,
+    @Schema(description = "Amount in minor units (cents)", example = "12345") @Min(1) @Max(Money.MAX_MINOR) long amountMinor,
+    @NotBlank @Pattern(regexp = "[A-Z]{3}") String currency,
+    @Schema(description = "Optional. Must equal the hotel's current business date from the PMS; the server fills it in when omitted") LocalDate businessDate) {
+  public PaymentCommand toCommand(LocalDate resolvedBusinessDate) {
+    return new PaymentCommand(idempotencyKey, bookingRef, folioId, token, new Money(amountMinor, currency), resolvedBusinessDate);
+  }
+}

@@ -1,0 +1,77 @@
+package dev.foliopay.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.web.servlet.MockMvc;
+
+/**
+ * The published API description (docs/openapi.json) must be what the code really serves. After an intentional API change regenerate it:
+ * {@code UPDATE_OPENAPI=true ./mvnw test -Dtest=OpenApiContractTest}.
+ */
+@SpringBootTest(properties = {"foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=true", "springdoc.api-docs.enabled=true"})
+@AutoConfigureMockMvc
+class OpenApiContractTest {
+  private static final Path COMMITTED = Path.of("docs", "openapi.json");
+  private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+  @Autowired MockMvc mvc;
+
+  private JsonNode served() throws Exception {
+    String body = mvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+    return mapper.readTree(body);
+  }
+
+  @Test
+  void theCommittedSpecMatchesWhatTheCodeServes() throws Exception {
+    JsonNode live = served();
+    if ("true".equals(System.getenv("UPDATE_OPENAPI"))) {
+      Files.writeString(COMMITTED, mapper.writeValueAsString(live) + "\n");
+    }
+    assertThat(Files.exists(COMMITTED)).as("docs/openapi.json is committed").isTrue();
+    assertThat(live).as("docs/openapi.json is stale: regenerate with UPDATE_OPENAPI=true").isEqualTo(mapper.readTree(Files.readString(COMMITTED)));
+  }
+
+  @Test
+  void aCardNumberIsAcceptedByExactlyOneOperation() throws Exception {
+    JsonNode doc = served();
+    List<String> acceptingPan = new ArrayList<>();
+    doc.path("paths").fields().forEachRemaining(path -> path.getValue().fields().forEachRemaining(op -> {
+      String schemaRef = op.getValue().path("requestBody").path("content").path("application/json").path("schema").path("$ref").asText("");
+      JsonNode schema = doc.path("components").path("schemas").path(schemaRef.substring(schemaRef.lastIndexOf('/') + 1));
+      if (schema.path("properties").has("pan")) acceptingPan.add(op.getKey().toUpperCase() + " " + path.getKey());
+    }));
+    assertThat(acceptingPan).containsExactly("POST /api/cards");
+  }
+
+  @Test
+  void noResponseSchemaCarriesACardNumberOrTheCardToken() throws Exception {
+    JsonNode schemas = served().path("components").path("schemas");
+    for (String name : List.of("CardResponse", "ChargeView", "PostingView", "PaymentResponse", "LinkView")) {
+      assertThat(schemas.has(name)).as("%s is documented", name).isTrue();
+      Iterator<String> fields = schemas.path(name).path("properties").fieldNames();
+      while (fields.hasNext()) {
+        assertThat(fields.next().toLowerCase()).as("%s must not expose card data", name).isNotIn("pan", "cardnumber", "cardtoken", "cvv");
+      }
+    }
+  }
+
+  @Test
+  void paymentOperationsAreDocumented() throws Exception {
+    JsonNode paths = served().path("paths");
+    assertThat(paths.fieldNames()).toIterable().contains("/api/cards", "/api/payments", "/api/postings/{id}/replay", "/api/booking-events", "/api/links/{id}/pay", "/api/reconcile");
+    assertThat(paths.path("/api/payments").path("post").path("description").asText()).contains("never charges twice");
+  }
+}

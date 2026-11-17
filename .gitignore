@@ -1,0 +1,10 @@
+target
+.idea
+*.iml
+.DS_Store
+var
+demo/.venv
+demo/__pycache__
+# the narrated video is attached to the GitHub release, not committed (8 MB per re-recording would stay in history for good)
+demo/out/*.mp4
+demo/out/*.png

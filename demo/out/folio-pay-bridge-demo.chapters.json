@@ -1,0 +1,52 @@
+[
+ {
+  "id": "intro",
+  "start": 0.9,
+  "end": 25.0
+ },
+ {
+  "id": "booking",
+  "start": 25.6,
+  "end": 46.7
+ },
+ {
+  "id": "vault",
+  "start": 47.3,
+  "end": 67.1
+ },
+ {
+  "id": "pay",
+  "start": 67.7,
+  "end": 86.6
+ },
+ {
+  "id": "timeout",
+  "start": 87.2,
+  "end": 106.0
+ },
+ {
+  "id": "outage",
+  "start": 106.7,
+  "end": 125.2
+ },
+ {
+  "id": "logs",
+  "start": 125.8,
+  "end": 140.3
+ },
+ {
+  "id": "recon",
+  "start": 141.0,
+  "end": 157.4
+ },
+ {
+  "id": "shadow",
+  "start": 158.0,
+  "end": 184.6
+ },
+ {
+  "id": "close",
+  "start": 186.1,
+  "end": 227.6
+ }
+]

@@ -1,0 +1,11 @@
+[project]
+name = "folio-pay-bridge-demo"
+version = "0.1.0"
+description = "Narrated demo video of Folio Pay Bridge (local Kokoro voice, Playwright, ffmpeg)"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright==1.64.0",
+    "kokoro-onnx==0.6.1",
+    "soundfile==0.14.0",
+    "numpy==2.5.4",
+]

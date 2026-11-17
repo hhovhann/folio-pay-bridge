@@ -1,0 +1,162 @@
+1
+00:00:00,917 --> 00:00:08,111
+This is Folio Pay Bridge: a small proof of concept of a hotel
+payments slice, in Java seventeen with Spring Boot and
+
+2
+00:00:08,111 --> 00:00:15,429
+Hibernate. It takes bookings from a property management system
+such as Oracle OPERA, sends payment requests, charges a
+
+3
+00:00:15,429 --> 00:00:22,808
+virtual card, and posts the payment to the guest folio. The
+processor and the PMS are fakes, the data is synthetic, and
+
+4
+00:00:22,808 --> 00:00:24,979
+this is not any company's software.
+
+5
+00:00:25,602 --> 00:00:32,876
+Bookings arrive as events. An advance purchase booking asks
+for the full amount within twenty four hours. A flexible
+
+6
+00:00:32,876 --> 00:00:40,463
+booking, thirty days out, asks for a twenty percent deposit,
+seven days before arrival. When the booking changes, the old
+
+7
+00:00:40,463 --> 00:00:46,671
+request is superseded by a new one. The rules live in one
+small class that a product lead can read.
+
+8
+00:00:47,328 --> 00:00:55,766
+Next, the card. The number is tokenised the moment it arrives.
+The database keeps only the ciphertext, a data key wrapped by
+
+9
+00:00:55,766 --> 00:01:03,795
+a master key, and the first six and last four digits. In
+production the master key lives in AWS KMS, with the token as
+
+10
+00:01:03,795 --> 00:01:07,130
+the encryption context. No card number is stored.
+
+11
+00:01:07,742 --> 00:01:15,655
+Now the guest pays the advance purchase request, and double
+clicks. The card is charged once, the payment is posted to the
+
+12
+00:01:15,655 --> 00:01:23,761
+folio once, and the counters, read from the fake processor and
+the fake PMS, say exactly that. The second click used the same
+
+13
+00:01:23,761 --> 00:01:26,550
+idempotency key, so nothing happened twice.
+
+14
+00:01:27,192 --> 00:01:35,390
+Real networks fail in the worst way: the processor takes the
+money, and the response is lost. I arm that fault, and pay the
+
+15
+00:01:35,390 --> 00:01:43,521
+flexible deposit. The service retries with the same key, the
+processor returns its original result, and the captured total
+
+16
+00:01:43,521 --> 00:01:45,987
+rises by the deposit once, not twice.
+
+17
+00:01:46,658 --> 00:01:54,416
+Now the PMS goes down. A late booking is paid. The card is
+charged, but the posting cannot be made. The tool does not
+
+18
+00:01:54,416 --> 00:02:02,373
+hide it: the charge is captured, the posting waits in a dead
+letter state with a reason. When the PMS is back, one click
+
+19
+00:02:02,373 --> 00:02:05,158
+replays it, and it is posted exactly once.
+
+20
+00:02:05,776 --> 00:02:12,967
+The operator log shows all of this with the card number
+masked. A mask catches mistakes, but the code never logs the
+
+21
+00:02:12,967 --> 00:02:20,345
+number in the first place, and the tests fail the build if a
+card number ever appears in a log line or in the database.
+
+22
+00:02:21,047 --> 00:02:28,851
+At the end of the day, finance reconciles. A clean acquirer
+statement matches every capture. This messy one has a capture
+
+23
+00:02:28,851 --> 00:02:36,654
+missing, an amount short by one dollar fifty, and a line we
+never captured. Each exception has a name that a finance team
+
+24
+00:02:36,654 --> 00:02:37,364
+can act on.
+
+25
+00:02:38,028 --> 00:02:45,122
+Finally, shadow mode, which is how a rebuild is made safe. The
+same two hundred bookings run through the new service, and
+
+26
+00:02:45,122 --> 00:02:52,392
+each result is compared with what the legacy system does. With
+the natural new rules, many bookings differ: tax rounded once
+
+27
+00:02:52,392 --> 00:02:59,486
+on the total instead of every night, and the payment dated in
+UTC instead of the hotel's day. Those are decisions for the
+
+28
+00:02:59,486 --> 00:03:04,586
+product team, not bugs by default. With legacy compatible
+rules, all two hundred match.
+
+29
+00:03:06,110 --> 00:03:14,057
+That is the slice: idempotent charges, lost responses, outages
+and replays, tokenisation with envelope encryption, masked
+
+30
+00:03:14,057 --> 00:03:22,069
+logs, reconciliation, and shadow mode, with over one hundred
+and seventy automated tests behind it. The AWS key service is
+
+31
+00:03:22,069 --> 00:03:30,081
+tested against a stub, not real AWS, and every external system
+here is a fake. I built it by directing Claude Code agents,
+
+32
+00:03:30,081 --> 00:03:37,962
+reviewing and testing what they wrote, and having two other
+models review it independently for security and idempotency.
+
+33
+00:03:37,962 --> 00:03:45,974
+The log of what the agents got wrong, and the review findings
+I fixed, is in the repository. I would be glad to talk about
+
+34
+00:03:45,974 --> 00:03:47,550
+your first two services.

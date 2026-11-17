@@ -1,0 +1,18 @@
+# Phase 11 Validation - Full-flow simulators over HTTP
+
+- [x] `FullFlowHttpIntegrationTest.aPaymentIsAuthorisedCapturedAndPostedToTheReservationFolioOverHttp`
+- [x] `FullFlowHttpIntegrationTest.theCardNumberReachesOnlyTheProcessorAndOnlyItsLastFourAreKept`
+- [x] `FullFlowHttpIntegrationTest.anExpiredAccessTokenIsReplacedOnceWithoutFailingThePayment`
+- [x] `FullFlowHttpIntegrationTest.aReplyLostAfterOperaPostedIsFoundAgainNotPostedTwice`
+- [x] `FullFlowHttpIntegrationTest.aRateLimitIsWaitedOutAndRetried`
+- [x] `FullFlowHttpIntegrationTest.aLockConflictOnTheReservationIsRetried`
+- [x] `FullFlowHttpIntegrationTest.anOperaOutageDeadLettersTheCapturedPaymentAndReplayPostsItOnceOperaIsBack`
+- [x] `FullFlowHttpIntegrationTest.aClosedFolioIsRejectedWithOperasReasonAndReplayLeavesItAlone`
+- [x] `FullFlowHttpIntegrationTest.operaRefusesACallWithoutTheApplicationKeyOrTheHotelHeader`
+- [x] `FullFlowHttpIntegrationTest.theBusinessDateComesFromOperaAndMovesOnlyAtNightAudit`
+- [x] `FullFlowHttpIntegrationTest.aProcessorThatCapturesThenGoesQuietIsRetriedWithTheSameKeyAndChargesOnce`
+- [x] `FullFlowHttpIntegrationTest.aDeclineIsFinalAndNothingReachesTheFolio`
+- [x] `FullFlowHttpIntegrationTest.aCaptureDeclinedAfterAuthorisationReleasesTheHoldAtTheProcessor`
+- [x] `FullFlowHttpIntegrationTest.reconciliationAgainstTheProcessorsOwnSettlementFileMatchesEverythingPosted`
+- [x] `docker compose up --build` runs bridge, PostgreSQL and both simulators; a booking event pushed by the OPERA simulator became a payment link, a guest paid it, the folio held `RES-ADV` window 1 code CC 800.00 and the processor ledger showed AUTH and CAPTURE; no card number in the app logs, the processor or OPERA (2026-11-17)
+- [ ] The adapter is exercised against the real OHIP sandbox (manual) - needs OHIP partner access, an application key and a test hotel; the endpoint paths must first be checked against Oracle's documentation
