@@ -113,6 +113,16 @@ class PaymentControllerTest {
   }
 
   @Test
+  void aDownstreamOutageIsA503TellingTheClientToRetryWithTheSameKey() throws Exception {
+    doThrow(new dev.foliopay.gateway.OperaUnavailableException("jdbc secret-host")).when(payments).pay(any());
+    String body = pay(VALID).andExpect(status().isServiceUnavailable()).andReturn().getResponse().getContentAsString();
+    assertThat(body).contains("same idempotency key").doesNotContain("secret-host");
+
+    doThrow(new dev.foliopay.gateway.PspTransientException("timeout")).when(payments).pay(any());
+    pay(VALID).andExpect(status().isServiceUnavailable());
+  }
+
+  @Test
   void anUnexpectedFailureReturnsAGenericMessageAndNoInternals() throws Exception {
     doThrow(new IllegalStateException("jdbc:postgresql://secret-host/folio password=hunter2")).when(payments).pay(any());
     String body = pay(VALID).andExpect(status().isInternalServerError()).andReturn().getResponse().getContentAsString();

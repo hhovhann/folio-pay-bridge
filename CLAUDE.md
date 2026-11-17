@@ -26,7 +26,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 188 tests (unit + a small integration layer)
+./mvnw test                      # 271 tests (unit + a small integration layer)
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 DEMO_FAST=1 uv run --project demo python demo/make_demo.py   # dry run: drives every panel, asserts the narration

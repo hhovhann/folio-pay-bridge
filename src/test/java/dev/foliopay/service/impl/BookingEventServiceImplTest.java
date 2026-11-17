@@ -93,6 +93,17 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  void aParallelTwinThatCreatesTheLiveLinkFirstIsTreatedAsTheRepeatItIs() {
+    when(links.saveAndFlush(any(PaymentLink.class)))
+        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("one live link per booking"))
+        .thenAnswer(call -> add(call.getArgument(0)));
+
+    var outcome = service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
+
+    assertThat(outcome.links()).hasSize(1);
+  }
+
+  @Test
   void aRepeatOfTheSameEventChangesNothing() {
     service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
     var again = service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);

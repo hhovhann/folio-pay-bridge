@@ -30,7 +30,6 @@ public class PspSimulator {
 
   PspSimulator(Clock clock) { this.clock = clock; }
 
-  public Fault fault() { return fault.get(); }
   public void arm(Fault f) { fault.set(f); }
   public boolean consume(Fault f) { return fault.compareAndSet(f, Fault.NONE); }
 

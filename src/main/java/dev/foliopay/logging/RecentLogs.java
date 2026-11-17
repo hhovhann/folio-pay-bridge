@@ -38,7 +38,7 @@ public class RecentLogs {
 
     private static String shortName(String n) { return n.substring(n.lastIndexOf('.') + 1); }
 
-    synchronized void add(String line) {
+    public synchronized void add(String line) {
         lines.addLast(line);
         while (lines.size() > 200) lines.removeFirst();
     }

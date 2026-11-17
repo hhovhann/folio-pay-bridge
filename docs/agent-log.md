@@ -1,6 +1,6 @@
 # What the agents got wrong (this build)
 
-Entries 6 to 14 come from the first review and the refactor; 15 to 22 from the security and idempotency review that followed, 23 from the simulator work. 1 to 5 are from the first build.
+Entries 6 to 14 come from the first review and the refactor; 15 to 22 from the security and idempotency review that followed, 23 to 27 from the simulator, coverage and demo work. 1 to 5 are from the first build.
 
 A pilot, not production. These are the corrections made while building it with Claude Code agents; each was caught by reading output or by a test, not by the agent noticing.
 
@@ -30,5 +30,10 @@ A pilot, not production. These are the corrections made while building it with C
 22. **A test that set its configuration at the wrong precedence.** `FailClosedStartupTest` passed properties through the builder, where `application.properties` overrides them, so the first run failed for the wrong reason. Command-line arguments are used now.
 
 23. **Two things the build caught while adding the HTTP simulators.** The jar now holds two main classes, and Maven refused to repackage until one was named. And the reconciliation test in the full-flow suite failed because the bridge database kept charges from earlier tests while the simulator was reset each time (six "missing in settlement"): a test-hygiene bug, confirmed from the failure output before the fix, not a code bug.
+
+24. **Weak tests that could not see the bug they named.** "A rate limit is waited out" and "a lock conflict is retried" passed even if the simulator never sent the 429 or 409, because they only checked that the payment finally succeeded. Found while writing the simulator's own endpoint tests (one of which failed). Fixed by asserting the simulator really consumed each fault, for all four fault scenarios.
+25. **Two placeholder assertions written to fill a gap.** Twice I left a trivial assertion in a test file (one asserted nothing about a card number, one asserted `null` is null). Both were caught by re-reading the file before running it and replaced by real tests (`CardRequestTest`, `PspSimControllerTest`). The habit to keep: re-read what was just written.
+26. **A test client that sent a request twice.** `RestClient.create()` picked the JDK HTTP client, which tried an HTTP/2 upgrade on a cleartext POST; a throttle test got 201 instead of 429 while `curl` against the same simulator got 429. Confirmed by reproducing with curl first, then pinned the test client to HTTP/1.1 like the production adapters.
+27. **A business-date lookup that made a payment fail while the PMS was down.** The dry run of the full-flow demo found that paying during an OPERA outage returned an error before the card was charged, because the bridge read the business date first. Now the last known date is used for up to 24 hours, with unit and full-flow tests, and a downstream outage is a 503, not a 500.
 
 Pattern: the agents are quick at the shape of the code and weak at **what the test would actually catch** and at **what is really on the screen**. So the brief makes tests name their failure, and the demo asserts every claim.

@@ -45,3 +45,7 @@ Status: done 2026-11-17
 ## Phase 11 - Full-flow simulators over HTTP
 Status: done 2026-11-17
 - The bridge runs against an OPERA-style PMS and a processor as separate HTTP services, in Docker, with the failures a real integration has.
+
+## Phase 12 - Measured coverage and a catalogue of edge cases
+Status: done 2026-11-17
+- A coverage number with a gate, a page of every edge case with its test, and a checker that keeps the page honest.

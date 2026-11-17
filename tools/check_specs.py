@@ -64,6 +64,22 @@ if "--no-reports" not in sys.argv:
                     errors.append(f"{p.name}: ticked test {ref} was not found in the test reports")
                 elif not reports[ref]:
                     errors.append(f"{p.name}: ticked test {ref} did not pass")
+    # docs/edge-cases.md promises a test for every case it lists: each test it names must exist and have passed
+    edge = root / "docs" / "edge-cases.md"
+    if edge.is_file():
+        names = set()
+        for ref in re.findall(r"`([A-Z][A-Za-z0-9]*\.[A-Za-z0-9*]+)`", edge.read_text(encoding="utf-8")):
+            if ref.endswith(".*"):
+                if not any(k.startswith(ref[:-1]) for k in reports):
+                    errors.append(f"docs/edge-cases.md: no tests found for {ref}")
+                continue
+            names.add(ref)
+        for ref in sorted(names):
+            checked += 1
+            if ref not in reports:
+                errors.append(f"docs/edge-cases.md: test {ref} was not found in the test reports")
+            elif not reports[ref]:
+                errors.append(f"docs/edge-cases.md: test {ref} did not pass")
 for e in errors:
     print("ERROR", e)
 print(f"{len(phases)} phase folder(s), {len(done)} done, {checked} ticked test reference(s) checked, {len(errors)} error(s)")

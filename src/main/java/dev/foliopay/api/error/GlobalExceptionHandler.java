@@ -37,6 +37,13 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(GoneException.class)
   ResponseEntity<ErrorResponse> gone(GoneException e) { return reply(HttpStatus.GONE, e.getMessage()); }
 
+  /** A downstream system is down or not answering: the client should retry later with the same idempotency key. */
+  @ExceptionHandler({dev.foliopay.gateway.OperaUnavailableException.class, dev.foliopay.gateway.PspTransientException.class})
+  ResponseEntity<ErrorResponse> downstreamUnavailable(RuntimeException e) {
+    log.warn("Downstream unavailable: {}", e.getClass().getSimpleName());
+    return reply(HttpStatus.SERVICE_UNAVAILABLE, "A downstream system is unavailable: try again with the same idempotency key");
+  }
+
   @ExceptionHandler(Exception.class)
   ResponseEntity<ErrorResponse> unexpected(Exception e) {
     log.error("Unhandled error: {}", e.getClass().getName()); // class only: the message could carry request data

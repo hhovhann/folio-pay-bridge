@@ -195,6 +195,42 @@ class PostingServiceImplTest {
   }
 
   @Test
+  void theListOfPostingsIsBoundedAndNewestFirst() {
+    when(repository.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(Fixtures.posting("p", "c", "F", AMOUNT, DAY))));
+    assertThat(service.findAll()).hasSize(1);
+    ArgumentCaptor<org.springframework.data.domain.Pageable> page = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+    verify(repository).findAll(page.capture());
+    assertThat(page.getValue().getPageSize()).isEqualTo(500);
+  }
+
+  @Test
+  void aRequestThatLosesTheRaceCarriesItsPostOntoWhateverIsStoredPending() {
+    newPosting();
+    when(opera.postPayment(any())).thenReturn("OP-1");
+    Posting storedPending = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
+    when(repository.save(any(Posting.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Posting.class, "id")).thenAnswer(call -> call.getArgument(0));
+    when(repository.findById(anyString())).thenReturn(Optional.of(storedPending));
+
+    Posting result = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");
+
+    assertThat(result).isSameAs(storedPending);
+    assertThat(result.isPosted()).isTrue();
+    assertThat(result.getOperaRef()).isEqualTo("OP-1");
+  }
+
+  @Test
+  void aRequestThatLosesTheRaceToAPostedEntryReturnsThePostedOne() {
+    newPosting();
+    when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("503"));
+    Posting storedPosted = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
+    storedPosted.posted("OP-OTHER");
+    when(repository.save(any(Posting.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Posting.class, "id"));
+    when(repository.findById(anyString())).thenReturn(Optional.of(storedPosted));
+
+    assertThat(service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1").getOperaRef()).isEqualTo("OP-OTHER");
+  }
+
+  @Test
   void replayOfAnUnknownPostingIsNotFound() {
     when(repository.findById("nope")).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.replay("nope")).isInstanceOf(NotFoundException.class);

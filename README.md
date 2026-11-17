@@ -34,7 +34,7 @@ Built as a work sample for an **AI-first Senior Java Engineer (payments)** role.
 | The published OpenAPI file is what the code serves; only `POST /api/cards` accepts a card number; no response carries card data | `OpenApiContractTest` |
 | Every ticked box in a spec points at a test that ran and passed | `tools/check_specs.py` (reads the surefire reports) |
 
-Tests: **188** (unit tests per rule and service with test doubles; `@WebMvcTest` for the HTTP contract; a small `integration` package on H2 for what only a real database proves).
+Tests: **271** (unit tests per rule and service with test doubles; `@WebMvcTest` for the HTTP contract; an `integration` package on H2 and against the HTTP simulators for what only a real database or network proves). Coverage is measured, not claimed: **99.8% of lines and 92.3% of branches** (JaCoCo; `python3 tools/coverage.py`), enforced by a gate in `./mvnw verify`. The only uncovered lines are an unreachable `NoSuchAlgorithmException` catch; the two `main()` methods are excluded. [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, the test that fails if it breaks, and what is **not** covered; `tools/check_specs.py` fails the build if a named test is missing.
 
 ## Architecture
 ```
@@ -53,7 +53,7 @@ Decisions and their reasons are in [`specs/decisions.md`](specs/decisions.md) (D
 ## Run
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                                              # 188 tests
+./mvnw test                                              # 271 tests
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # console at http://127.0.0.1:8081, Swagger UI at /swagger-ui/index.html
 python3 tools/check_specs.py                             # after the tests
 docker compose up --build                                # PostgreSQL + demo profile, port on loopback only
@@ -72,6 +72,9 @@ Four containers over real HTTP: the bridge, PostgreSQL, an OPERA simulator and a
 
 **This is not Oracle OPERA.** There is no public container image of OPERA or OPERA Cloud: it is a managed service (or a licensed on-premise install for OPERA 5). The simulator follows the shape of OHIP (OAuth client credentials with an application key, bearer tokens, `x-hotelid`, a business date that moves at night audit, payments to a folio window, no deduplication) but its resource paths are simplified and not checked against Oracle's documentation. Running against the real thing needs OHIP partner access and its sandbox; that box in phase 11 stays open.
 
+## Deploying on AWS
+[`docs/aws-deployment.md`](docs/aws-deployment.md) is a step-by-step runbook (VPC, KMS, RDS, Secrets Manager, ECS on Amazon Linux 2023, the midnight-to-3am deployment window, a going-live checklist, and how OPERA Cloud fits: it is Oracle's SaaS, called over HTTPS, not something you run in AWS). It has not been executed in a real account.
+
 ## Demo video
 Four minutes, narrated, captions burned in: attached to the [v0.1.0 release](../../releases/tag/v0.1.0). Captions (`.vtt`, `.srt`) are in [`demo/out`](demo/out).
 
@@ -84,3 +87,4 @@ Specs first, one folder per capability under `specs/` (requirements, plan, valid
 3. Real OPERA Cloud (OHIP) and OPERA 5 adapters: OAuth, rate limits, reject-and-repair for a wrong business date.
 4. Flyway migrations and `ddl-auto=validate`; timeouts, circuit breaker and bulkhead on downstream calls.
 5. PSP commands that carry 3-D Secure and stored-credential fields; persisted refund-review flags and booking-event sequencing.
+6. Hosted card entry for guests (the number never reaches the service); chargeback cases with scheme deadlines and evidence packs; virtual-card collection from booking channels as bookings arrive; guest messaging; many properties.

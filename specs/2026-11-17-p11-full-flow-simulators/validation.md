@@ -9,6 +9,10 @@
 - [x] `FullFlowHttpIntegrationTest.anOperaOutageDeadLettersTheCapturedPaymentAndReplayPostsItOnceOperaIsBack`
 - [x] `FullFlowHttpIntegrationTest.aClosedFolioIsRejectedWithOperasReasonAndReplayLeavesItAlone`
 - [x] `FullFlowHttpIntegrationTest.operaRefusesACallWithoutTheApplicationKeyOrTheHotelHeader`
+- [x] `FullFlowHttpIntegrationTest.whenOperaIsDownThePaymentIsStillTakenUsingTheLastKnownBusinessDateAndThePostingWaits`
+- [x] `BusinessDateServiceImplTest.whenThePmsIsDownTheLastKnownDateKeepsThePaymentFlowing`
+- [x] `BusinessDateServiceImplTest.withNoEarlierAnswerAPmsOutageIsNotHidden`
+- [x] `BusinessDateServiceImplTest.anAnswerOlderThanADayIsNotTrusted`
 - [x] `FullFlowHttpIntegrationTest.theBusinessDateComesFromOperaAndMovesOnlyAtNightAudit`
 - [x] `FullFlowHttpIntegrationTest.aProcessorThatCapturesThenGoesQuietIsRetriedWithTheSameKeyAndChargesOnce`
 - [x] `FullFlowHttpIntegrationTest.aDeclineIsFinalAndNothingReachesTheFolio`

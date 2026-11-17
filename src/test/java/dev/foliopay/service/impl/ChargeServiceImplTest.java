@@ -53,7 +53,9 @@ class ChargeServiceImplTest {
     final AtomicInteger opened = new AtomicInteger();
 
     @Override public dev.foliopay.domain.model.CardToken tokenise(Pan pan, String expiry) { throw new UnsupportedOperationException(); }
-    @Override public boolean exists(String token) { return true; }
+    boolean known = true;
+
+    @Override public boolean exists(String token) { return known; }
 
     @Override
     public <T> T withCard(String token, BiFunction<Pan, String, T> use) {
@@ -131,6 +133,53 @@ class ChargeServiceImplTest {
 
     assertThat(charge.getStatus()).isEqualTo(Charge.Status.DECLINED);
     verify(psp).voidAuthorization("key-1:void", "auth_1");
+  }
+
+  @Test
+  void anUnknownCardTokenIsRefusedBeforeAnythingIsStoredOrSent() {
+    vault.known = false;
+    assertThatThrownBy(() -> service.charge(command())).isInstanceOf(InvalidRequestException.class).hasMessageContaining("Unknown card token");
+    verifyNoInteractions(psp);
+    verify(repository, never()).saveAndFlush(any(Charge.class));
+  }
+
+  @Test
+  void aHoldThatCannotBeReleasedDoesNotHideTheDecline() {
+    noExistingCharge();
+    when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
+    when(psp.capture(anyString(), anyString(), any())).thenThrow(new PspDeclinedException("Capture declined"));
+    org.mockito.Mockito.doThrow(new RuntimeException("processor down")).when(psp).voidAuthorization(anyString(), anyString());
+
+    assertThat(service.charge(command()).getStatus()).isEqualTo(Charge.Status.DECLINED);
+  }
+
+  @Test
+  void aRequestThatLosesTheRaceCarriesItsCaptureOntoWhateverIsStoredPending() {
+    noExistingCharge();
+    when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
+    when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
+    Charge storedPending = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
+    when(repository.save(any(Charge.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "id")).thenAnswer(call -> call.getArgument(0));
+    when(repository.findById(anyString())).thenReturn(Optional.of(storedPending));
+
+    Charge result = service.charge(command());
+
+    assertThat(result).isSameAs(storedPending);
+    assertThat(result.getStatus()).as("the capture was not lost").isEqualTo(Charge.Status.CAPTURED);
+    assertThat(result.getPspRef()).isEqualTo("cap_1");
+  }
+
+  @Test
+  void aRequestThatLosesTheRaceToAFinishedChargeReturnsTheFinishedOne() {
+    noExistingCharge();
+    when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
+    when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
+    Charge storedCaptured = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
+    storedCaptured.captured("cap_other");
+    when(repository.save(any(Charge.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "id"));
+    when(repository.findById(anyString())).thenReturn(Optional.of(storedCaptured));
+
+    assertThat(service.charge(command()).getPspRef()).isEqualTo("cap_other");
   }
 
   @Test

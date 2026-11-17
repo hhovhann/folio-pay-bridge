@@ -146,6 +146,7 @@ class FullFlowHttpIntegrationTest {
     var result = pay("RES-1", 7_000);
 
     assertThat(result.outcome()).isEqualTo(Outcome.OK);
+    assertThat(state(operaUrl).path("fault").asText()).as("the fault was really hit, not skipped").isEqualTo("NONE");
     assertThat(state(operaUrl).path("payments")).as("OPERA does not deduplicate, so exactly one means the bridge looked before it retried").hasSize(1);
   }
 
@@ -153,6 +154,7 @@ class FullFlowHttpIntegrationTest {
   void aRateLimitIsWaitedOutAndRetried() {
     fault(operaUrl, "THROTTLE_NEXT");
     assertThat(pay("RES-1", 3_000).outcome()).isEqualTo(Outcome.OK);
+    assertThat(state(operaUrl).path("fault").asText()).as("the fault was really hit, not skipped").isEqualTo("NONE");
     assertThat(state(operaUrl).path("payments")).hasSize(1);
   }
 
@@ -160,6 +162,7 @@ class FullFlowHttpIntegrationTest {
   void aLockConflictOnTheReservationIsRetried() {
     fault(operaUrl, "LOCK_CONFLICT_NEXT");
     assertThat(pay("RES-1", 3_000).outcome()).isEqualTo(Outcome.OK);
+    assertThat(state(operaUrl).path("fault").asText()).as("the fault was really hit, not skipped").isEqualTo("NONE");
     assertThat(state(operaUrl).path("payments")).hasSize(1);
   }
 
@@ -216,12 +219,25 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  void whenOperaIsDownThePaymentIsStillTakenUsingTheLastKnownBusinessDateAndThePostingWaits() {
+    LocalDate known = businessDates.resolve(null);
+    fault(operaUrl, "DOWN");
+
+    assertThat(businessDates.resolve(null)).isEqualTo(known);
+    var result = payments.pay(new PaymentCommand("k-" + UUID.randomUUID(), "BK-1", "RES-1", token, new Money(6_000, "USD"), businessDates.resolve(null)));
+
+    assertThat(result.outcome()).isEqualTo(Outcome.CHARGED_NOT_POSTED);
+    assertThat(state(pspUrl).path("capturedMinor").asLong()).isEqualTo(6_000);
+  }
+
+  @Test
   void aProcessorThatCapturesThenGoesQuietIsRetriedWithTheSameKeyAndChargesOnce() {
     fault(pspUrl, "TIMEOUT_AFTER_CAPTURE");
 
     var result = pay("RES-1", 18_000);
 
     assertThat(result.outcome()).isEqualTo(Outcome.OK);
+    assertThat(state(pspUrl).path("fault").asText()).as("the fault was really hit, not skipped").isEqualTo("NONE");
     assertThat(state(pspUrl).path("ledger")).filteredOn(e -> e.path("kind").asText().equals("CAPTURE")).hasSize(1);
     assertThat(state(pspUrl).path("capturedMinor").asLong()).isEqualTo(18_000);
   }

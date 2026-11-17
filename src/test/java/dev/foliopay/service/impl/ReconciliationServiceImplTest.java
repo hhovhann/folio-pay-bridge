@@ -47,6 +47,18 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  void aPastedStatementIsParsedAndReconciled() {
+    when(charges.findByStatus(Charge.Status.CAPTURED)).thenReturn(captured);
+    when(postings.findByStatus(Posting.Status.POSTED)).thenReturn(posted);
+    capture("cap_1", 1_000, true);
+
+    ReconReport report = service.reconcileCsv("psp_ref,amount_minor,currency\ncap_1,1000,USD\ncap_x,5,USD");
+
+    assertThat(report.matched()).isEqualTo(1);
+    assertThat(report.exceptions()).containsOnlyKeys("UNKNOWN_IN_SETTLEMENT");
+  }
+
+  @Test
   void aCleanStatementMatchesEverythingWithNoExceptions() {
     capture("cap_1", 1_000, true);
     capture("cap_2", 2_000, true);

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How it works</title>
+<style>
+:root{--ink:#1c2333;--mut:#5b6478;--line:#c9d0e0;--bg:#f1f3f8;--card:#fff;--bridge:#1a56db;--pms:#7a1f1f;--psp:#14365d;--ok:#0f7b45;--warn:#b45309}
+@media (prefers-color-scheme:dark){:root{--ink:#e6e9f2;--mut:#9aa3b8;--line:#3a4256;--bg:#12161f;--card:#1a2030;--bridge:#6ea0ff;--pms:#ff8f8f;--psp:#8cb8ff;--ok:#5fd39a;--warn:#f0b35a}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{padding:14px 24px;border-bottom:1px solid var(--line)}h1{margin:0;font-size:20px}header p{margin:2px 0 0;color:var(--mut);font-size:13px}
+main{padding:16px 24px;display:grid;gap:16px;grid-template-columns:1.35fr 1fr;max-width:1280px;margin:0 auto}
+section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+h2{margin:0 0 8px;font-size:15px}svg{width:100%;height:auto;display:block}
+.box{fill:var(--card);stroke:var(--line);stroke-width:1.5}.t{fill:var(--ink);font:600 13px system-ui}.s{fill:var(--mut);font:11px system-ui}
+.b{stroke:var(--bridge)}.p{stroke:var(--pms)}.q{stroke:var(--psp)}.arrow{stroke:var(--mut);stroke-width:1.6;fill:none;marker-end:url(#h)}
+.n{fill:var(--bridge)}.nt{fill:#fff;font:700 11px system-ui;text-anchor:middle}
+ol{margin:0;padding-left:20px}li{margin:4px 0}b.g{color:var(--ok)}b.w{color:var(--warn)}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+.wide{grid-column:span 2}
+@media (max-width:900px){main{grid-template-columns:1fr}.wide{grid-column:span 1}}
+</style></head><body>
+<header><h1>How it works, and how it should work in production</h1><p>A hotel payment goes guest to processor to PMS folio. Synthetic data; the processor and the PMS are simulators.</p></header>
+<main>
+<section><h2>The flow (what the demo shows)</h2>
+<svg viewBox="0 0 760 400" role="img" aria-label="Flow between PMS, bridge, guest, processor, database and key service">
+<defs><marker id="h" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#667"/></marker></defs>
+<rect class="box p" x="20" y="30" width="170" height="84" rx="10"/><text class="t" x="105" y="62" text-anchor="middle">Hotel PMS</text><text class="s" x="105" y="80" text-anchor="middle">OPERA (OHIP-style simulator)</text><text class="s" x="105" y="95" text-anchor="middle">folios, business date</text>
+<rect class="box b" x="285" y="140" width="190" height="120" rx="10"/><text class="t" x="380" y="170" text-anchor="middle">Payment bridge</text><text class="s" x="380" y="190" text-anchor="middle">api, service, domain</text><text class="s" x="380" y="205" text-anchor="middle">idempotency, retry,</text><text class="s" x="380" y="220" text-anchor="middle">dead letter, replay</text><text class="s" x="380" y="240" text-anchor="middle">reconciliation</text>
+<rect class="box" x="560" y="30" width="180" height="84" rx="10"/><text class="t" x="650" y="62" text-anchor="middle">Guest</text><text class="s" x="650" y="80" text-anchor="middle">pays a payment link</text><text class="s" x="650" y="95" text-anchor="middle">card tokenised on entry</text>
+<rect class="box q" x="560" y="290" width="180" height="84" rx="10"/><text class="t" x="650" y="322" text-anchor="middle">Card processor</text><text class="s" x="650" y="340" text-anchor="middle">authorise, capture, void</text><text class="s" x="650" y="355" text-anchor="middle">settlement file</text>
+<rect class="box" x="20" y="290" width="170" height="84" rx="10"/><text class="t" x="105" y="322" text-anchor="middle">PostgreSQL</text><text class="s" x="105" y="340" text-anchor="middle">ciphertext only, never</text><text class="s" x="105" y="355" text-anchor="middle">the card number</text>
+<rect class="box" x="285" y="320" width="190" height="60" rx="10"/><text class="t" x="380" y="348" text-anchor="middle">Key service (KMS)</text><text class="s" x="380" y="364" text-anchor="middle">wraps the data key</text>
+<path class="arrow" d="M190 72 L285 160"/><path class="arrow" d="M560 72 L475 160"/><path class="arrow" d="M475 230 L560 310"/><path class="arrow" d="M285 230 L190 310"/><path class="arrow" d="M380 260 L380 320"/><path class="arrow" d="M285 185 L190 100" style="display:none"/>
+<circle class="n" cx="238" cy="116" r="10"/><text class="nt" x="238" y="120">1</text>
+<circle class="n" cx="518" cy="116" r="10"/><text class="nt" x="518" y="120">2</text>
+<circle class="n" cx="518" cy="272" r="10"/><text class="nt" x="518" y="276">3</text>
+<circle class="n" cx="238" cy="272" r="10"/><text class="nt" x="238" y="276">4</text>
+<circle class="n" cx="396" cy="292" r="10"/><text class="nt" x="396" y="296">5</text>
+</svg>
+<ol>
+<li><b>PMS to bridge:</b> a booking event; the bridge applies the payment rule and creates a payment link.</li>
+<li><b>Guest to bridge:</b> the card is tokenised the moment it arrives. Only a token comes back.</li>
+<li><b>Bridge to processor:</b> authorise, then capture, with an idempotency key so a repeat never charges twice.</li>
+<li><b>Bridge to database:</b> only ciphertext and a wrapped key are stored. The number is never stored, logged or returned.</li>
+<li><b>Bridge to PMS:</b> the payment is posted to the reservation's folio window. If the PMS is down it waits in a dead-letter queue with the reason, and replays once.</li>
+</ol></section>
+<section><h2>The rules that keep money safe</h2>
+<ul>
+<li><b class="g">Idempotent:</b> the same key is the same payment, however it is repeated or raced.</li>
+<li><b class="g">Never lost:</b> a captured payment is posted, or dead-lettered with a reason.</li>
+<li><b class="g">Unknown is not failed:</b> after a timeout the bridge looks for its own post before posting again.</li>
+<li><b class="g">The PMS decides the date:</b> the business date moves at night audit, not at midnight.</li>
+<li><b class="g">Reconciled:</b> every capture is matched against the processor's settlement file and the folio.</li>
+<li><b class="g">Fails closed:</b> no key mode or no gateway configured means it does not start.</li>
+</ul></section>
+<section class="wide"><h2>How it should work in production (what is not built yet)</h2>
+<table><thead><tr><th>Today in this pilot</th><th>In production</th></tr></thead><tbody>
+<tr><td>OPERA is a simulator in the shape of OHIP</td><td>A real OPERA Cloud (OHIP) adapter, with its documented paths and error codes, tested in Oracle's sandbox; OPERA 5 behind the same port where needed</td></tr>
+<tr><td>The processor is a simulator</td><td>One adapter per acquirer behind the same port, 3-D Secure results carried through, stored-credential flags, refunds and disputes</td></tr>
+<tr><td>Loopback only, no login</td><td>Authentication, roles, tenant-scoped keys and tokens, rate limits, TLS</td></tr>
+<tr><td>A crash between steps can strand a payment</td><td>A sweeper with a lease that re-drives stale charges and missing postings, with alarms</td></tr>
+<tr><td>Local demo key; KMS tested against a stub</td><td>KMS keys per environment, proven in a real AWS account, rotation on</td></tr>
+<tr><td>Hibernate creates the schema</td><td>Flyway migrations, run as a separate step before a deploy</td></tr>
+<tr><td>The bridge accepts a card number from the page (the pilot's console)</td><td>For a guest paying a link, the acquirer's hosted card entry, so the number never reaches this service and only a token does. The number-handling vault stays for virtual cards that arrive from booking channels</td></tr>
+<tr><td>No 3-D Secure</td><td>3-D Secure challenge and result handling through the acquirer's checkout, carried into the charge record</td></tr>
+<tr><td>Declines and refunds only</td><td>Chargeback cases: scheme deadlines, evidence pack from the booking and folio, status tracking, representment</td></tr>
+<tr><td>Virtual cards are charged one at a time from a token</td><td>Virtual cards from booking channels collected automatically as bookings arrive, with the same idempotency, dead-letter and reconciliation rules</td></tr>
+<tr><td>One hotel configured</td><td>Many properties and tenants: per-property settings, keys, tokens and idempotency scopes</td></tr>
+<tr><td>The console shows confirmation</td><td>Real-time payment confirmation back to the PMS and to the guest by email, SMS or WhatsApp</td></tr>
+</tbody></table></section>
+</main></body></html>
