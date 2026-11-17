@@ -14,7 +14,7 @@
   <description>Hotel payments slice: virtual-card charging and folio posting, PCI-minded, with shadow mode against a legacy stand-in</description>
   <properties>
     <java.version>17</java.version>
-    <awssdk.version>2.54.10</awssdk.version>
+    <awssdk.version>2.59.1</awssdk.version>
     <resilience4j.version>2.2.0</resilience4j.version>
     <springdoc.version>2.8.17</springdoc.version>
   </properties>
