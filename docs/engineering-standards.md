@@ -100,7 +100,16 @@ INFO for every state change, DEBUG for decisions, with ids, keys, amounts and st
 - Guardrails are enforced by tools, not by intent: `tools/guard_secrets.py` and `tools/guard_commands.py` as hooks, reading every argument because prefix rules miss reordered commands (log 43); each guard has a self-test with commands it must allow as well as refuse, so it cannot quietly block legitimate work (log 46).
 - Commits and pushes need a person's approval; an agent never rewrites shared history.
 
-## 13. Definition of done
+## 13. Dependencies (no jar hell)
+- Spring Boot's dependency management is the source of versions; a version is declared only for what it does not manage, as a property. A managed version is raised only to what a library using it was built against, with a comment saying when to remove the line (log 50).
+- The enforcer runs on every build: one version per library (`dependencyConvergence`), never older than a dependency asked for (`requireUpperBoundDeps`), no duplicate declarations, the expected Java and Maven. A conflict fails at `validate`, before anything compiles (log 50).
+- Exclude what is not used (the AWS SDK's async Netty client): fewer jars, fewer advisories, fewer conflicts (log 50).
+- A library that talks to the outside world through its own HTTP stack gets one test with the real client against a local endpoint (`KmsWireTest`): a stubbed client cannot see a classpath problem (log 50).
+- Updates are applied as a tested set: Dependabot groups minor and patch updates into one pull request per ecosystem; the whole build, the browser check and the Docker image pass before it is merged. A failed check is read before it is believed: one failed on a download, not on its change (log 50).
+- Majors of runtime frameworks are planned migrations; majors of build and test tools are taken, because a security fix can exist only there (log 50). Frontend versions are exact, with the lock file committed; `npm audit --omit=dev` is clean, and a development-only advisory with no fixed version is written down with the reason it is not reachable (SECURITY.md).
+- A new dependency needs the owner's approval and a line in `specs/tech-stack.md` saying why (CLAUDE.md rule 7) (log 38).
+
+## 14. Definition of done
 1. The failing test first, then the fix; the mutation check for a fix to money, security or a guard.
 2. `./mvnw clean verify` (coverage gate), `python3 tools/check_specs.py`, `python3 tools/guard_secrets.py --repo`, `python3 tools/guard_commands.py --self-test`.
 3. For a flow change: the Compose stack and `DEMO_FAST=1 demo/make_fullflow_demo.py`; for the dashboard: `demo/check_dashboard.py`.

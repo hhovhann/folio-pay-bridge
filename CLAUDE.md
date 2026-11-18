@@ -3,7 +3,7 @@
 This is a payments codebase in miniature. Treat every change as one that touches money.
 
 ## Read first
-1. `docs/engineering-standards.md`: how code is written here (workflow, architecture, Java conventions, API design, OWASP, twelve-factor, persistence, integrations, logging, testing, docs, AI agents) and the mistake behind each rule. Imported in full:
+1. `docs/engineering-standards.md`: how code is written here (workflow, architecture, Java conventions, API design, OWASP, twelve-factor, persistence, integrations, logging, testing, docs, AI agents, dependencies) and the mistake behind each rule. Imported in full:
    @docs/engineering-standards.md
 2. `specs/mission.md`, `specs/tech-stack.md`, `specs/decisions.md`
 3. The phase folder you are working in: `requirements.md`, `plan.md`, `validation.md`
@@ -31,7 +31,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 436 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 437 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)

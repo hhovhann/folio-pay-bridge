@@ -48,5 +48,8 @@
 - [x] `CodeConventionsTest.nothingPrintsToTheConsoleDirectly`
 - [x] Each convention broken on purpose in a main file made its check fail: 4 of 4, after the field-injection check was widened to every spelling (agent log 49) (2026-11-18)
 - [x] `tools/check_specs.py` fails when an agent-log entry is not cited by `docs/engineering-standards.md` (checked by removing the citation of entry 26, 2026-11-18)
+- [x] `KmsWireTest.theRealClientWrapsAndUnwrapsADataKeyOverHttp` (fails with `NoClassDefFoundError` when httpclient5 is forced to 5.1.4, checked 2026-11-18)
+- [x] The Maven enforcer (dependencyConvergence, requireUpperBoundDeps, no duplicate declarations, Java 17, Maven 3.9) passes in `./mvnw clean verify`; it failed on five libraries before the fix (2026-11-18)
+- [x] The seven Dependabot updates applied as one set, with vite 7.3.8 and Vitest 4.1.12: `./mvnw clean verify` with the pinned Node, `demo/check_dashboard.py`, `npm audit --omit=dev` 0 advisories (2026-11-18)
 - [ ] Testcontainers PostgreSQL in `./mvnw verify`, so the migrations and PostgreSQL's locking run in every build (manual) - a new test dependency, for the owner to approve
 - [ ] The Cognito set-up (no audience, scope prefix) against a real user pool (manual) - needs an AWS account

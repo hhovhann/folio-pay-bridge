@@ -192,4 +192,4 @@ Status: **Covered** = a test fails if the behaviour breaks. **Partial** = covere
 19. **Rate limiting.** No per-client limit on tokenising or paying (card testing); it belongs in front of the service (AWS WAF rate-based rules, API Gateway usage plans) and is in the deployment runbook, not built here.
 20. **Pagination.** The ledger lists return the newest 500 rows; there is no cursor for reading further back.
 
-Coverage of the code by tests is measured, not claimed: `python3 tools/coverage.py` (99.5% lines, 91.5% branches at the time of writing, 436 backend tests plus 15 dashboard tests; the gate in `./mvnw verify` fails below 99% and 90%). Coverage shows lines were run, not that every case above is right; this page is the list of cases.
+Coverage of the code by tests is measured, not claimed: `python3 tools/coverage.py` (99.5% lines, 91.5% branches at the time of writing, 437 backend tests plus 15 dashboard tests; the gate in `./mvnw verify` fails below 99% and 90%). Coverage shows lines were run, not that every case above is right; this page is the list of cases.

@@ -54,7 +54,7 @@ Agents write much of this code, so the rules are enforced by tooling, not only s
 - **No circuit breaker or bulkhead**; a payment chains several calls, each with timeouts and up to three tries, so during an outage each payment waits for the timeouts (D-33 explains why the business date is not short-circuited).
 - **The simulators' control endpoints** (`/sim/*`) have no authentication or CSRF protection; they are local demo tools, never deployed.
 - **Card number copies in memory:** the vault zeroes its byte buffers, but the number also exists as a Java `String` while the processor request is built.
-- **Supply chain:** actions and base images pinned by tag, not digest; the Maven wrapper has no checksum; Dependabot is configured, the OWASP dependency check is not.
+- **Supply chain:** actions and base images pinned by tag, not digest; the Maven wrapper has no checksum; Dependabot groups updates and the Maven enforcer refuses version conflicts, but no OWASP dependency check runs in CI. The dashboard's shipped packages have no known advisory (`npm audit --omit=dev`); its build and test tools carry one high-severity advisory (picomatch ReDoS, reached through vite 7 and Vitest 4) that has no fixed version: it needs an attacker-supplied glob pattern, and the build's patterns are its own configuration, so it is not reachable here.
 - Short card numbers (13 digits) leave few unknown digits in the stored first six and last four.
 
 ## Untrusted text is data, never instructions
