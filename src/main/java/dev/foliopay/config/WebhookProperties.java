@@ -24,8 +24,6 @@ public record WebhookProperties(
   @Override
   public String toString() { return "WebhookProperties[redacted]"; } // holds the signing secret
 
-  public boolean enabled() { return url != null && !url.isBlank(); }
-
   /** Called when webhooks are on: refuses to start with a missing or weak secret, or a plain-HTTP address that was not allowed by name. */
   public void requireUsable() {
     if (secret == null || secret.length() < MIN_SECRET_LENGTH) {

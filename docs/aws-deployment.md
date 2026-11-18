@@ -88,10 +88,10 @@ Rotate them on a schedule. They reach the container as environment variables (se
 ### 2.5 Image
 ```bash
 aws ecr create-repository --repository-name folio-pay-bridge
-docker build -t folio-pay-bridge:0.1.0 .          # Amazon Linux 2023, Corretto 17, runs as uid 10001
-docker tag folio-pay-bridge:0.1.0 <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:0.1.0
+docker build -t folio-pay-bridge:0.2.0 .          # Amazon Linux 2023, Corretto 17, runs as uid 10001
+docker tag folio-pay-bridge:0.2.0 <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:0.2.0
 aws ecr get-login-password | docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
-docker push <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:0.1.0
+docker push <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:0.2.0
 ```
 Pin the image by digest in the task definition and scan it (ECR scanning).
 
@@ -173,7 +173,7 @@ Task definition essentials:
 The KMS adapter is tested against a stubbed client only. To close that, in a throwaway AWS account:
 1. Create a symmetric KMS key (alias `alias/folio-pay-bridge-test`) and an IAM role or user with `kms:GenerateDataKey` and `kms:Decrypt` on that key only, with the `kms:EncryptionContext:token` condition from section 2.2.
 2. Start a local PostgreSQL (`docker run -d -p 127.0.0.1:5432:5432 -e POSTGRES_DB=folio -e POSTGRES_USER=folio -e POSTGRES_PASSWORD=folio postgres:16`): KMS keys are refused on an in-memory database by design.
-3. Run `AWS_PROFILE=<that profile> AWS_REGION=<region> DB_URL=jdbc:postgresql://127.0.0.1:5432/folio DB_USER=folio DB_PASSWORD=folio java -jar target/folio-pay-bridge-0.1.0.jar --spring.profiles.active=postgres --foliopay.keys=kms --foliopay.kms.key-id=alias/folio-pay-bridge-test --foliopay.gateway=fake --foliopay.demo-controls=true`.
+3. Run `AWS_PROFILE=<that profile> AWS_REGION=<region> DB_URL=jdbc:postgresql://127.0.0.1:5432/folio DB_USER=folio DB_PASSWORD=folio java -jar target/folio-pay-bridge-0.2.0.jar --spring.profiles.active=postgres --foliopay.keys=kms --foliopay.kms.key-id=alias/folio-pay-bridge-test --foliopay.gateway=fake --foliopay.demo-controls=true`.
 4. Tokenise a public test card and pay with it. In CloudTrail, `GenerateDataKey` and `Decrypt` must carry `"encryptionContext": {"token": "tok_..."}`, and `card_token.key_id` must hold the key's ARN, not the alias.
 5. Call `Decrypt` with another token as the context and confirm KMS refuses. Move the alias to a new key and confirm the old card still pays (D-31).
 Only then tick the boxes in phases 1, 9 and 14, with the date and the account type (never the account id).

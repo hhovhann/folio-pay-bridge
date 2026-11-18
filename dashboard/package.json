@@ -1,7 +1,7 @@
 {
   "name": "folio-pay-dashboard",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "Operator dashboard for Folio Pay Bridge: overview, payments and folio postings, payment links, webhooks, reconciliation.",
   "scripts": {

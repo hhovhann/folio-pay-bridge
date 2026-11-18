@@ -34,6 +34,12 @@ class HostAllowlistFilterTest {
     assertThat(response.getContentAsString()).contains("Host not allowed");
   }
 
+  /** A path the URI parser refuses (a raw space) gets no exemption from the host check: unparsable is never "a probe". */
+  @Test
+  void aPathThatCannotBeParsedIsNotAProbe() {
+    assertThat(HostAllowlistFilter.isHealthProbe(to("10.0.3.17", "/actuator/health/a b"))).isFalse();
+  }
+
   /** Fails if the exemption matches a prefix of the raw path: a rebinding page could reach the API through it. */
   @Test
   void onlyTheProbeItselfIsExemptNotAPathThatMerelyStartsLikeIt() throws Exception {

@@ -40,6 +40,6 @@
 - [x] Flyway V1 and V2 applied on PostgreSQL 16 in Compose, the application started with `ddl-auto=validate`, and the new constraints are in `pg_constraint` (`uk_charge_client_key`, `fk_charge_card_token`, `fk_posting_charge`) (2026-11-18)
 - [x] The full-flow demo's dry run (`DEMO_FAST=1 make_fullflow_demo.py`) against the Docker stack on the versioned API (2026-11-18)
 - [x] `demo/check_dashboard.py`: every screen in a real browser against the running app on the versioned API, no browser error (2026-11-18)
-- [x] `./mvnw clean verify`: 429 backend tests, 15 dashboard tests, 99.1% lines and 91.0% branches against the 99% and 90% gate (2026-11-18)
+- [x] `./mvnw clean verify`: 431 backend tests, 15 dashboard tests, 99.5% lines and 91.5% branches against the 99% and 90% gate (2026-11-18; the first push failed CI at 98.9% on the Linux runner, agent log 48)
 - [ ] Testcontainers PostgreSQL in `./mvnw verify`, so the migrations and PostgreSQL's locking run in every build (manual) - a new test dependency, for the owner to approve
 - [ ] The Cognito set-up (no audience, scope prefix) against a real user pool (manual) - needs an AWS account

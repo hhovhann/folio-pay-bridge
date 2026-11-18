@@ -125,12 +125,10 @@ public class Notification {
   public String getId() { return id; }
   public String getEventId() { return eventId; }
   public Type getType() { return type; }
-  public String getSubjectId() { return subjectId; }
   public String getPayload() { return payload; }
   public Status getStatus() { return status; }
   public int getAttempts() { return attempts; }
   public Instant getNextAttemptAt() { return nextAttemptAt; }
   public String getLastError() { return lastError; }
-  public Instant getCreatedAt() { return createdAt; }
   public Instant getDeliveredAt() { return deliveredAt; }
 }

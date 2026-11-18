@@ -51,9 +51,10 @@ def seed():
 
 
 def main():
-    jar = ROOT / "target/folio-pay-bridge-0.1.0.jar"
-    if not jar.exists():
+    jars = sorted((ROOT / "target").glob("folio-pay-bridge-*.jar"))
+    if not jars:
         raise SystemExit("Build first: ./mvnw -q package -DskipTests")
+    jar = jars[-1]
     with socket.socket() as s:
         if s.connect_ex(("127.0.0.1", PORT)) == 0:
             raise SystemExit(f"port {PORT} is in use")

@@ -15,7 +15,7 @@ FROM amazoncorretto:17-al2023-headless
 # A fixed non-root user id: the headless image has no useradd, and the app needs no home directory.
 USER 10001:10001
 WORKDIR /app
-COPY --from=build /src/target/folio-pay-bridge-0.1.0.jar app.jar
+COPY --from=build /src/target/folio-pay-bridge-*.jar app.jar
 EXPOSE 8081
 # Inside a container the app must listen on all interfaces; compose publishes the port on the host's loopback only.
 ENV SERVER_ADDRESS=0.0.0.0 \
