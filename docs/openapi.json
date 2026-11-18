@@ -1,0 +1,1223 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Folio Pay Bridge API",
+    "description" : "Concept pilot: tokenise virtual cards, charge them once per idempotency key, post to the guest folio, turn booking events into payment links, and reconcile against an acquirer statement. Synthetic data only: the processor and the PMS are simulated (in-memory fakes, or HTTP simulators in the Compose profile). Card numbers are accepted only by POST /api/cards and are never returned. Money is an integer in minor units (cents) plus an ISO 4217 currency.",
+    "license" : {
+      "name" : "Concept pilot, not for production use"
+    },
+    "version" : "0.1.0"
+  },
+  "servers" : [ {
+    "url" : "http://localhost",
+    "description" : "Generated server url"
+  } ],
+  "tags" : [ {
+    "name" : "Cards",
+    "description" : "Tokenisation. The only endpoint that accepts a card number."
+  }, {
+    "name" : "Payments",
+    "description" : "Charge a tokenised card, post to the folio, inspect the ledger, replay dead-lettered postings."
+  }, {
+    "name" : "Demo",
+    "description" : "Present only when foliopay.demo-controls=true."
+  }, {
+    "name" : "Reconciliation",
+    "description" : "Revenue assurance against an acquirer settlement statement."
+  }, {
+    "name" : "Dashboard",
+    "description" : "What the operator dashboard reads: the overview, and how to sign in."
+  }, {
+    "name" : "Notifications",
+    "description" : "Signed webhooks telling the integrator a payment was captured or declined and posted to the folio or dead-lettered."
+  }, {
+    "name" : "Payment links",
+    "description" : "Booking events become payment requests under the written policy; the guest pays a link."
+  } ],
+  "paths" : {
+    "/api/sim" : {
+      "get" : {
+        "tags" : [ "Demo" ],
+        "summary" : "Simulator state",
+        "operationId" : "state",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SimState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Demo" ],
+        "summary" : "Arm a fault or reset the fakes",
+        "operationId" : "apply",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/SimRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/SimState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/shadow" : {
+      "post" : {
+        "tags" : [ "Demo" ],
+        "summary" : "Run shadow mode",
+        "description" : "Replays synthetic bookings through the payment flow and compares each with the legacy stand-in.",
+        "operationId" : "run",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ShadowRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ShadowReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reconcile" : {
+      "post" : {
+        "tags" : [ "Reconciliation" ],
+        "summary" : "Reconcile",
+        "description" : "With csv (header psp_ref,amount_minor,currency) reconciles that statement; without it, the acquirer's own statement. from/to (business dates, optional) scope which captures are expected. Exceptions: MISSING_IN_SETTLEMENT, AMOUNT_DIFFERENCE, CURRENCY_DIFFERENCE, UNKNOWN_IN_SETTLEMENT, DUPLICATE_IN_SETTLEMENT, NOT_POSTED_TO_PMS.",
+        "operationId" : "reconcile",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ReconcileRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ReconReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/postings/{id}/replay" : {
+      "post" : {
+        "tags" : [ "Payments" ],
+        "summary" : "Replay a posting",
+        "description" : "Tries a dead-lettered posting again. A posting rejected by the PMS is returned untouched; an outage can be replayed. Safe to repeat.",
+        "operationId" : "replay",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PostingView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payments" : {
+      "post" : {
+        "tags" : [ "Payments" ],
+        "summary" : "Pay",
+        "description" : "Idempotent on idempotencyKey: repeating a request returns the first result and never charges twice. The same key with different parameters is 409. The outcome says which half happened: OK, DECLINED, CHARGE_PENDING (retry with the same key; after night audit, leave the date out and the charge keeps the date it was taken on), CHARGED_NOT_POSTED (captured; the folio posting is in progress or waiting in the dead-letter queue).",
+        "operationId" : "pay",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/redeliver" : {
+      "post" : {
+        "tags" : [ "Notifications" ],
+        "summary" : "Send a failed event again",
+        "description" : "Starts a fresh round of attempts for a FAILED event once the receiver is fixed. Anything else is returned unchanged.",
+        "operationId" : "redeliver",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/NotificationView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/links" : {
+      "get" : {
+        "tags" : [ "Payment links" ],
+        "summary" : "List payment links",
+        "operationId" : "links",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/LinkView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post" : {
+        "tags" : [ "Payment links" ],
+        "summary" : "Create a payment request",
+        "description" : "Remote creation by a third-party app (F&B, events, spa, guest messaging): a link for a set amount and due date, posted to the given folio when paid. One live request per reference: the same request again changes nothing; different terms replace the open request; a request being paid is not changed.",
+        "operationId" : "create",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/PaymentRequestCreate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookingOutcomeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/links/{id}/pay" : {
+      "post" : {
+        "tags" : [ "Payment links" ],
+        "summary" : "Pay a link",
+        "description" : "Charges the link amount. The idempotency key is per link and card: a double-click is one charge; a different card after a decline is a new attempt. 410 when the link is cancelled or superseded.",
+        "operationId" : "pay_1",
+        "parameters" : [ {
+          "name" : "id",
+          "in" : "path",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LinkPayRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PaymentResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cards" : {
+      "post" : {
+        "tags" : [ "Cards" ],
+        "summary" : "Tokenise a card",
+        "description" : "Returns a token and the display digits (first six, last four). The number is never returned or stored in clear.",
+        "operationId" : "tokenise",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CardRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "description" : "Created",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/CardResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/booking-events" : {
+      "post" : {
+        "tags" : [ "Payment links" ],
+        "summary" : "Handle a booking event",
+        "description" : "NEW and MODIFIED create or supersede the open payment request; CANCELLED closes it and flags a refund review when it was already paid. Repeating an event changes nothing.",
+        "operationId" : "event",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/BookingEventRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/BookingOutcomeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vault" : {
+      "get" : {
+        "tags" : [ "Demo" ],
+        "summary" : "What the vault stores",
+        "description" : "Ciphertext previews and display digits only.",
+        "operationId" : "vault",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/VaultRow"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/dashboard-config" : {
+      "get" : {
+        "tags" : [ "Dashboard" ],
+        "summary" : "How the dashboard signs in",
+        "description" : "Public: none (open API, demo), oidc (authority, client id and scope for authorization code with PKCE), or unavailable (the API needs credentials and no identity provider is configured). Holds no secret.",
+        "operationId" : "dashboardConfig",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Config"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/postings" : {
+      "get" : {
+        "tags" : [ "Payments" ],
+        "summary" : "List folio postings",
+        "operationId" : "postings",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/PostingView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/overview" : {
+      "get" : {
+        "tags" : [ "Dashboard" ],
+        "summary" : "Overview",
+        "description" : "Money captured today per currency (the hotel's day) and every queue that needs a person. Computed by the database.",
+        "operationId" : "overview",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Overview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications" : {
+      "get" : {
+        "tags" : [ "Notifications" ],
+        "summary" : "List webhook events",
+        "description" : "Newest first, at most 500: PENDING (waiting for its next attempt), DELIVERED, or FAILED after the last attempt.",
+        "operationId" : "list",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/NotificationView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logs" : {
+      "get" : {
+        "tags" : [ "Demo" ],
+        "summary" : "Masked log tail",
+        "operationId" : "logs",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/charges" : {
+      "get" : {
+        "tags" : [ "Payments" ],
+        "summary" : "List charges",
+        "operationId" : "charges",
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/ChargeView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "SimRequest" : {
+        "type" : "object",
+        "properties" : {
+          "opera" : {
+            "type" : "string",
+            "maxLength" : 32,
+            "minLength" : 0
+          },
+          "psp" : {
+            "type" : "string",
+            "maxLength" : 32,
+            "minLength" : 0
+          },
+          "reset" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "SimState" : {
+        "type" : "object",
+        "properties" : {
+          "opera" : {
+            "type" : "string"
+          },
+          "psp" : {
+            "type" : "string"
+          },
+          "pspCaptures" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "pspCapturedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "operaPosts" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ShadowRequest" : {
+        "type" : "object",
+        "properties" : {
+          "bookings" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1
+          },
+          "seed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "mode" : {
+            "type" : "string",
+            "pattern" : "compat|strict"
+          }
+        }
+      },
+      "Mismatch" : {
+        "type" : "object",
+        "properties" : {
+          "bookingRef" : {
+            "type" : "string"
+          },
+          "field" : {
+            "type" : "string"
+          },
+          "legacy" : {
+            "type" : "string"
+          },
+          "candidate" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ShadowConfig" : {
+        "type" : "object",
+        "properties" : {
+          "rounding" : {
+            "type" : "string",
+            "enum" : [ "PER_NIGHT", "ON_TOTAL" ]
+          },
+          "dateRule" : {
+            "type" : "string",
+            "enum" : [ "UTC_DAY", "HOTEL_LOCAL_DAY" ]
+          }
+        }
+      },
+      "ShadowReport" : {
+        "type" : "object",
+        "properties" : {
+          "runId" : {
+            "type" : "string"
+          },
+          "config" : {
+            "$ref" : "#/components/schemas/ShadowConfig"
+          },
+          "bookings" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "matched" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "mismatched" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "byField" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          "samples" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Mismatch"
+            }
+          },
+          "errors" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "ReconcileRequest" : {
+        "type" : "object",
+        "properties" : {
+          "mode" : {
+            "type" : "string",
+            "pattern" : "clean|messy"
+          },
+          "csv" : {
+            "type" : "string",
+            "maxLength" : 200000,
+            "minLength" : 0
+          },
+          "from" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "to" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        }
+      },
+      "Item" : {
+        "type" : "object",
+        "properties" : {
+          "category" : {
+            "type" : "string",
+            "enum" : [ "MISSING_IN_SETTLEMENT", "AMOUNT_DIFFERENCE", "CURRENCY_DIFFERENCE", "UNKNOWN_IN_SETTLEMENT", "DUPLICATE_IN_SETTLEMENT", "NOT_POSTED_TO_PMS" ]
+          },
+          "pspRef" : {
+            "type" : "string"
+          },
+          "bookingRef" : {
+            "type" : "string"
+          },
+          "expectedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "expectedCurrency" : {
+            "type" : "string"
+          },
+          "settledMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "settledCurrency" : {
+            "type" : "string"
+          }
+        }
+      },
+      "ReconReport" : {
+        "type" : "object",
+        "properties" : {
+          "matched" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "exceptions" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "type" : "integer",
+              "format" : "int32"
+            }
+          },
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Item"
+            }
+          },
+          "totals" : {
+            "type" : "object",
+            "additionalProperties" : {
+              "$ref" : "#/components/schemas/Total"
+            }
+          }
+        }
+      },
+      "Total" : {
+        "type" : "object",
+        "properties" : {
+          "expectedMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "settledMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "PostingView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "chargeId" : {
+            "type" : "string"
+          },
+          "folioId" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "businessDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "PENDING", "POSTED", "DEAD_LETTER" ]
+          },
+          "operaRef" : {
+            "type" : "string"
+          },
+          "failureCategory" : {
+            "type" : "string",
+            "enum" : [ "OPERA_UNAVAILABLE", "REJECTED_BY_OPERA" ]
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "PayRequest" : {
+        "type" : "object",
+        "properties" : {
+          "idempotencyKey" : {
+            "type" : "string",
+            "description" : "Client-chosen key. Repeating it returns the first result; never charges twice.",
+            "example" : "order-7731-attempt-1",
+            "maxLength" : 100,
+            "minLength" : 0,
+            "pattern" : "(?!link:|post:|shadow-)[A-Za-z0-9:_.-]+"
+          },
+          "bookingRef" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z0-9._-]{1,64}"
+          },
+          "folioId" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z0-9._-]{1,64}"
+          },
+          "token" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "tok_[a-f0-9]{32}"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64",
+            "description" : "Amount in minor units (cents)",
+            "example" : 12345,
+            "maximum" : 1000000000000,
+            "minimum" : 1
+          },
+          "currency" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Z]{3}"
+          },
+          "businessDate" : {
+            "type" : "string",
+            "format" : "date",
+            "description" : "Optional. Must equal the hotel's current business date from the PMS; when omitted, a new charge takes the PMS date and a repeat keeps the date it was taken on"
+          }
+        },
+        "required" : [ "bookingRef", "currency", "folioId", "idempotencyKey", "token" ]
+      },
+      "ChargeView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "idempotencyKey" : {
+            "type" : "string"
+          },
+          "bookingRef" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "PENDING", "CAPTURED", "DECLINED" ]
+          },
+          "pspRef" : {
+            "type" : "string"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          }
+        }
+      },
+      "PaymentResponse" : {
+        "type" : "object",
+        "properties" : {
+          "outcome" : {
+            "type" : "string",
+            "enum" : [ "OK", "DECLINED", "CHARGE_PENDING", "CHARGED_NOT_POSTED" ]
+          },
+          "charge" : {
+            "$ref" : "#/components/schemas/ChargeView"
+          },
+          "posting" : {
+            "$ref" : "#/components/schemas/PostingView"
+          }
+        }
+      },
+      "NotificationView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "eventId" : {
+            "type" : "string"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string"
+          },
+          "attempts" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "nextAttemptAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "deliveredAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "payload" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PaymentRequestCreate" : {
+        "type" : "object",
+        "properties" : {
+          "reference" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z0-9._-]{1,64}"
+          },
+          "folioId" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z0-9._-]{1,64}"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64",
+            "maximum" : 1000000000000,
+            "minimum" : 1
+          },
+          "currency" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Z]{3}"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "description" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cntrl}]*"
+          }
+        },
+        "required" : [ "currency", "dueDate", "folioId", "reference" ]
+      },
+      "BookingOutcomeResponse" : {
+        "type" : "object",
+        "properties" : {
+          "links" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/LinkView"
+            }
+          },
+          "refundReview" : {
+            "type" : "boolean"
+          },
+          "note" : {
+            "type" : "string"
+          }
+        }
+      },
+      "LinkView" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "bookingRef" : {
+            "type" : "string"
+          },
+          "folioId" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "dueDate" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "OPEN", "PAYING", "PAID", "CANCELLED", "SUPERSEDED" ]
+          }
+        }
+      },
+      "LinkPayRequest" : {
+        "type" : "object",
+        "properties" : {
+          "token" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "tok_[a-f0-9]{32}"
+          },
+          "businessDate" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        },
+        "required" : [ "token" ]
+      },
+      "CardRequest" : {
+        "type" : "object",
+        "properties" : {
+          "pan" : {
+            "type" : "string",
+            "maxLength" : 23,
+            "minLength" : 0
+          },
+          "expiry" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "(0[1-9]|1[0-2])/\\d{2}"
+          }
+        },
+        "required" : [ "expiry", "pan" ]
+      },
+      "CardResponse" : {
+        "type" : "object",
+        "properties" : {
+          "token" : {
+            "type" : "string"
+          },
+          "bin6" : {
+            "type" : "string"
+          },
+          "last4" : {
+            "type" : "string"
+          },
+          "expiry" : {
+            "type" : "string"
+          }
+        }
+      },
+      "BookingEventRequest" : {
+        "type" : "object",
+        "properties" : {
+          "type" : {
+            "type" : "string",
+            "enum" : [ "NEW", "MODIFIED", "CANCELLED" ]
+          },
+          "bookingRef" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z0-9._-]{1,64}"
+          },
+          "folioId" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Za-z0-9._-]{1,64}"
+          },
+          "ratePlan" : {
+            "type" : "string",
+            "enum" : [ "ADVANCE_PURCHASE", "FLEXIBLE" ]
+          },
+          "arrival" : {
+            "type" : "string",
+            "format" : "date"
+          },
+          "totalMinor" : {
+            "type" : "integer",
+            "format" : "int64",
+            "maximum" : 1000000000000,
+            "minimum" : 1
+          },
+          "currency" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "[A-Z]{3}"
+          },
+          "today" : {
+            "type" : "string",
+            "format" : "date"
+          }
+        },
+        "required" : [ "arrival", "bookingRef", "currency", "folioId", "ratePlan", "type" ]
+      },
+      "VaultRow" : {
+        "type" : "object",
+        "properties" : {
+          "token" : {
+            "type" : "string"
+          },
+          "bin6" : {
+            "type" : "string"
+          },
+          "last4" : {
+            "type" : "string"
+          },
+          "sealedPanHex" : {
+            "type" : "string"
+          },
+          "wrappedKeyHex" : {
+            "type" : "string"
+          },
+          "keyId" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Config" : {
+        "type" : "object",
+        "properties" : {
+          "auth" : {
+            "type" : "string"
+          },
+          "authority" : {
+            "type" : "string"
+          },
+          "clientId" : {
+            "type" : "string"
+          },
+          "scope" : {
+            "type" : "string"
+          },
+          "demo" : {
+            "type" : "boolean"
+          }
+        }
+      },
+      "Captured" : {
+        "type" : "object",
+        "properties" : {
+          "currency" : {
+            "type" : "string"
+          },
+          "amountMinor" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "count" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      },
+      "Overview" : {
+        "type" : "object",
+        "properties" : {
+          "at" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "capturedToday" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Captured"
+            }
+          },
+          "chargesPending" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "postingsPending" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "deadLettersReplayable" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "deadLettersRejected" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "webhooksPending" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "webhooksFailed" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "linksOpen" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "linksPaying" : {
+            "type" : "integer",
+            "format" : "int64"
+          }
+        }
+      }
+    }
+  }
+}

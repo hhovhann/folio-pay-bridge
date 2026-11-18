@@ -1,0 +1,11 @@
+target
+.git
+.idea
+*.iml
+demo
+docs
+specs
+dashboard/node_modules
+var
+.claude
+tools

@@ -1,0 +1,47 @@
+# Phase 14 Validation - Production hardening, authentication, notifications
+
+- [x] `ChargeServiceImplTest.aCaptureTheProcessorRefusesIsFinalAndReleasesTheHold`
+- [x] `ChargeServiceImplTest.anUnexpectedErrorIsSavedAsPendingAndKeepsTheHoldBecauseTheCaptureMayHaveHappened`
+- [x] `HttpAdapterRepliesTest.aCaptureTheProcessorRefusesIsARejectionWithItsCodeSoTheChargeCanReleaseTheHold`
+- [x] `HttpAdapterRepliesTest.aKeyReusedWithADifferentRequestIsFinalNotWaitedOut`
+- [x] `HttpAdapterRepliesTest.aTruncatedOrNonJsonRejectionFromOperaIsStillARejectionNotACrash`
+- [x] `HttpAdapterRepliesTest.aFoundPaymentWithoutATransactionNumberIsNeitherPostedAgainNorRecordedAsPosted`
+- [x] `PostingServiceImplTest.aRequestWhoseLeaseRanOutAndWasTakenOverDoesNotPostAndDoesNotOverwriteTheNewHolder`
+- [x] `PostingServiceImplTest.theLeaseIsRenewedByItsOwnerRightBeforeEveryPostIncludingRetries`
+- [x] `ResilienceConfigTest.slowerTimeoutsAndMoreRetriesGiveALongerLease`
+- [x] `ReconciliationServiceImplTest.onlyCapturesTakenInTheStatementsPeriodAreExpectedInIt`
+- [x] `ReconciliationServiceImplTest.aReferenceSettledInTwoCurrenciesGivesOneItemPerCurrencyNeverASumAcrossThem`
+- [x] `BusinessDateServiceImplTest.aSlowReplyFromBeforeNightAuditCannotMoveTheRememberedDateBack`
+- [x] `BusinessDateServiceImplTest.theFirstAnswerAfterAnOutageIsUsedAtOnceSoANightAuditDuringTheOutageIsNotMissed`
+- [x] `PaymentControllerTest.theTwoConflictsCarryDifferentCodesAndOnlyTheRetryableOneHasRetryAfter`
+- [x] `RequestIdFilterTest.anIdThatCouldForgeALogLineIsReplacedNotLogged`
+- [x] `KmsKeyServiceTest.aCardWrappedBeforeTheAliasMovedIsDecryptedWithTheKeyThatWrappedIt`
+- [x] `KeyModeGuardTest.kmsKeysOnAnInMemoryDatabaseAreRefusedBecausePaymentStateWouldVanishAtTheNextDeploy`
+- [x] `RequestSizeFilterTest.aBodyWithNoDeclaredLengthAndNoTransferEncodingIsCappedToo`
+- [x] `HostAllowlistFilterTest.aHealthProbeByIpOrLoopbackIsAnsweredWhateverTheHost`
+- [x] `PanMaskerTest.findsANumberWrittenInDigitsOutsideTheBasicMultilingualPlane`
+- [x] `BookingEventServiceImplTest.supersedingTheOldLinkAndStoringTheNewOneHappenInOneTransaction`
+- [x] `SecurityIntegrationTest.aTokenThatIsExpiredForAnotherApiFromAnotherIssuerOrForgedIsRefused`
+- [x] `SecurityIntegrationTest.aClientCanDoOnlyWhatItsScopesAllow`
+- [x] `SecurityIntegrationTest.aWrongApiKeyIsRefusedEvenAlongsideAValidToken`
+- [x] `FailClosedStartupTest.withARealGatewayAndNoAuthenticationItDoesNotStart`
+- [x] `WebhookIntegrationTest.aCapturedPaymentAndItsFolioPostingAreEachAnnouncedOnceSignedAndWithoutCardData`
+- [x] `WebhookIntegrationTest.twoRelaysRunningAtOnceDeliverEachEventOnce`
+- [x] `WebhookIntegrationTest.aBacklogLargerThanOneBatchDrainsInsteadOfStallingOnTheFirstPage`
+- [x] `WebhookSignatureTest.signsTheTimestampAndTheBodyWithHmacSha256`
+- [x] `FullFlowHttpIntegrationTest.theHotelsMiddlewareReceivesSignedCaptureAndPostingEventsOverHttp`
+- [x] `RemoteCreationIntegrationTest.aRequestCreatesOneOpenLinkAndSendingItAgainChangesNothing`
+- [x] `SimulatorEndpointsTest.aKeyReusedForADifferentAmountIsAConflictNotTheFirstAnswer`
+- [x] Mutation check: 39 of 39 deliberate bugs made their named test fail (one of them in the dashboard) (2026-11-18)
+- [x] The full-flow demo's dry run (`DEMO_FAST=1 make_fullflow_demo.py`) against the Docker stack, after the quiet-period regression it found was removed (2026-11-18)
+- [x] Flyway `V1__baseline.sql` applied on PostgreSQL 16 and the application started with `ddl-auto=validate` (2026-11-18)
+- [x] `python3 tools/guard_secrets.py --repo`: no card number or secret in any file (2026-11-18)
+- [x] `DashboardIntegrationTest.theOverviewKeepsEachCurrencyApartAndCountsEveryQueueThatNeedsAPerson`
+- [x] `SecurityIntegrationTest.theDashboardsSignInSettingsArePublicButItsDataIsNot`
+- [x] `SecurityHeadersFilterTest.theBrowserMayTalkToTheIdentityProviderAndNothingElse`
+- [x] `DashboardAuthTest.aProtectedApiWithoutAnIdentityProviderSaysSignInIsUnavailable`
+- [x] The dashboard's own tests (Vitest, run by `./mvnw test`): Replay offered only where OPERA was unavailable, money per currency, exact minor units from the form, error codes read from the body (2026-11-18)
+- [x] `demo/check_dashboard.py`: every screen in a real browser against the running app, Replay and a new request through the UI, dark theme, phone width, no browser error and no content security policy violation (2026-11-18)
+- [ ] The dashboard's sign-in against a real identity provider (Cognito, Okta or Keycloak)
+- [ ] KMS, Cognito and the runbook exercised in a real AWS account
+- [ ] A real OHIP sandbox and an acquirer's test environment

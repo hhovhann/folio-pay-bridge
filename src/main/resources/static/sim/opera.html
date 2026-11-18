@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OPERA front desk (simulator)</title>
+<style>
+body{font:14px/1.45 system-ui,sans-serif;margin:0;background:#f1f3f8;color:#1c2333}
+header{background:#7a1f1f;color:#fff;padding:12px 20px}header h1{margin:0;font-size:18px}header span{opacity:.8;font-size:12px}
+.banner{background:#fff3cd;color:#664d03;padding:6px 20px;font-size:12px}
+main{padding:16px 20px;display:grid;gap:14px;grid-template-columns:1fr 1fr}
+section{background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 3px #0001}
+h2{margin:0 0 8px;font-size:14px}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:5px 6px;border-bottom:1px solid #e5e8f0;font-size:13px}
+button,select{font:inherit;padding:6px 10px;border:1px solid #c5cbe0;border-radius:6px;background:#fff;cursor:pointer}button.p{background:#7a1f1f;color:#fff;border-color:#7a1f1f}
+.big{font-size:22px;font-weight:600}.mut{color:#667}.row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
+.wide{grid-column:span 2}
+</style></head><body>
+<header><h1>OPERA front desk <span>simulator: an OHIP-style PMS, in memory</span></h1></header>
+<div class="banner">Synthetic. This stands in for the hotel's PMS so the payment bridge can be shown against a real HTTP system. It is not Oracle software.</div>
+<main>
+<section><h2>Business date</h2><div class="big" data-testid="business-date">...</div>
+  <p class="mut">It moves only at night audit, not at midnight. The bridge reads it from here and refuses any other date.</p>
+  <button class="p" data-action="night-audit" data-testid="night-audit">Run night audit</button></section>
+<section><h2>Make it fail</h2>
+  <div class="row"><select id="fault" data-testid="opera-fault"><option>NONE</option><option>DOWN</option><option>THROTTLE_NEXT</option><option>LOCK_CONFLICT_NEXT</option><option>TIMEOUT_AFTER_POST</option></select>
+  <button data-action="fault" data-testid="apply-fault">Apply</button><button data-action="expire" data-testid="expire-tokens">Expire access tokens</button><button data-action="reset">Reset</button></div>
+  <p class="mut">Current fault: <b data-testid="current-fault">NONE</b> · access tokens issued: <b data-testid="tokens">0</b></p></section>
+<section class="wide"><h2>Booking events the PMS sends to the bridge</h2>
+  <div class="row"><button data-action="booking" data-args='["RES-FLEX","FLEXIBLE",30,100000]' data-testid="send-flex">New reservation: flexible, 30 days out</button>
+  <button data-action="booking" data-args='["RES-ADV","ADVANCE_PURCHASE",10,80000]' data-testid="send-adv">New reservation: advance purchase</button></div>
+  <p class="mut" data-testid="booking-note">Nothing sent yet.</p></section>
+<section class="wide"><h2>Payments posted to guest folios <span class="mut" data-testid="count"></span></h2>
+  <table data-testid="payments"><thead><tr><th>Txn</th><th>Reservation</th><th>Window</th><th>Code</th><th>Cashier</th><th>Amount</th><th>Business date</th><th>Reference</th><th>Processor ref</th></tr></thead><tbody></tbody></table></section>
+<section class="wide"><h2>Events from the bridge (signed webhooks, signature checked) <span class="mut" data-testid="webhook-count"></span></h2>
+  <p class="mut">The hotel's own systems are told what happened. Only events whose HMAC signature checks out are kept; a repeated event id is ignored.</p>
+  <table data-testid="webhooks"><thead><tr><th>Event</th><th>Received</th></tr></thead><tbody></tbody></table></section>
+</main><script src="/sim/sim.js"></script></body></html>

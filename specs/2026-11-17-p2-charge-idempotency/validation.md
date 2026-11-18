@@ -1,0 +1,24 @@
+# Phase 2 Validation - Idempotent virtual-card charging
+
+- [x] `ChargeServiceImplTest.authorisesThenCapturesAndStoresTheProcessorReference`
+- [x] `ChargeServiceImplTest.aTransientFailureIsRetriedWithTheSameKeyUntilItSucceeds`
+- [x] `ChargeServiceImplTest.whenRetriesRunOutTheChargeStaysPendingSoTheSameKeyCanTryAgain`
+- [x] `ChargeServiceImplTest.aDeclineIsFinalAndNotRetried`
+- [x] `ChargeServiceImplTest.aCaptureDeclinedAfterAuthorisationReleasesTheHold`
+- [x] `ChargeServiceImplTest.theCardNumberIsNotHeldWhileARetryWaitsOrDuringCapture`
+- [x] `ChargeServiceImplTest.theSameKeyWithADifferentAmountIsAConflictAndNeverReachesTheProcessor`
+- [x] `ChargeServiceImplTest.theSameKeyWithADifferentFolioOrBusinessDateIsAConflictNotASilentReplayOfTheFirst`
+- [x] `ChargeServiceImplTest.aZeroAmountIsRefusedBeforeAnythingIsStored`
+- [x] `IdempotentStoreTest.aTwinThatLosesTheInsertReturnsTheWinnersRow`
+- [x] `IdempotentStoreTest.aLostRaceWhereTheStoredStateKnowsMoreReturnsTheStoredState`
+- [x] `IdempotentStoreTest.aLostRaceWhereWeKnowMoreCarriesOurResultOntoTheStoredRowAndSavesAgain`
+- [x] `MoneyFormatTest.refusesAnAmountAboveTheCeilingSoArithmeticCannotOverflow`
+- [x] `PaymentRequestPolicyTest.aHugeTotalCannotOverflowTheDepositIntoANonsenseAmount`
+- [x] `PaymentFlowIntegrationTest.repeatingTheRequestLeavesOneChargeRowAndOnePostingRow`
+- [x] `PaymentFlowIntegrationTest.parallelDuplicatesEndWithOneChargeRowOneCapturedStateAndOnePostingRow`
+- [x] `PaymentFlowIntegrationTest.aLostResponseAfterCaptureIsRetriedWithoutChargingTwice`
+- [x] `PaymentFlowIntegrationTest.aDeclineIsStoredAsFinalAndNothingReachesThePms`
+- [x] `PaymentFlowIntegrationTest.moneyIsConservedAcrossProcessorChargesAndPostings`
+- [x] `ReviewFindingsIntegrationTest.theSameKeyWithADifferentFolioIsAConflictNotAnOkForTheOriginal`
+- [x] `ReviewFindingsIntegrationTest.aCaptureDeclinedAfterAuthorisationReleasesTheHold`
+- [x] `ApiIntegrationTest.aPaymentRepeatedOverHttpIsOneCaptureAndADifferentAmountUnderTheSameKeyIs409`
