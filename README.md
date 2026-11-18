@@ -15,7 +15,7 @@ You need a JDK 17 and Docker.
 git clone https://github.com/hhovhann/folio-pay-bridge && cd folio-pay-bridge
 export JAVA_HOME=<path to a JDK 17>
 
-# 1. Prove it: 431 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
+# 1. Prove it: 436 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
 ./mvnw clean verify && python3 tools/check_specs.py
 
 # 2. See the whole flow over real HTTP: bridge + PostgreSQL (Flyway) + OPERA simulator + processor simulator
@@ -29,7 +29,7 @@ docker compose up --build
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo
 ```
 
-New to the project? [`docs/onboarding.md`](docs/onboarding.md) is a five-session plan: read, run, and break each part on purpose. Then read, in this order: [`docs/architecture.md`](docs/architecture.md) (how it works, why, and a glossary of every hotel-payments term) → [`specs/decisions.md`](specs/decisions.md) (D-1 to D-41) → [`SECURITY.md`](SECURITY.md) → [`docs/product-map.md`](docs/product-map.md) (what is built, simulated, missing).
+New to the project? [`docs/onboarding.md`](docs/onboarding.md) is a five-session plan: read, run, and break each part on purpose. Then read, in this order: [`docs/architecture.md`](docs/architecture.md) (how it works, why, and a glossary of every hotel-payments term) → [`specs/decisions.md`](specs/decisions.md) (D-1 to D-41) → [`SECURITY.md`](SECURITY.md) → [`docs/product-map.md`](docs/product-map.md) (what is built, simulated, missing). Before changing code: [`docs/engineering-standards.md`](docs/engineering-standards.md), how code is written here and the mistake behind each rule.
 
 ### Call the API like an integrator
 Outside the demo profiles every `/api` call needs credentials (the app refuses to start with a real gateway and none configured).
@@ -84,7 +84,7 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | The layers stay layers: no controller reaches a repository, no service reaches HTTP, the domain knows no Spring, money is never floating point | `ArchitectureTest` |
 | Logs at DEBUG carry no card number and no card token; production JSON logs are masked | `PciIntegrationTest`, `JsonLogConfigTest` |
 
-**431 backend tests** and 15 dashboard tests; backend coverage measured, not claimed: **99.5% of lines, 91.5% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
+**436 backend tests** and 15 dashboard tests; backend coverage measured, not claimed: **99.5% of lines, 91.5% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
 
 ## Honest limits (read before you trust it)
 - **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer: the HTTP adapters are tested against simulators shaped like them. Running for real needs OHIP partner access and its sandbox, and an acquirer's test environment.
@@ -103,13 +103,13 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | `dashboard/` | The frontend: the operator dashboard, a React + TypeScript single-page app (Vite). It calls only the public API, and Maven builds, tests and packs it into the jar, served at `/dashboard/` |
 | `src/main/resources/static` | The classic console the demo video drives (fault switches, the guest's view); outside the demo profiles `/` goes to the dashboard |
 | `specs/` | Mission, tech stack, decisions, and one folder per phase (requirements, plan, validation with the test that proves each box) |
-| `docs/` | Architecture and glossary, product map, AWS runbook, edge cases, agent log, OpenAPI |
+| `docs/` | Engineering standards, architecture and glossary, product map, AWS runbook, edge cases, agent log, OpenAPI |
 | `tools/` | Spec checker, coverage report, card-number and secret guard, command guard (no force-push or remote deletion by an agent), API key generator |
 | `demo/` | Scripts that drive the real app with Playwright: the narrated video (asserting every line against the screen) and the dashboard's browser check |
 | `.claude/settings.json` | AI guardrails for Claude Code: hooks that block card numbers, secrets and history-rewriting commands, permission rules |
 
 ## How it was built (AI-first, reviewed by a person)
-Specs first (`specs/`), one phase at a time, test before code, a box ticked only when the named test passed (`tools/check_specs.py` checks the surefire reports). Claude Code agents wrote most of the code from the brief in `CLAUDE.md`; every change was read, run and, for the risky ones, mutation-checked. Independent reviews by other models found real bugs (a paid link could be paid again by another card; parallel replays could double-post to OPERA; a refused capture left a card hold in place), each fixed with a test that fails without the fix. [`docs/agent-log.md`](docs/agent-log.md) lists what the agents got wrong and how each was caught. The AI guardrails are enforced, not only written: a hook stops an agent writing a card number or secret, and CI runs the same check.
+Specs first (`specs/`), one phase at a time, test before code, a box ticked only when the named test passed (`tools/check_specs.py` checks the surefire reports). Claude Code agents wrote most of the code from the brief in `CLAUDE.md`; every change was read, run and, for the risky ones, mutation-checked. Independent reviews by other models found real bugs (a paid link could be paid again by another card; parallel replays could double-post to OPERA; a refused capture left a card hold in place), each fixed with a test that fails without the fix. [`docs/agent-log.md`](docs/agent-log.md) lists what the agents got wrong and how each was caught, and every entry is cited by the rule or test in [`docs/engineering-standards.md`](docs/engineering-standards.md) that now prevents it (`tools/check_specs.py` fails otherwise), which `CLAUDE.md` loads into every agent session. The AI guardrails are enforced, not only written: a hook stops an agent writing a card number or secret, and CI runs the same check.
 
 ## Deploying on AWS
 [`docs/aws-deployment.md`](docs/aws-deployment.md): VPC, KMS, RDS PostgreSQL, Secrets Manager, ECS on Amazon Linux 2023, OAuth2 with Cognito, the midnight-to-3am deployment window, and a going-live checklist. OPERA Cloud is Oracle's SaaS, called over HTTPS, not something you run in AWS. Not yet executed in a real account.

@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.net.URI;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -45,7 +46,7 @@ class HostAllowlistFilter extends OncePerRequestFilter {
   static boolean isHealthProbe(HttpServletRequest request) {
     String path;
     try {
-      path = java.net.URI.create(request.getRequestURI()).normalize().getPath();
+      path = URI.create(request.getRequestURI()).normalize().getPath();
     } catch (IllegalArgumentException unparsable) {
       return false;
     }

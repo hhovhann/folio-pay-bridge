@@ -14,6 +14,7 @@ Review the whole service as if it were going to production at a hotel-payments p
   - Agent-log entries 42 and 43 and decision D-30 said more than the code did: the recorder's sample-rate check and a force-push guard that reads every argument are now built; D-30 is rewritten.
 - The owner's questions: the API is versioned in the path with a deprecation mechanism (D-39); errors are RFC 9457 problem details (D-20, D-29); services log every state change at INFO and their decisions at DEBUG, never card data or tokens, and production logs are JSON (D-41); foreign keys, a version on card tokens, change timestamps, connection pool and UTC settings for Hibernate (D-12); the layer rules are a test (`ArchitectureTest`); Java conventions (imports, braces, no inline class names, verb method names); invisible characters and a command guard against prompt injection (D-24, D-36, CLAUDE.md rule 8).
 - Documentation brought in line: decisions, security notes, edge cases, README, runbook, agent log.
+- Engineering standards (`docs/engineering-standards.md`), loaded into every agent session by `CLAUDE.md`: each rule cites the agent-log entry it came from, the spec checker fails if an entry is not cited, and the conventions that code can check are a test (`CodeConventionsTest`). Frontend rules in `dashboard/CLAUDE.md`.
 
 ## Out of scope
 - New dependencies (Testcontainers, a formatter plugin, a metrics registry): proposed to the owner, not added (CLAUDE.md rule 7).

@@ -5,6 +5,8 @@
 2. A phase marked done has every box ticked (boxes marked "(manual)" may stay open).
 3. Every ticked box that names a test as `Class.method` points at a test that exists and ran without failure in
    target/surefire-reports. Run ./mvnw test first; with --no-reports this third check is skipped.
+4. Every entry in docs/agent-log.md is cited, as "(log N)", by a rule in docs/engineering-standards.md: a mistake is
+   not finished until it has become a rule or a test, so the next agent does not make it again.
 """
 import pathlib, re, sys
 import xml.etree.ElementTree as ET
@@ -80,6 +82,20 @@ if "--no-reports" not in sys.argv:
                 errors.append(f"docs/edge-cases.md: test {ref} was not found in the test reports")
             elif not reports[ref]:
                 errors.append(f"docs/edge-cases.md: test {ref} did not pass")
+# Every lesson in the agent log has become a rule in the engineering standards (and every citation points at a real entry).
+standards, log = root / "docs" / "engineering-standards.md", root / "docs" / "agent-log.md"
+if standards.is_file() and log.is_file():
+    cited = set()
+    for group in re.findall(r"\(log ([\d, ]+)\)", standards.read_text(encoding="utf-8")):
+        cited.update(int(n) for n in re.findall(r"\d+", group))
+    entries = [int(n) for n in re.findall(r"^(\d+)\. \*\*", log.read_text(encoding="utf-8"), flags=re.M)]
+    for n in entries:
+        if n not in cited:
+            errors.append(f"docs/agent-log.md entry {n} is not cited by any rule in docs/engineering-standards.md: turn the lesson into a rule or a test")
+    for n in sorted(cited - set(entries)):
+        errors.append(f"docs/engineering-standards.md cites agent-log entry {n}, which does not exist")
+else:
+    errors.append("docs/engineering-standards.md and docs/agent-log.md must both exist")
 for e in errors:
     print("ERROR", e)
 print(f"{len(phases)} phase folder(s), {len(done)} done, {checked} ticked test reference(s) checked, {len(errors)} error(s)")
