@@ -31,13 +31,15 @@ This is a payments codebase in miniature. Treat every change as one that touches
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 436 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 447 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)
 python3 tools/guard_commands.py --self-test   # the hook that blocks force-push, remote deletion and similar, checked against its table
 (cd dashboard && npm run dev)    # the operator dashboard with hot reload, against a bridge on :8081
 uv run --project demo python demo/check_dashboard.py   # the dashboard in a real browser against the running app
+uv run --project demo python demo/check_frontdesk.py   # the OPERA simulator's front desk in a real browser (a stay, an OHIP payment, check-out)
+python3 tools/ohip_specs.py <commit>   # refresh Oracle's OHIP contract (src/test/resources/ohip) that OhipContractTest checks against
 DEMO_FAST=1 uv run --project demo python demo/make_fullflow_demo.py   # dry run on the Docker stack: drives every scene, asserts the narration
 uv run --project demo python demo/make_fullflow_demo.py   # re-record the one narrated video (demo/out, the .mp4 is not committed)
 ```

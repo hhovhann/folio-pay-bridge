@@ -28,7 +28,7 @@ flowchart LR
   Vault -- "GenerateDataKey / Decrypt" --> KMS
   Core --> DB
   Core -- "authorise, capture, void (idempotency key)" --> PSP
-  Core -- "OHIP REST: post payment to folio window,<br/>look up by reference, business date" --> PMS
+  Core -- "OHIP REST, on Oracle's published contract:<br/>postBillingPayment, getFolio, getBusinessDate" --> PMS
   Core -- "signed webhooks" --> MW
   PSP -. "settlement statement" .-> Core
 ```
@@ -53,15 +53,15 @@ sequenceDiagram
   B-->>MW: card token (tok_...)
   MW->>B: POST /api/v1/links/{id}/pay (token)
   B->>B: claim the link for this card (atomic OPEN to PAYING)
-  B->>O: business date for the hotel
+  B->>O: getBusinessDate for the hotel
   B->>B: store charge PENDING under a unique idempotency key
   B->>K: Decrypt wrapped key (context must match)
   B->>P: authorise (key:auth, card number), card number dropped right after
   B->>P: capture (key:cap)
   B->>B: charge CAPTURED, link PAID
   B->>B: store posting PENDING (post:chargeId), take the lease
-  B->>O: find payment by reference post:chargeId (none yet)
-  B->>O: post payment to reservation folio window (payment code, cashier, business date)
+  B->>O: getFolio: a payment with reference post:chargeId? (none yet)
+  B->>O: postBillingPayment to the folio window (payment method, cashier, reference); OPERA posts it on its business date
   O-->>B: transaction number
   B->>B: posting POSTED
   B-->>MW: outcome OK
@@ -137,16 +137,19 @@ Today one deployment serves one property (`foliopay.opera.hotel-id`). A platform
 5. **Data residency**: properties in the EU (GDPR) and the GCC may need their card data in-region: a deployment (and KMS key) per region, routed by property.
 
 ## 10. What is simulated and what is real
-Real: the Java service, its database rules, the operator dashboard (checked in a real browser against the running app), encryption with a real AES-GCM implementation, the HTTP adapters (timeouts, OAuth refresh, idempotency headers, status mapping), Spring Security with real signed JWTs, Flyway on PostgreSQL 16, the Docker image on Amazon Linux 2023. Simulated: OPERA and the processor (HTTP simulators shaped like OHIP and a typical PSP, not their real APIs), KMS (tested against a stubbed client), the authorization server (a local JWKS in tests). Not built: 3-D Secure and a hosted payment page, messaging (email, SMS, WhatsApp), multi-tenancy, chargeback handling. See [`docs/product-map.md`](product-map.md).
+Real: the Java service, its database rules, the operator dashboard (checked in a real browser against the running app), encryption with a real AES-GCM implementation, the HTTP adapters (timeouts, OAuth refresh, idempotency headers, status mapping), Spring Security with real signed JWTs, Flyway on PostgreSQL 16, the Docker image on Amazon Linux 2023. Simulated: OPERA, by a simulator on Oracle's published OHIP contract for the four operations the bridge uses, held to Oracle's own Swagger files by `OhipContractTest` (D-42), with a front desk (reservations, folios, room charges, night audit, check-out); it is not Oracle software, and OPERA cannot be run locally by anyone. The processor, by a simulator shaped like a typical PSP, not a real API. KMS (tested against a stubbed client), the authorization server (a local JWKS in tests). Not built: 3-D Secure and a hosted payment page, messaging (email, SMS, WhatsApp), multi-tenancy, chargeback handling. See [`docs/product-map.md`](product-map.md).
 
 ## 11. Glossary
 **Hotel side**
 - **PMS (property management system):** the hotel's core system: reservations, rooms, guest bills, the business date. OPERA is the most common one in large hotels.
 - **Oracle OPERA Cloud / OPERA 5:** Oracle's PMS. OPERA Cloud is Oracle's SaaS (hosted on Oracle Cloud Infrastructure); OPERA 5 (V5) is the older on-premise version. You never run OPERA yourself.
-- **OHIP (Oracle Hospitality Integration Platform):** the REST API gateway to OPERA Cloud. Calls need an OAuth2 client, an application key (`x-app-key`) and the hotel id (`x-hotelid`).
+- **OHIP (Oracle Hospitality Integration Platform):** the REST API gateway to OPERA Cloud. Calls need an OAuth2 token (client credentials: client id and secret, an enterprise id and a scope), an application key (`x-app-key`) and the hotel id (`x-hotelid`). Oracle publishes the specifications at github.com/oracle/hospitality-api-docs; access is through Oracle's developer portal, a shared partner sandbox (API only, billed per call) or a hotel's test environment. The APIs are grouped by module: `csh` cashiering (folios, payments, charges), `bof` back office (business date), `rsv` reservations, `fof` front desk (check-in, rooms).
+- **OPERA 5 interfaces:** OXI (XML messages for reservations and profiles), OWS (SOAP web services), IFC8 (postings from POS and payment systems). New integrations target OHIP; an OPERA 5 hotel would be another adapter behind the same port.
+- **OPI (OPERA Payment Interface):** Oracle's own link between OPERA and card terminals and payment providers. For some hotels Oracle's payment offer is an alternative to a payment company's, so it is worth knowing where each fits.
 - **Reservation:** a booking in the PMS. **Folio:** the guest's bill on a reservation. **Folio window:** one of several sub-bills on a folio (window 1 for the guest, window 2 for the company, for example). A payment is posted to a window.
-- **Payment code / transaction code:** how OPERA classifies a posting (for example `CC` for card, or one code per card brand). **Cashier:** the user or interface id a posting is made under; finance closes cashiers at the end of the day.
-- **Business date / night audit:** the hotel's accounting day. It does not change at midnight but when the night auditor closes the day (often 2 to 4 am). A posting must carry the current business date, or OPERA refuses it.
+- **Payment method / transaction code:** how OPERA classifies a posting (a payment method such as `CC`, or one per card brand; transaction codes such as `1000` for a room charge). **Cashier:** the numbered user or interface a posting is made under; finance closes cashiers at the end of the day. The bridge posts as its own interface cashier.
+- **Transaction type:** OHIP's `Revenue` (a charge on the folio) or `Payment`. **Balance:** charges minus payments per window; a guest checks out with every window at zero.
+- **Business date / night audit:** the hotel's accounting day. It does not change at midnight but when the night auditor closes the day (often 2 to 4 am), which also posts room and tax to every guest in house. OPERA posts every charge and payment on the open business date: an integration does not choose it, but must know it, because a payment charged before night audit and posted after it lands on the next day.
 - **Rate plan:** the commercial terms of a booking. **Advance purchase:** non-refundable, paid up front. **Flexible:** a deposit or nothing until near arrival. The bridge's policy turns these into a payment request and due date.
 - **OTA (online travel agent):** Booking.com, Expedia and the like. **VCC (virtual credit card):** a single-use card an OTA issues to pay the hotel for a booking; the hotel charges it like any card, often after arrival. Charging VCCs without manual keying is the flow this project is built around.
 

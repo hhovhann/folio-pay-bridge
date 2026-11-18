@@ -15,6 +15,7 @@ import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.PaymentCommand;
 import dev.foliopay.service.ShadowService;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -80,7 +81,8 @@ class ShadowServiceImpl implements ShadowService {
         errors++;
         continue;
       }
-      List<Mismatch> differences = compare(booking, opera.find(settings.hotelId(), result.posting().getIdempotencyKey()).orElse(null));
+      var posting = result.posting();
+      List<Mismatch> differences = compare(booking, opera.find(settings.hotelId(), posting.getFolioId(), posting.getIdempotencyKey()).orElse(null), posting.getBusinessDate());
       differences.forEach(m -> byField.merge(m.field(), 1, Integer::sum));
       differences.stream().limit(Math.max(0, MAX_SAMPLES - samples.size())).forEach(samples::add);
       if (differences.isEmpty()) {
@@ -98,14 +100,18 @@ class ShadowServiceImpl implements ShadowService {
     return PaymentCommand.bridge("shadow-" + runId + "-" + booking.ref(), booking.ref(), "F-" + booking.ref(), token, amount, Pricing.businessDate(booking, config.dateRule()));
   }
 
-  private static List<Mismatch> compare(ShadowBooking booking, OperaClient.Posted posted) {
+  /**
+   * The amount is compared with what OPERA has on the folio. The business date is the one the date rule gave the bridge's own record: OPERA
+   * posts every payment on its current business date (D-42), so the rule decides how the bridge books the payment, not how OPERA does.
+   */
+  private static List<Mismatch> compare(ShadowBooking booking, OperaClient.Posted posted, LocalDate recordedDate) {
     LegacyRules.Expected expected = LegacyRules.expected(booking);
     List<Mismatch> differences = new ArrayList<>();
     if (posted == null || posted.amount().minor() != expected.amountMinor()) {
       differences.add(new Mismatch(booking.ref(), "amount", String.valueOf(expected.amountMinor()), posted == null ? "none" : String.valueOf(posted.amount().minor())));
     }
-    if (posted == null || !posted.businessDate().equals(expected.businessDate())) {
-      differences.add(new Mismatch(booking.ref(), "businessDate", String.valueOf(expected.businessDate()), posted == null ? "none" : String.valueOf(posted.businessDate())));
+    if (posted == null || !recordedDate.equals(expected.businessDate())) {
+      differences.add(new Mismatch(booking.ref(), "businessDate", String.valueOf(expected.businessDate()), posted == null ? "none" : String.valueOf(recordedDate)));
     }
     return differences;
   }

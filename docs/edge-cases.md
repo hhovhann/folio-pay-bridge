@@ -71,7 +71,12 @@ Status: **Covered** = a test fails if the behaviour breaks. **Partial** = covere
 | Missing app key or hotel header | Refused | `FullFlowHttpIntegrationTest.operaRefusesACallWithoutTheApplicationKeyOrTheHotelHeader`, `SimulatorEndpointsTest.everyResourceCallNeedsAValidTokenTheRightAppKeyAndTheMatchingHotelHeader` | Covered |
 | Amount sent as a decimal, read back in minor units, any currency | Exact | `HttpAdaptersTest.aPaymentIsFoundBackWithItsAmountRestoredToMinorUnitsInEachCurrency` | Covered |
 | Hostile or oversized PMS message | One line, 255 characters | `PostingServiceImplTest.anUpstreamMessageIsStoredAsOneBoundedLineSoItCannotForgeLogEntriesOrOverflowTheColumn`, `ReviewFindingsIntegrationTest.aStoredUpstreamMessageIsBoundedAndSingleLine` | Covered |
-| The real OPERA Cloud / OPERA 5 | Not exercised | none | Not covered (no public image; needs OHIP sandbox) |
+| A folio OPERA returns only in part (a window says it has more) | "Unavailable", never "not there": the bridge cannot prove absence, and posting again would post twice | `HttpAdapterRepliesTest.aFolioReturnedOnlyInPartIsUnavailableNotAbsent` | Covered |
+| A payment listed as a credit (negative), or a charge that carries our reference | Found with its amount; a charge is not our payment | `HttpAdapterRepliesTest.aPaymentListedAsACreditIsFoundAndAChargeWithOurReferenceIsNot` | Covered |
+| OHIP answers 201 with no postings, only generated ones (a surcharge), or none for a guest not yet in house (204 folio) | No transaction number: look before posting again; a 204 folio is "not posted yet" | `HttpAdapterRepliesTest.anOperaReplyWithoutATransactionNumberIsNotRecordedAsPostedWithABlankReference`, `HttpAdapterRepliesTest.aFolioWithNoContentIsNotFound` | Covered |
+| A whole amount (800.00) or more decimals than the currency has | Trailing zeros kept, exact; a fraction of a cent is unreadable, never cut | `OhipContractTest.aPaymentIsPostedAndFoundBackThroughOraclesOperationsInEachCurrency`, `HttpAdapterRepliesTest.aFoundPaymentWeCannotReadIsAnOutageNotACrash` | Covered |
+| A request or reply that departs from Oracle's published OHIP contract (path, header, field, enum, status) | The build fails: every exchange of the adapter with the simulator is checked against Oracle's Swagger files (D-42) | `OhipContractTest.theCheckRefusesTheInventedShapesTheBridgeUsedBeforeD42`, and every `OhipContractTest` scenario | Covered |
+| The real OPERA Cloud / OPERA 5 | Oracle's published contract is checked; the system itself is not exercised | `OhipContractTest` | Partial (OPERA cannot be run locally; the sandbox questions are in `specs/roadmap.md`) |
 
 ## 6. Business date and night audit
 | Case | Handling | Test | Status |
@@ -171,18 +176,18 @@ Status: **Covered** = a test fails if the behaviour breaks. **Partial** = covere
 | A layer reaches past its neighbour (a controller to a repository, a service to HTTP, the domain to Spring) | The build fails | `ArchitectureTest.controllersNeverTouchARepositoryAnImplementationAnAdapterOrTheVaultsCrypto`, `ArchitectureTest.servicesNeverTouchHttpOrTheApiLayer`, `ArchitectureTest.theDomainKnowsNoSpringAndNoOtherLayer` | Covered |
 
 ## 12. Not covered: be honest about these
-1. **The real OPERA Cloud (OHIP) and OPERA 5.** Only simulators exist; paths and error codes are simplified and unchecked against Oracle's documentation.
+1. **The real OPERA Cloud (OHIP) and OPERA 5.** Only a simulator exists. The four OHIP operations the bridge uses follow Oracle's published contract and every exchange is checked against it (D-42), but what the contract leaves open (the 201's body, a payment's sign, deposits before arrival, a lock's status, rate limits) needs a sandbox; OPERA 5's interfaces (OXI, OWS) are not built.
 2. **A real processor or acquirer**, 3-D Secure, hosted card entry, stored credentials, refunds, chargebacks and dispute evidence.
 3. **Crash between steps.** A JVM crash after a capture and before it is saved can strand a payment; there is no sweeper.
 4. **Tenant scoping** of credentials and data, mutual TLS, and rate limiting per client (authentication and scopes are built: section 11a).
 5. **Booking-event ordering and duplicate delivery** from a real PMS; refund-review flags are not persisted.
-6. **Reject-and-repair** for a posting refused because night audit passed while it waited.
+6. **Reject-and-repair** for a posting OPERA refuses for good (a checked-out folio): an operator posts it in OPERA by hand; the bridge has no workflow for it.
 7. **Real KMS and Cognito** in a real AWS account; circuit breaker and bulkhead (timeouts exist; D-33 explains why the business date is asked for every new charge even during an outage); load and soak behaviour.
 8. **Multi-property** operation (one hotel id is configuration here).
 9. **Clock and timezone edge cases** beyond the business-date rule: daylight-saving zones, leap days.
 10. **Concurrency beyond one JVM**: the database guarantees hold across instances, but this was tested with threads in one process, not with several containers.
 11. **A posting lease held by a request that crashed** blocks replay of that posting until it runs out (derived from the timeouts: about four minutes with the defaults); there is no alarm for it.
-12. **A posting dead-lettered across night audit** keeps the business date it was captured on, so OPERA may reject it on replay (item 6).
+12. **A posting dead-lettered across night audit** is posted by OPERA on the day it is replayed, while the bridge's record keeps the business date of the capture: reconciliation must explain the difference until OPERA's date is stored too (`specs/roadmap.md`, Next 5).
 13. **The simulators' control endpoints** (`/sim/reset`, `/sim/night-audit`, faults) have no Host check or CSRF protection: a web page open in the same browser could reset a local demo. They are demo tools, never deployed.
 14. **Webhook ordering**: events are delivered at least once and may arrive out of order (a posting before its capture after a retry); receivers order by the data, not by arrival.
 15. **Compose with local keys over PostgreSQL**: `docker compose restart app` keeps the database but makes new keys, so stored cards can no longer be opened. The guard refuses local keys over a persistent database unless `foliopay.allow-ephemeral-keys=true`, which only the Compose demo profile sets; use `docker compose down -v` to start clean.

@@ -46,6 +46,8 @@ services:
       FOLIOPAY_HTTP_OPERA_APP_KEY: demo-app-key
       FOLIOPAY_HTTP_OPERA_CLIENT_ID: fpbridge
       FOLIOPAY_HTTP_OPERA_CLIENT_SECRET: fpbridge-secret
+      FOLIOPAY_HTTP_OPERA_ENTERPRISE_ID: DEMOENT
+      FOLIOPAY_HTTP_OPERA_SCOPE: demo-scope
       FOLIOPAY_HTTP_PSP_BASE_URL: http://psp-sim:8091
       FOLIOPAY_HTTP_PSP_API_KEY: demo-psp-key
       # Local demo only: the console and the OPERA simulator call the API without credentials. A real deployment sets

@@ -42,7 +42,7 @@ class FailClosedStartupTest {
   @Test
   void withARealGatewayAndNoAuthenticationItDoesNotStart() {
     assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=http", "foliopay.http.opera-base-url=http://127.0.0.1:1",
-        "foliopay.http.opera-app-key=a", "foliopay.http.opera-client-id=b", "foliopay.http.opera-client-secret=c", "foliopay.http.psp-base-url=http://127.0.0.1:1",
+        "foliopay.http.opera-app-key=a", "foliopay.http.opera-client-id=b", "foliopay.http.opera-client-secret=c", "foliopay.http.opera-enterprise-id=d", "foliopay.http.opera-scope=e", "foliopay.http.psp-base-url=http://127.0.0.1:1",
         "foliopay.http.psp-api-key=d")).hasStackTraceContaining("No authentication configured");
   }
 

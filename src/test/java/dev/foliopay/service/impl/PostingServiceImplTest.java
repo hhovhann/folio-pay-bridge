@@ -45,7 +45,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PostingServiceImplTest {
   private static final Money AMOUNT = new Money(5_000, "USD");
   private static final LocalDate DAY = Fixtures.DAY;
-  private static final OperaProperties SETTINGS = new OperaProperties("HOTEL9", 2, "VCC", "CASH1");
+  private static final OperaProperties SETTINGS = new OperaProperties("HOTEL9", 2, "VCC", 7001);
 
   private final PostingRepository repository = mock(PostingRepository.class);
   private final OperaClient opera = mock(OperaClient.class);
@@ -66,7 +66,7 @@ class PostingServiceImplTest {
     when(repository.lease(anyString(), anyString(), any(), any())).thenReturn(1); // nobody else holds it, unless a test says so
     when(repository.renew(anyString(), anyString(), any(), any())).thenReturn(1); // and it is still ours when we post
     when(repository.save(any(Posting.class))).thenAnswer(call -> call.getArgument(0));
-    when(opera.find(anyString(), anyString())).thenReturn(Optional.empty());
+    when(opera.find(anyString(), anyString(), anyString())).thenReturn(Optional.empty());
   }
 
   private Posting keep(Posting posting) {
@@ -95,12 +95,11 @@ class PostingServiceImplTest {
     assertThat(payment.hotelId()).isEqualTo("HOTEL9");
     assertThat(payment.reservationId()).isEqualTo("RES-1");
     assertThat(payment.folioWindow()).isEqualTo(2);
-    assertThat(payment.paymentCode()).isEqualTo("VCC");
-    assertThat(payment.cashierId()).isEqualTo("CASH1");
+    assertThat(payment.paymentMethod()).isEqualTo("VCC");
+    assertThat(payment.cashierId()).isEqualTo(7001);
     assertThat(payment.externalRef()).isEqualTo("post:ch-1");
     assertThat(payment.pspRef()).isEqualTo("cap_77");
     assertThat(payment.amount()).isEqualTo(AMOUNT);
-    assertThat(payment.businessDate()).isEqualTo(DAY);
   }
 
   @Test
@@ -132,7 +131,7 @@ class PostingServiceImplTest {
   void aRetryAfterALostResponseFindsTheEarlierPostInsteadOfPostingTwice() {
     newPosting();
     // the first attempt reached OPERA but its reply was lost; the retry looks first and finds it
-    when(opera.find("HOTEL9", "post:ch-1")).thenReturn(Optional.empty()).thenReturn(Optional.of(new Posted("OP-9", "RES-1", AMOUNT, DAY)));
+    when(opera.find("HOTEL9", "RES-1", "post:ch-1")).thenReturn(Optional.empty()).thenReturn(Optional.of(new Posted("OP-9", "RES-1", AMOUNT, DAY)));
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("Read timed out"));
 
     Posting posting = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");
@@ -147,7 +146,7 @@ class PostingServiceImplTest {
     Posting waiting = stored();
     waiting.recordAttempt(); // it was tried before
     waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "timeout");
-    when(opera.find("HOTEL9", "post:ch-1")).thenReturn(Optional.of(new Posted("OP-5", "RES-1", AMOUNT, DAY)));
+    when(opera.find("HOTEL9", "RES-1", "post:ch-1")).thenReturn(Optional.of(new Posted("OP-5", "RES-1", AMOUNT, DAY)));
 
     Posting result = service.replay(waiting.getId());
 

@@ -52,68 +52,98 @@ class SimulatorEndpointsTest {
     return request.exchange((req, res) -> res.bodyTo(JsonNode.class));
   }
 
+  private static final String BASIC = "Basic " + java.util.Base64.getEncoder().encodeToString("fpbridge:fpbridge-secret".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+  private static RestClient.RequestBodySpec tokenRequest(String appKey, String enterprise, String basic) {
+    RestClient.RequestBodySpec spec = HTTP.post().uri(opera.url() + "/oauth/v1/tokens").contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
+    if (appKey != null) spec.header("x-app-key", appKey);
+    if (enterprise != null) spec.header("enterpriseId", enterprise);
+    if (basic != null) spec.header("Authorization", basic);
+    return spec;
+  }
+
   private static String token() {
-    return HTTP.post().uri(opera.url() + "/oauth/v1/tokens").header("x-app-key", "demo-app-key").contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
-        .body("grant_type=client_credentials&client_id=fpbridge&client_secret=fpbridge-secret").retrieve().body(JsonNode.class).path("access_token").asText();
+    return tokenRequest("demo-app-key", "DEMOENT", BASIC).body("grant_type=client_credentials&scope=demo-scope").retrieve().body(JsonNode.class).path("access_token").asText();
   }
 
   private static RestClient.RequestBodySpec operaPost(String path, String bearer) {
     return HTTP.post().uri(opera.url() + path).header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1").contentType(org.springframework.http.MediaType.APPLICATION_JSON);
   }
 
-  private static Map<String, Object> payment(String code, String date) {
-    return Map.of("folioWindow", 1, "paymentCode", code, "cashierId", "C1", "amount", "10.00", "currency", "USD", "businessDate", date, "reference", "r1", "pspRef", "cap_1");
+  /** A postBillingPayment body, as Oracle's billingPayment definition shapes it. */
+  private static Map<String, Object> payment(String reservation, String method, long cashier, Object amount) {
+    return Map.of("criteria", Map.of("hotelId", "DEMO1", "reservationId", Map.of("id", reservation, "type", "Reservation"), "folioWindowNo", 1, "cashierId", cashier,
+        "paymentMethod", Map.of("paymentMethod", method), "postingAmount", Map.of("amount", amount, "currencyCode", "USD"), "postingReference", "r1",
+        "postingRemark", "Processor reference cap_1", "action", "Billing"));
   }
+
+  private static JsonNode frontDesk(String path) { return json(HTTP.post().uri(opera.url() + path)); }
+
+  private static int frontDeskStatus(String path) { return statusOf(HTTP.post().uri(opera.url() + path)); }
 
   private static int redirectStatus(String url) throws Exception {
     return RAW.send(HttpRequest.newBuilder(URI.create(url)).build(), HttpResponse.BodyHandlers.discarding()).statusCode();
   }
 
-  // ---- OPERA front desk
+  // ---- OPERA: the OHIP surface
   @Test
   void theFrontDeskHomeRedirectsToItsPage() throws Exception {
     assertThat(redirectStatus(opera.url() + "/")).isEqualTo(302);
   }
 
   @Test
-  void theTokenEndpointRefusesABadClientAndTheWholeServiceRefusesWhenItIsDown() {
-    assertThat(statusOf(HTTP.post().uri(opera.url() + "/oauth/v1/tokens").header("x-app-key", "wrong").contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
-        .body("grant_type=client_credentials&client_id=fpbridge&client_secret=fpbridge-secret"))).isEqualTo(401);
+  void theTokenEndpointWantsBasicCredentialsTheAppKeyTheEnterpriseAndAScopeAndRefusesWhenDown() {
+    String form = "grant_type=client_credentials&scope=demo-scope";
+    assertThat(statusOf(tokenRequest("wrong", "DEMOENT", BASIC).body(form))).as("wrong app key").isEqualTo(401);
+    assertThat(statusOf(tokenRequest("demo-app-key", "OTHER", BASIC).body(form))).as("wrong enterprise").isEqualTo(401);
+    assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", null).body(form))).as("no client credentials").isEqualTo(401);
+    assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", "Basic %%%").body(form))).as("unreadable credentials").isEqualTo(401);
+    assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", BASIC).body("grant_type=client_credentials"))).as("no scope").isEqualTo(400);
+    assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", BASIC).body("grant_type=password&scope=s"))).as("not client credentials").isEqualTo(400);
+    assertThat(json(tokenRequest("demo-app-key", "DEMOENT", BASIC).body(form)).path("token_type").asText()).isEqualTo("Bearer");
     HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "DOWN")).retrieve().toBodilessEntity();
-    assertThat(statusOf(HTTP.post().uri(opera.url() + "/oauth/v1/tokens").header("x-app-key", "demo-app-key").contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
-        .body("grant_type=client_credentials&client_id=fpbridge&client_secret=fpbridge-secret"))).isEqualTo(503);
+    assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", BASIC).body(form))).isEqualTo(503);
   }
 
   @Test
   void everyResourceCallNeedsAValidTokenTheRightAppKeyAndTheMatchingHotelHeader() {
     String bearer = token();
-    String url = opera.url() + "/v1/hotels/DEMO1/business-date";
+    String url = opera.url() + "/bof/v1/hotels/DEMO1/businessDate";
     assertThat(statusOf(HTTP.get().uri(url).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1"))).as("no token").isEqualTo(401);
     assertThat(statusOf(HTTP.get().uri(url).header("Authorization", "Bearer " + bearer).header("x-hotelid", "DEMO1"))).as("no app key").isEqualTo(401);
     assertThat(statusOf(HTTP.get().uri(url).header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "OTHER"))).as("wrong hotel").isEqualTo(400);
-    assertThat(json(HTTP.get().uri(url).header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1")).path("businessDate").asText()).isEqualTo(TODAY);
+    JsonNode reply = json(HTTP.get().uri(url).header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1"));
+    assertThat(reply.path("hotels").get(0).path("hotelId").asText()).isEqualTo("DEMO1");
+    assertThat(reply.path("hotels").get(0).path("businessDate").asText()).isEqualTo(TODAY);
   }
 
   @Test
-  void aPaymentIsRefusedForEachReasonARealPmsWouldGive() {
+  void aPaymentIsRefusedForEachReasonARealPmsWouldGiveWithOperasErrorCode() {
     String bearer = token();
-    String path = "/v1/hotels/DEMO1/reservations/";
-    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("", TODAY)))).as("no payment code").isEqualTo(400);
-    assertThat(statusOf(operaPost(path + "GHOST-1/payments", bearer).body(payment("CC", TODAY)))).as("no such reservation").isEqualTo(404);
-    assertThat(statusOf(operaPost(path + "CLOSED-9/payments", bearer).body(payment("CC", TODAY)))).as("closed folio").isEqualTo(400);
-    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("CC", "2001-01-01")))).as("wrong business date").isEqualTo(400);
-    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("CC", TODAY)))).as("a good one").isEqualTo(201);
+    String path = "/csh/v1/hotels/DEMO1/reservations/";
+    JsonNode missing = json(operaPost(path + "GHOST-1/payments", bearer).body(payment("GHOST-1", "CC", 9001, 10.00)));
+    assertThat(missing.path("status").asInt()).as("no such reservation").isEqualTo(404);
+    assertThat(missing.path("o:errorCode").asText()).isEqualTo("RESERVATION_NOT_FOUND");
+    assertThat(statusOf(operaPost(path + "CLOSED-9/payments", bearer).body(payment("CLOSED-9", "CC", 9001, 10.00)))).as("checked out").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("RES-1", "ZZ", 9001, 10.00)))).as("unknown payment method").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("RES-1", "CC", 4242, 10.00)))).as("unknown cashier").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("RES-1", "CC", 9001, 10.001)))).as("a fraction of a cent").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("RES-1", "CC", 9001, -5)))).as("not positive").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("RES-2", "CC", 9001, 10.00)))).as("body names another reservation").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(Map.of("nothing", 1)))).as("no criteria").isEqualTo(400);
+    assertThat(statusOf(operaPost(path + "RES-1/payments", bearer).body(payment("RES-1", "CC", 9001, 10.00)))).as("a good one").isEqualTo(201);
   }
 
   @Test
   void aThrottleAndALockConflictEachHitOnlyTheNextPaymentThenClear() {
     String bearer = token();
-    String path = "/v1/hotels/DEMO1/reservations/RES-1/payments";
+    String path = "/csh/v1/hotels/DEMO1/reservations/RES-1/payments";
     HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "THROTTLE_NEXT")).retrieve().toBodilessEntity();
-    assertThat(statusOf(operaPost(path, bearer).body(payment("CC", TODAY)))).isEqualTo(429);
-    assertThat(statusOf(operaPost(path, bearer).body(payment("CC", TODAY)))).isEqualTo(201);
+    assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(429);
+    assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(201);
     HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "LOCK_CONFLICT_NEXT")).retrieve().toBodilessEntity();
-    assertThat(statusOf(operaPost(path, bearer).body(payment("CC", TODAY)))).isEqualTo(409);
+    assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(409);
+    assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(201);
   }
 
   @Test
@@ -122,7 +152,38 @@ class SimulatorEndpointsTest {
     assertThat(json(HTTP.get().uri(opera.url() + "/sim/state")).path("businessDate").asText()).isEqualTo(LocalDate.parse(TODAY).plusDays(1).toString());
     String bearer = token();
     HTTP.post().uri(opera.url() + "/sim/expire-tokens").retrieve().toBodilessEntity();
-    assertThat(statusOf(HTTP.get().uri(opera.url() + "/v1/hotels/DEMO1/business-date").header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1"))).isEqualTo(401);
+    assertThat(statusOf(HTTP.get().uri(opera.url() + "/bof/v1/hotels/DEMO1/businessDate").header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1"))).isEqualTo(401);
+  }
+
+  // ---- OPERA: the front desk
+  /** A guest's stay as a front desk sees it: check in, a room night, a payment that settles it, then check-out, which needs a zero balance. */
+  @Test
+  void aGuestChecksInIsChargedPaysAndCanCheckOutOnlyWhenTheFolioIsSettled() {
+    assertThat(frontDesk("/sim/reservations/RES-1002/check-in").toString()).contains("IN_HOUSE");
+    assertThat(frontDeskStatus("/sim/reservations/RES-1002/check-in")).as("already in house").isEqualTo(400);
+    frontDesk("/sim/reservations/RES-1002/room-charge");
+    JsonNode folio = json(HTTP.get().uri(opera.url() + "/sim/reservations/RES-1002/folio"));
+    assertThat(folio.path("balance").asText()).isEqualTo("320.00");
+    assertThat(frontDeskStatus("/sim/reservations/RES-1002/check-out")).as("a balance is owed").isEqualTo(400);
+
+    operaPost("/csh/v1/hotels/DEMO1/reservations/RES-1002/payments", token()).body(payment("RES-1002", "CC", 9001, 320.00)).retrieve().toBodilessEntity();
+    assertThat(json(HTTP.get().uri(opera.url() + "/sim/reservations/RES-1002/folio")).path("balance").asText()).isEqualTo("0.00");
+    assertThat(frontDesk("/sim/reservations/RES-1002/check-out").toString()).contains("CHECKED_OUT");
+    assertThat(statusOf(operaPost("/csh/v1/hotels/DEMO1/reservations/RES-1002/payments", token()).body(payment("RES-1002", "CC", 9001, 1.00))))
+        .as("a checked-out folio is closed").isEqualTo(400);
+    assertThat(frontDeskStatus("/sim/reservations/RES-1002/room-charge")).as("no room nights after departure").isEqualTo(400);
+    assertThat(frontDeskStatus("/sim/reservations/RES-1002/check-out")).isEqualTo(400);
+    assertThat(statusOf(HTTP.get().uri(opera.url() + "/sim/reservations/GHOST-2/folio"))).isEqualTo(404);
+  }
+
+  @Test
+  void nightAuditPostsARoomNightToEveryGuestInHouseOnTheDayItCloses() {
+    int before = json(HTTP.get().uri(opera.url() + "/sim/reservations/RES-1001/folio")).path("postings").size();
+    HTTP.post().uri(opera.url() + "/sim/night-audit").retrieve().toBodilessEntity();
+    JsonNode postings = json(HTTP.get().uri(opera.url() + "/sim/reservations/RES-1001/folio")).path("postings");
+    assertThat(postings).hasSize(before + 1);
+    assertThat(postings.get(before).path("businessDate").asText()).isEqualTo(TODAY);
+    assertThat(json(HTTP.get().uri(opera.url() + "/sim/reservations/RES-1002/folio")).path("postings")).as("not checked in: nothing posted").isEmpty();
   }
 
   @Test

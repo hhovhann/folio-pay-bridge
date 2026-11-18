@@ -24,8 +24,8 @@ class FakeGatewaysTest {
   private final FakePsp psp = new FakePsp();
   private final FakeOpera opera = new FakeOpera(Clock.fixed(Instant.parse("2026-11-17T10:00:00Z"), ZoneOffset.UTC));
 
-  private OperaPayment payment(String reservation, String ref, String code, String cashier) {
-    return new OperaPayment("H1", reservation, 1, code, cashier, TEN, DAY, ref, "cap_1");
+  private OperaPayment payment(String reservation, String ref, String method, long cashier) {
+    return new OperaPayment("H1", reservation, 1, method, cashier, TEN, ref, "cap_1");
   }
 
   @Test
@@ -84,10 +84,11 @@ class FakeGatewaysTest {
 
   @Test
   void operaPostsPaymentsAndFindsThemByReferenceAndReportsTheClockDateAsItsBusinessDate() {
-    String ref = opera.postPayment(payment("RES-1", "post:1", "CC", "C1"));
+    String ref = opera.postPayment(payment("RES-1", "post:1", "CC", 9001));
     assertThat(ref).startsWith("OP-");
-    assertThat(opera.find("H1", "post:1")).isPresent().get().satisfies(p -> assertThat(p.reservationId()).isEqualTo("RES-1"));
-    assertThat(opera.find("H1", "other")).isEmpty();
+    assertThat(opera.find("H1", "RES-1", "post:1")).isPresent().get().satisfies(p -> assertThat(p.businessDate()).as("posted on OPERA's own date").isEqualTo(DAY));
+    assertThat(opera.find("H1", "RES-1", "other")).isEmpty();
+    assertThat(opera.find("H1", "RES-2", "post:1")).as("on another reservation's folio").isEmpty();
     assertThat(opera.postCount()).isEqualTo(1);
     assertThat(opera.businessDate("H1")).isEqualTo(LocalDate.of(2026, 11, 17));
   }
@@ -102,9 +103,9 @@ class FakeGatewaysTest {
 
   @Test
   void operaRejectsAClosedFolioAndAPaymentWithoutACodeOrCashier() {
-    assertThatThrownBy(() -> opera.postPayment(payment("F-CLOSED", "r1", "CC", "C1"))).isInstanceOf(OperaRejectedException.class).hasMessageContaining("closed");
-    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r2", "", "C1"))).isInstanceOf(OperaRejectedException.class);
-    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r3", "CC", null))).isInstanceOf(OperaRejectedException.class);
+    assertThatThrownBy(() -> opera.postPayment(payment("F-CLOSED", "r1", "CC", 9001))).isInstanceOf(OperaRejectedException.class).hasMessageContaining("closed");
+    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r2", "", 9001))).isInstanceOf(OperaRejectedException.class);
+    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r3", "CC", 0))).isInstanceOf(OperaRejectedException.class);
     assertThat(opera.postCount()).isZero();
   }
 
@@ -112,10 +113,10 @@ class FakeGatewaysTest {
   void operaCanBeDownOrPostAndThenLoseTheReply() {
     opera.arm(FakeOpera.Fault.DOWN);
     assertThat(opera.armed()).isEqualTo(FakeOpera.Fault.DOWN);
-    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r1", "CC", "C1"))).isInstanceOf(OperaUnavailableException.class);
+    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r1", "CC", 9001))).isInstanceOf(OperaUnavailableException.class);
 
     opera.arm(FakeOpera.Fault.TIMEOUT_AFTER_POST);
-    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r1", "CC", "C1"))).isInstanceOf(OperaUnavailableException.class);
+    assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r1", "CC", 9001))).isInstanceOf(OperaUnavailableException.class);
     assertThat(opera.postCount()).as("it posted before the reply was lost").isEqualTo(1);
     assertThat(opera.armed()).isEqualTo(FakeOpera.Fault.NONE);
   }

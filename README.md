@@ -15,14 +15,14 @@ You need a JDK 17 and Docker.
 git clone https://github.com/hhovhann/folio-pay-bridge && cd folio-pay-bridge
 export JAVA_HOME=<path to a JDK 17>
 
-# 1. Prove it: 436 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
+# 1. Prove it: 447 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
 ./mvnw clean verify && python3 tools/check_specs.py
 
 # 2. See the whole flow over real HTTP: bridge + PostgreSQL (Flyway) + OPERA simulator + processor simulator
 docker compose up --build
 #   operator dashboard http://127.0.0.1:8081/dashboard/   overview, payments, links, webhooks, reconciliation
 #   classic console   http://127.0.0.1:8081   the guest and fault switches used in the demo video
-#   OPERA front desk  http://127.0.0.1:8090   folios, business date, night audit, faults; received webhooks at /sim/webhooks
+#   OPERA front desk  http://127.0.0.1:8090   reservations, folios, check-in and check-out, night audit, faults; received webhooks
 #   processor         http://127.0.0.1:8091   ledger, settlement, faults
 
 # or a single process with in-memory fakes and the console's fault switches
@@ -59,7 +59,7 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | **Payment links from bookings** | PMS booking events (new, modified, cancelled) become payment requests under the booking policy; one live request per booking; a link can be paid by one card at a time |
 | **Payment requests from any app** | `POST /api/v1/links` with the `links:write` scope: F&B, events, spa or a messaging app asks for a set amount by a due date, and cannot take money itself |
 | **Card charging, exactly once** | Tokenised card, authorise then capture, idempotency key on every processor call, the same key on every retry; a refused capture releases the hold |
-| **Posting to OPERA, exactly once** | To the reservation's folio window with payment code, cashier and the hotel's business date; looks before posting again (OPERA does not deduplicate); a lease stops two requests posting at once; failures are dead-lettered with a reason and replayable |
+| **Posting to OPERA, exactly once** | On Oracle's published OHIP contract (`postBillingPayment`, `getFolio`, `getBusinessDate`, OAuth client credentials), checked exchange by exchange against Oracle's own Swagger files (D-42): to the reservation's folio window with the hotel's payment method and the bridge's cashier; reads the folio before posting again (OPERA does not deduplicate); a lease stops two requests posting at once; failures are dead-lettered with a reason and replayable |
 | **Integrator notifications** | Signed (HMAC-SHA256) webhooks for captured, declined, posted, dead-lettered; derived from stored state, retried, never dropped |
 | **Revenue assurance** | Reconciliation of the acquirer's settlement against captures and postings, by period and per currency, with named exceptions |
 | **Operator dashboard** | React + TypeScript single page at `/dashboard/`: money captured today per currency, every queue that needs a person, payments with their folio status and Replay, new payment requests, webhooks with redeliver, reconciliation by period; light and dark; OpenID Connect sign-in in production |
@@ -84,10 +84,10 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | The layers stay layers: no controller reaches a repository, no service reaches HTTP, the domain knows no Spring, money is never floating point | `ArchitectureTest` |
 | Logs at DEBUG carry no card number and no card token; production JSON logs are masked | `PciIntegrationTest`, `JsonLogConfigTest` |
 
-**436 backend tests** and 15 dashboard tests; backend coverage measured, not claimed: **99.5% of lines, 91.5% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
+**447 backend tests** and 15 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.5% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
 
 ## Honest limits (read before you trust it)
-- **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer: the HTTP adapters are tested against simulators shaped like them. Running for real needs OHIP partner access and its sandbox, and an acquirer's test environment.
+- **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer. OPERA cannot be run locally by anyone (OPERA Cloud is Oracle's hosted service; OPERA 5 is licensed to hotels), so the OPERA side follows Oracle's published contract and a test holds the adapter and the simulator to it; what the contract leaves open is a list of questions for the first sandbox session (`specs/roadmap.md`). Running for real needs OHIP partner access, which comes with the employer, and an acquirer's test environment.
 - **One property per deployment.** Multi-tenancy (operators, properties, per-tenant credentials and webhooks, data residency) is designed in `docs/architecture.md`, not built.
 - **Not built:** 3-D Secure and a hosted payment page, guest messaging, chargeback handling, a sweeper for payments stranded by a crash between two steps. See `docs/product-map.md`.
 - **Not yet run against real AWS:** KMS (stubbed client), Cognito and the deployment runbook. Steps to close: `docs/aws-deployment.md` section 5.

@@ -50,7 +50,7 @@ class HttpAdaptersTest {
   }
 
   private HttpGatewayProperties props(String operaUrl, String pspUrl, String clientSecret, String pspKey) {
-    return new HttpGatewayProperties(operaUrl, "demo-app-key", "fpbridge", clientSecret, pspUrl, pspKey, Duration.ofSeconds(1), Duration.ofSeconds(1));
+    return new HttpGatewayProperties(operaUrl, "demo-app-key", "fpbridge", clientSecret, "DEMOENT", "demo-scope", pspUrl, pspKey, Duration.ofSeconds(1), Duration.ofSeconds(1));
   }
 
   private HttpOperaClient operaClient(String url) { return new HttpOperaClient(props(url, psp.url(), "fpbridge-secret", "demo-psp-key"), RestClient.builder(), java.time.Clock.systemUTC()); }
@@ -58,7 +58,7 @@ class HttpAdaptersTest {
   private HttpPspClient pspClient(String url, String key) { return new HttpPspClient(props(opera.url(), url, "fpbridge-secret", key), RestClient.builder()); }
 
   private static OperaPayment payment(String reservation, Money amount) {
-    return new OperaPayment("DEMO1", reservation, 1, "CC", "C1", amount, day, "ref-" + reservation + amount.currency(), "cap_1");
+    return new OperaPayment("DEMO1", reservation, 1, "CC", 9001, amount, "ref-" + reservation + amount.currency(), "cap_1");
   }
 
   @Test
@@ -93,10 +93,10 @@ class HttpAdaptersTest {
     client.postPayment(payment("RES-1", new Money(1_234, "KWD")));
     client.postPayment(payment("RES-1", new Money(500, "JPY")));
 
-    assertThat(client.find("DEMO1", "ref-RES-1USD").orElseThrow().amount()).isEqualTo(new Money(12_345, "USD"));
-    assertThat(client.find("DEMO1", "ref-RES-1KWD").orElseThrow().amount()).as("three decimals").isEqualTo(new Money(1_234, "KWD"));
-    assertThat(client.find("DEMO1", "ref-RES-1JPY").orElseThrow().amount()).as("no decimals").isEqualTo(new Money(500, "JPY"));
-    assertThat(client.find("DEMO1", "never-posted")).isEmpty();
+    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1USD").orElseThrow().amount()).isEqualTo(new Money(12_345, "USD"));
+    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1KWD").orElseThrow().amount()).as("three decimals").isEqualTo(new Money(1_234, "KWD"));
+    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1JPY").orElseThrow().amount()).as("no decimals").isEqualTo(new Money(500, "JPY"));
+    assertThat(client.find("DEMO1", "RES-1", "never-posted")).isEmpty();
     assertThat(client.businessDate("DEMO1")).isEqualTo(day);
   }
 

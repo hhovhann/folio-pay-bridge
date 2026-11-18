@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class BusinessDateServiceImplTest {
   private static final LocalDate PMS_DATE = LocalDate.of(2026, 11, 16);
   private final OperaClient opera = mock(OperaClient.class);
-  private final OperaProperties settings = new OperaProperties("H1", 1, "CC", "C");
+  private final OperaProperties settings = new OperaProperties("H1", 1, "CC", 9001);
 
   private BusinessDateServiceImpl service(Clock clock) { return new BusinessDateServiceImpl(opera, settings, clock); }
 
