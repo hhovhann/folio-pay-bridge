@@ -92,7 +92,7 @@ public class Notification {
     this.nextAttemptAt = now;
   }
 
-  public void delivered(Instant now) {
+  public void markDelivered(Instant now) {
     status = Status.DELIVERED;
     deliveredAt = now;
     lastError = null;
@@ -101,7 +101,7 @@ public class Notification {
   }
 
   /** Waits twice as long after each failure (30 s, 1 min, 2 min ... at most an hour); after the last attempt it is FAILED, for a person. */
-  public void failed(String reason, Instant now, int maxAttempts) {
+  public void recordFailure(String reason, Instant now, int maxAttempts) {
     attempts++;
     lastError = SafeText.clean(reason);
     leaseUntil = null;

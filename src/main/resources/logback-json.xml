@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Production on AWS: one masked JSON object per line, for CloudWatch Logs Insights. Chosen with LOGGING_CONFIG=classpath:logback-json.xml;
+     levels still come from Spring (LOGGING_LEVEL_DEV_FOLIOPAY=DEBUG to investigate: debug lines carry ids and amounts, never card data). -->
+<configuration>
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="dev.foliopay.logging.MaskedJsonEncoder"/>
+  </appender>
+  <root level="INFO"><appender-ref ref="JSON"/></root>
+</configuration>

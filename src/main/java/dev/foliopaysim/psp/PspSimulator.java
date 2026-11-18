@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -36,9 +37,11 @@ public class PspSimulator {
   public boolean consume(Fault f) { return fault.compareAndSet(f, Fault.NONE); }
 
   /** The first call with a key does the work; a repeat with the same key returns the same result and does nothing. */
-  public synchronized Entry once(String idempotencyKey, java.util.function.Supplier<Entry> work) {
+  public synchronized Entry once(String idempotencyKey, Supplier<Entry> work) {
     Entry existing = byIdempotencyKey.get(idempotencyKey);
-    if (existing != null) return existing;
+    if (existing != null) {
+      return existing;
+    }
     Entry created = work.get();
     byIdempotencyKey.put(idempotencyKey, created);
     ledger.add(created);

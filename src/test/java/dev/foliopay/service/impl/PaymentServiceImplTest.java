@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class PaymentServiceImplTest {
   private static final Money AMOUNT = new Money(2_500, "USD");
   private static final LocalDate DAY = LocalDate.of(2026, 11, 17);
-  private static final PaymentCommand COMMAND = new PaymentCommand("k", "BK-1", "F-1", "tok_1", AMOUNT, DAY);
+  private static final PaymentCommand COMMAND = PaymentCommand.bridge("k", "BK-1", "F-1", "tok_1", AMOUNT, DAY);
 
   private final ChargeService charges = mock(ChargeService.class);
   private final PostingService postings = mock(PostingService.class);
@@ -30,8 +30,8 @@ class PaymentServiceImplTest {
 
   private Charge charge(Charge.Status status) {
     Charge charge = Fixtures.charge("k", "BK-1", "tok_1", AMOUNT);
-    if (status == Charge.Status.CAPTURED) charge.captured("cap_1");
-    if (status == Charge.Status.DECLINED) charge.declined("no");
+    if (status == Charge.Status.CAPTURED) charge.markCaptured("cap_1");
+    if (status == Charge.Status.DECLINED) charge.markDeclined("no");
     when(charges.charge(Fixtures.command("k", "BK-1", "tok_1", AMOUNT))).thenReturn(charge);
     return charge;
   }
@@ -40,7 +40,7 @@ class PaymentServiceImplTest {
   void aCapturedAndPostedPaymentIsOk() {
     Charge charge = charge(Charge.Status.CAPTURED);
     Posting posting = Fixtures.posting("post:" + charge.getId(), charge.getId(), "F-1", AMOUNT, DAY);
-    posting.posted("OP-1");
+    posting.markPosted("OP-1");
     when(postings.post(charge.getId(), "F-1", AMOUNT, DAY, charge.getPspRef())).thenReturn(posting);
 
     assertThat(service.pay(COMMAND).outcome()).isEqualTo(Outcome.OK);
@@ -50,7 +50,7 @@ class PaymentServiceImplTest {
   void aCapturedPaymentWhoseFolioPostingIsWaitingSaysSoPlainly() {
     Charge charge = charge(Charge.Status.CAPTURED);
     Posting posting = Fixtures.posting("post:" + charge.getId(), charge.getId(), "F-1", AMOUNT, DAY);
-    posting.deadLetter(Posting.FailureCategory.OPERA_UNAVAILABLE, "503");
+    posting.moveToDeadLetter(Posting.FailureCategory.OPERA_UNAVAILABLE, "503");
     when(postings.post(any(), any(), any(), any(), any())).thenReturn(posting);
 
     var result = service.pay(COMMAND);

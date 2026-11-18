@@ -8,4 +8,4 @@
 - [x] `PanMaskerTest.safeAlsoFlattensLineBreaksSoAValueCannotForgeALogEntry`
 - [x] `SafeTextTest.flattensLineBreaksAndControlCharacters`
 - [x] `PanTest.toStringNeverContainsMoreThanTheLastFour`
-- [x] `PciIntegrationTest.theCardNumberIsNeverLoggedAcrossTokenisationChargeAndPosting`
+- [x] `PciIntegrationTest.theCardNumberAndTheCardTokenAreNeverLoggedEvenAtDebugLevel`

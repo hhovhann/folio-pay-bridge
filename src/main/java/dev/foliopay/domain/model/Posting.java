@@ -6,6 +6,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
@@ -15,7 +17,7 @@ import java.util.UUID;
 
 /** A captured payment on its way to the guest folio. It ends POSTED, or DEAD_LETTER with a category and an error: never dropped. */
 @Entity
-@Table(name = "posting", uniqueConstraints = @UniqueConstraint(columnNames = "idempotency_key"))
+@Table(name = "posting", uniqueConstraints = @UniqueConstraint(name = "uk_posting_idempotency_key", columnNames = "idempotency_key"))
 public class Posting {
   public enum Status { PENDING, POSTED, DEAD_LETTER }
 
@@ -76,6 +78,10 @@ public class Posting {
   @Column(name = "created_at", nullable = false)
   private Instant createdAt = Instant.now();
 
+  /** When the row last changed: a posting replayed weeks after it was created is still announced (D-35). Leases do not count. */
+  @Column(name = "updated_at", nullable = false)
+  private Instant updatedAt = createdAt;
+
   protected Posting() {}
 
   public Posting(String idempotencyKey, String chargeId, String folioId, Money amount, LocalDate businessDate, String pspRef) {
@@ -88,7 +94,13 @@ public class Posting {
     this.businessDate = businessDate;
   }
 
-  public void posted(String ref) {
+  @PrePersist
+  @PreUpdate
+  void touch() {
+    updatedAt = Instant.now();
+  }
+
+  public void markPosted(String ref) {
     status = Status.POSTED;
     operaRef = ref;
     failureCategory = null;
@@ -96,7 +108,7 @@ public class Posting {
     releaseLease();
   }
 
-  public void deadLetter(FailureCategory category, String reason) {
+  public void moveToDeadLetter(FailureCategory category, String reason) {
     status = Status.DEAD_LETTER;
     failureCategory = category;
     lastError = SafeText.clean(reason);
@@ -131,7 +143,7 @@ public class Posting {
     };
   }
 
-  public void attempt() { attempts++; }
+  public void recordAttempt() { attempts++; }
 
   public boolean isPosted() { return status == Status.POSTED; }
 

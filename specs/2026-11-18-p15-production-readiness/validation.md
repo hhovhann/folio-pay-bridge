@@ -1,0 +1,45 @@
+# Phase 15 Validation - Production readiness review
+
+- [x] `SecurityIntegrationTest.twoClientsUsingTheSameIdempotencyKeyGetTwoSeparatePayments`
+- [x] `ChargeServiceImplTest.aKeyIsLookedUpInTheCallersOwnNamespace`
+- [x] `ChargeServiceImplTest.aStoredChargeIsFoundUnderItsClientAndKey`
+- [x] `ChargeServiceImplTest.authorisesThenCapturesAndStoresTheProcessorReference` (the processor's keys are the charge's own id)
+- [x] `SecurityIntegrationTest.anAppThatMayAskForMoneyCannotTakeItAndAPayerCannotCreateRequests`
+- [x] `HttpAdapterRepliesTest.operaRefusingOurCredentialsIsReplayableNotARejectionOfTheFolio`
+- [x] `HttpAdaptersTest.wrongCredentialsAreOursToFixAndReplayableNotARejectionOfTheFolio`
+- [x] `HttpAdapterRepliesTest.a404WithoutTheirOwnErrorCodeIsAWrongAddressNotARefusal`
+- [x] `HttpAdapterRepliesTest.aProcessorSuccessWithoutAReferenceIsUnreadableNeverABlankReference`
+- [x] `ChargeServiceImplTest.aCaptureAnsweredWithoutAReferenceStaysPendingAndKeepsTheHold`
+- [x] `WebhookIntegrationTest.aPostingReplayedLongAfterItWasCreatedIsStillAnnounced`
+- [x] `WebhookIntegrationTest.aPaymentThatLastChangedBeforeTheLookbackWindowIsNotRescanned`
+- [x] `SecurityConfigTest.aCognitoAccessTokenWithoutAnAudienceIsAcceptedWhenTheScopePrefixBindsItToThisApi`
+- [x] `SecurityConfigTest.whereTheServerSetsAnAudienceItMustNameThisApi`
+- [x] `SecurityConfigTest.aConfigurationWithNeitherAudienceNorScopePrefixIsRefusedAtStartup`
+- [x] `SecurityConfigTest.withAPrefixOnlyThisApisScopesCount`
+- [x] `SecurityConfigTest.scopesSentAsAListAreReadToo`
+- [x] `SecurityConfigTest.theClientIsTheClientIdClaimOrElseTheSubject`
+- [x] `FailClosedStartupTest.anOAuth2SetUpWithoutIssuerOrAudienceDoesNotStart`
+- [x] `ApiEndpointsIntegrationTest.errorsAreProblemDetailsWithAStableCode`
+- [x] `ApiDeprecationInterceptorTest.aDeprecatedEndpointCarriesDeprecationSunsetAndItsSuccessor`
+- [x] `ApiDeprecationInterceptorTest.aCurrentEndpointCarriesNone`
+- [x] `PciIntegrationTest.theCardNumberAndTheCardTokenAreNeverLoggedEvenAtDebugLevel`
+- [x] `JsonLogConfigTest.eachLineIsOneJsonObjectWithTheRequestIdAndNoCardNumber`
+- [x] `SafeTextTest.removesInvisibleFormattingCharactersThatShowAPersonOneThingAndAProgramAnother`
+- [x] `RemoteCreationIntegrationTest.aPastDueDateAZeroAmountOrAnUnsafeReferenceIsRefusedWithoutStoringAnything` (an invisible right-to-left override is refused)
+- [x] `ArchitectureTest.controllersNeverTouchARepositoryAnImplementationAnAdapterOrTheVaultsCrypto`
+- [x] `ArchitectureTest.servicesNeverTouchHttpOrTheApiLayer`
+- [x] `ArchitectureTest.onlyTheDemoServiceSeesTheFakes`
+- [x] `ArchitectureTest.theDomainKnowsNoSpringAndNoOtherLayer`
+- [x] `ArchitectureTest.portsAndAdaptersPointInward`
+- [x] `ArchitectureTest.theBridgeAndTheSimulatorsShareNoCode`
+- [x] `ArchitectureTest.implementationsAndControllersArePackagePrivate`
+- [x] `ArchitectureTest.moneyIsNeverFloatingPointOrBigDecimal`
+- [x] Mutation check: 14 of 14 deliberate bugs made their named test fail (`var/mutate_p15.py`, 2026-11-18)
+- [x] `python3 tools/guard_commands.py --self-test`: 33 blocked and 25 allowed commands, 0 wrong (2026-11-18)
+- [x] The recorder's check on the published video: `demo/out/folio-pay-bridge-fullflow-demo.mp4` is 24000 Hz and 357.2 s; a generated 22050 Hz file is refused (2026-11-18)
+- [x] Flyway V1 and V2 applied on PostgreSQL 16 in Compose, the application started with `ddl-auto=validate`, and the new constraints are in `pg_constraint` (`uk_charge_client_key`, `fk_charge_card_token`, `fk_posting_charge`) (2026-11-18)
+- [x] The full-flow demo's dry run (`DEMO_FAST=1 make_fullflow_demo.py`) against the Docker stack on the versioned API (2026-11-18)
+- [x] `demo/check_dashboard.py`: every screen in a real browser against the running app on the versioned API, no browser error (2026-11-18)
+- [x] `./mvnw clean verify`: 429 backend tests, 15 dashboard tests, 99.1% lines and 91.0% branches against the 99% and 90% gate (2026-11-18)
+- [ ] Testcontainers PostgreSQL in `./mvnw verify`, so the migrations and PostgreSQL's locking run in every build (manual) - a new test dependency, for the owner to approve
+- [ ] The Cognito set-up (no audience, scope prefix) against a real user pool (manual) - needs an AWS account

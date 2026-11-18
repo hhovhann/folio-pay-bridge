@@ -11,7 +11,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface ChargeRepository extends JpaRepository<Charge, String> {
-  Optional<Charge> findByIdempotencyKey(String idempotencyKey);
+  /** Keys are per client (D-40): the same key from another client is another charge. */
+  Optional<Charge> findByClientIdAndIdempotencyKey(String clientId, String idempotencyKey);
 
   List<Charge> findByStatus(Charge.Status status);
 

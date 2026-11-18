@@ -13,11 +13,11 @@ public final class Fixtures {
   private Fixtures() {}
 
   public static Charge charge(String key, String bookingRef, String token, Money amount) {
-    return new Charge(key, bookingRef, "F-1", DAY, token, amount);
+    return new Charge(Charge.BRIDGE_CLIENT, key, bookingRef, "F-1", DAY, token, amount);
   }
 
   public static ChargeCommand command(String key, String bookingRef, String token, Money amount) {
-    return new ChargeCommand(key, bookingRef, "F-1", DAY, token, amount);
+    return new ChargeCommand(Charge.BRIDGE_CLIENT, key, bookingRef, "F-1", DAY, token, amount);
   }
 
   public static Posting posting(String key, String chargeId, String folioId, Money amount, LocalDate day) {

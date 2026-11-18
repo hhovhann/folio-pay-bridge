@@ -19,16 +19,16 @@ class NotificationTest {
   @Test
   void aFailureWaitsTwiceAsLongEachTimeUpToAnHourAndTheLastAttemptEndsFailedNotDropped() {
     Notification n = new Notification(Notification.Type.FOLIO_POSTED, "p-1", "{}", NOW);
-    n.failed("The receiver answered 500", NOW, 12);
+    n.recordFailure("The receiver answered 500", NOW, 12);
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofSeconds(30));
-    n.failed("The receiver answered 500", NOW, 12);
+    n.recordFailure("The receiver answered 500", NOW, 12);
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofMinutes(1));
-    for (int i = 0; i < 8; i++) n.failed("down", NOW, 12);
+    for (int i = 0; i < 8; i++) n.recordFailure("down", NOW, 12);
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofHours(1));
     assertThat(n.getStatus()).isEqualTo(Notification.Status.PENDING);
 
-    n.failed("down", NOW, 12);
-    n.failed("down", NOW, 12);
+    n.recordFailure("down", NOW, 12);
+    n.recordFailure("down", NOW, 12);
 
     assertThat(n.getStatus()).isEqualTo(Notification.Status.FAILED);
     assertThat(n.getAttempts()).isEqualTo(12);
@@ -38,14 +38,14 @@ class NotificationTest {
   @Test
   void aFailedEventCanBeSentAgainFromTheStartButADeliveredOneIsLeftAlone() {
     Notification failed = new Notification(Notification.Type.FOLIO_POSTED, "p-1", "{}", NOW);
-    failed.failed("down", NOW, 1);
+    failed.recordFailure("down", NOW, 1);
     failed.redeliver(NOW.plusSeconds(60));
     assertThat(failed.getStatus()).isEqualTo(Notification.Status.PENDING);
     assertThat(failed.getAttempts()).isZero();
     assertThat(failed.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(60));
 
     Notification delivered = new Notification(Notification.Type.FOLIO_POSTED, "p-2", "{}", NOW);
-    delivered.delivered(NOW);
+    delivered.markDelivered(NOW);
     delivered.redeliver(NOW.plusSeconds(60));
     assertThat(delivered.getStatus()).isEqualTo(Notification.Status.DELIVERED);
     assertThat(delivered.getDeliveredAt()).isEqualTo(NOW);

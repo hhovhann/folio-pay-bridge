@@ -7,7 +7,7 @@ export function fakeApi(routes: Record<string, unknown>) {
     const method = init?.method ?? 'GET';
     calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined, headers: (init?.headers ?? {}) as Record<string, string> });
     const answer = routes[`${method} ${path}`];
-    if (answer === undefined) return new Response(JSON.stringify({ error: 'Not Found', code: 'NOT_FOUND' }), { status: 404 });
+    if (answer === undefined) return new Response(JSON.stringify({ detail: 'Not Found', code: 'NOT_FOUND' }), { status: 404 });
     if (answer instanceof Response) return answer;
     return new Response(JSON.stringify(answer), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });

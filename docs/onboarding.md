@@ -32,7 +32,7 @@ For an engineer (or a reviewer) who wants to own this code, not just read it. Ea
 ## Session 5: running it in production, and working with agents
 **Goal:** deploy-readiness and the AI-first way of working.
 - Read: `docs/aws-deployment.md` (ECS on Amazon Linux 2023, RDS, KMS, Secrets Manager, Cognito, the midnight-to-3am window), `SECURITY.md` (authentication and scopes), `src/main/resources/db/migration/V1__baseline.sql`, `CLAUDE.md`, `docs/agent-log.md`, `.claude/settings.json`, `tools/guard_secrets.py`.
-- Run: `python3 tools/new_api_key.py demo-client "payments:read"`; start the app with that entry in `FOLIOPAY_AUTH_API_KEYS` and call `/api/charges` with and without `X-Api-Key`. Run `python3 tools/guard_secrets.py --repo` and `python3 tools/check_specs.py`.
+- Run: `python3 tools/new_api_key.py demo-client "payments:read"`; start the app with that entry in `FOLIOPAY_AUTH_API_KEYS` and call `/api/v1/charges` with and without `X-Api-Key`. Run `python3 tools/guard_secrets.py --repo` and `python3 tools/check_specs.py`.
 - Break it: ask an agent to add a test with a card number that passes the Luhn check but is not a public test number: the hook in `.claude/settings.json` blocks the write and tells the agent why.
 - Discuss: the next phase (multi-tenancy, `docs/architecture.md` section 9) and how you would brief agents for it: spec first, decisions recorded, tests that fail without the change, a review by another model, a human who proves it.
 

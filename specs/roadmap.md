@@ -51,12 +51,16 @@ Status: done 2026-11-17
 - A coverage number with a gate, a page of every edge case with its test, and a checker that keeps the page honest.
 
 ## Phase 13 - Fixes from the final code review
-Status: done 2026-11-18 (decisions recorded with the owner's approval in phase 14)
-- Every confirmed review finding fixed with a test that fails without the fix; documentation claims corrected.
+Status: done 2026-11-18
+- Every confirmed review finding fixed with a test that fails without the fix; documentation claims corrected. Decisions recorded with the owner's approval in phase 14.
 
 ## Phase 14 - Production hardening, authentication, notifications
-Status: done 2026-11-18 (real AWS and a real OHIP sandbox still open)
-- OAuth2 or API keys with scopes, Flyway, signed webhooks, remote creation of payment requests, every review finding fixed and mutation-checked, AI guardrails enforced by a hook and CI.
+Status: done 2026-11-18
+- OAuth2 or API keys with scopes, Flyway, signed webhooks, remote creation of payment requests, every review finding fixed and mutation-checked, AI guardrails enforced by a hook and CI. Real AWS, a real identity provider and a real OHIP sandbox are open, as manual boxes.
+
+## Phase 15 - Production readiness review
+Status: done 2026-11-18
+- The final review's findings fixed (credentials never reject a folio, asking for money is not taking it, idempotency keys per client, Cognito tokens, unreadable processor replies, the webhook window); the API versioned with a deprecation path; RFC 9457 errors; logging that is safe at DEBUG and JSON in production; foreign keys and Hibernate settings; the layer rules as a test; a command guard that reads every argument.
 
 ## Next
 1. Multi-tenancy: operators and properties on every row, credential and webhook; per-property settings; data residency (`docs/architecture.md` section 9).

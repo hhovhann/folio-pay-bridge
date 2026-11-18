@@ -1,6 +1,7 @@
 package dev.foliopay.gateway.http;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.gateway.OperaClient;
 import dev.foliopay.gateway.OperaRejectedException;
@@ -10,6 +11,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -85,7 +88,7 @@ public class HttpOperaClient implements OperaClient {
   }
 
   /** A reply we cannot read is treated like no reply: the caller retries, looks first, and dead-letters as replayable, never crashes. */
-  private static <T> T readable(String what, java.util.function.Supplier<T> parse) {
+  private static <T> T readable(String what, Supplier<T> parse) {
     try {
       return parse.get();
     } catch (RuntimeException unreadable) {
@@ -93,7 +96,7 @@ public class HttpOperaClient implements OperaClient {
     }
   }
 
-  private JsonNode call(String hotelId, java.util.function.Function<RestClient, RestClient.RequestHeadersSpec<?>> request) {
+  private JsonNode call(String hotelId, Function<RestClient, RestClient.RequestHeadersSpec<?>> request) {
     try {
       return send(hotelId, request, null);
     } catch (TokenExpired expired) {
@@ -102,13 +105,13 @@ public class HttpOperaClient implements OperaClient {
   }
 
   /** {@code rejectedToken} is null on the first try, or the token OPERA just refused (401), which is then replaced once. */
-  private JsonNode send(String hotelId, java.util.function.Function<RestClient, RestClient.RequestHeadersSpec<?>> request, String rejectedToken) {
+  private JsonNode send(String hotelId, Function<RestClient, RestClient.RequestHeadersSpec<?>> request, String rejectedToken) {
     boolean freshToken = rejectedToken != null;
     String bearer = token(rejectedToken);
     try {
       JsonNode reply = request.apply(http).header("Authorization", "Bearer " + bearer).header("x-hotelid", hotelId).header("x-app-key", settings.operaAppKey())
           .retrieve().body(JsonNode.class);
-      return reply == null ? com.fasterxml.jackson.databind.node.MissingNode.getInstance() : reply;
+      return reply == null ? MissingNode.getInstance() : reply;
     } catch (HttpClientErrorException e) {
       throw map(e.getStatusCode(), e.getResponseBodyAsString(), freshToken, bearer);
     } catch (HttpServerErrorException e) {
@@ -118,11 +121,28 @@ public class HttpOperaClient implements OperaClient {
     }
   }
 
+  /**
+   * A 4xx is a rejection of the posting (dead-letter, no replay) only when it is about the posting. Our credentials being refused (401
+   * after a fresh token, 403: a rotated secret, an application key or hotel not granted) says nothing about the folio: it is "unavailable",
+   * so the posting can be replayed once the configuration is fixed, instead of waiting for a person to repair a folio that is fine (D-34).
+   */
   private RuntimeException map(HttpStatusCode status, String body, boolean alreadyRefreshed, String bearer) {
     int code = status.value();
-    if (code == 401 && !alreadyRefreshed) return new TokenExpired(bearer);
-    if (code == 429 || code == 409 || code == 401) return new OperaUnavailableException("OPERA asked us to wait (" + code + ")");
-    return new OperaRejectedException("OPERA refused the request (" + code + "): " + ErrorBodies.code(body));
+    if (code == 401 && !alreadyRefreshed) {
+      return new TokenExpired(bearer);
+    }
+    if (code == 401 || code == 403) {
+      return new OperaUnavailableException("OPERA refused our credentials (" + code + "): check the client id, secret, application key and hotel access");
+    }
+    if (code == 408 || code == 409 || code == 429) {
+      return new OperaUnavailableException("OPERA asked us to wait (" + code + ")");
+    }
+    String reason = ErrorBodies.code(body);
+    if (code == 404 && ErrorBodies.NO_REASON.equals(reason)) {
+      // Not OPERA's own answer about the reservation (that carries an error code) but a wrong address or a proxy: ours to fix, replayable.
+      return new OperaUnavailableException("OPERA could not be reached at the configured address (404)");
+    }
+    return new OperaRejectedException("OPERA refused the request (" + code + "): " + reason);
   }
 
   /**
@@ -131,19 +151,27 @@ public class HttpOperaClient implements OperaClient {
    */
   private synchronized String token(String rejected) {
     boolean stillValid = accessToken != null && clock.instant().isBefore(tokenExpiresAt.minusSeconds(EXPIRY_MARGIN_SECONDS));
-    if (stillValid && !accessToken.equals(rejected)) return accessToken;
+    if (stillValid && !accessToken.equals(rejected)) {
+      return accessToken;
+    }
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
     form.add("grant_type", "client_credentials");
     form.add("client_id", settings.operaClientId());
     form.add("client_secret", settings.operaClientSecret());
     try {
       JsonNode reply = http.post().uri("/oauth/v1/tokens").header("x-app-key", settings.operaAppKey()).contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(JsonNode.class);
-      accessToken = reply.path("access_token").asText();
+      String token = reply == null ? "" : reply.path("access_token").asText();
+      if (token.isBlank()) {
+        throw new OperaUnavailableException("OPERA token service answered without a token");
+      }
+      accessToken = token;
       tokenExpiresAt = clock.instant().plusSeconds(reply.path("expires_in").asLong(60));
       log.info("Fetched a new OPERA access token, valid for {} s", reply.path("expires_in").asLong(60));
       return accessToken;
     } catch (HttpClientErrorException e) {
-      throw new OperaRejectedException("OPERA refused our credentials (" + e.getStatusCode().value() + "): check the client id, secret and application key");
+      // Our credentials, not the posting: replayable once they are fixed, never a rejection of a guest's folio.
+      log.error("OPERA refused our credentials ({}): check the client id, secret and application key", e.getStatusCode().value());
+      throw new OperaUnavailableException("OPERA refused our credentials (" + e.getStatusCode().value() + "): check the client id, secret and application key");
     } catch (RestClientException e) {
       throw new OperaUnavailableException("OPERA token service did not answer");
     }

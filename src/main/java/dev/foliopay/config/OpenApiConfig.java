@@ -2,11 +2,10 @@ package dev.foliopay.config;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.License;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/** The API description. Served only when springdoc is enabled (demo profile); the committed copy is docs/openapi.json. */
+/** The API description. Served only when springdoc is enabled (demo profiles); the committed copy is docs/openapi.json. */
 @Configuration
 class OpenApiConfig {
   @Bean
@@ -15,12 +14,13 @@ class OpenApiConfig {
         .info(
             new Info()
                 .title("Folio Pay Bridge API")
-                .version("0.1.0")
+                .version("v1")
                 .description(
-                    "Concept pilot: tokenise virtual cards, charge them once per idempotency key, post to the guest folio, "
-                        + "turn booking events into payment links, and reconcile against an acquirer statement. "
-                        + "Synthetic data only: the processor and the PMS are simulated (in-memory fakes, or HTTP simulators in the Compose profile). Card numbers are accepted only by POST /api/cards "
-                        + "and are never returned. Money is an integer in minor units (cents) plus an ISO 4217 currency.")
-                .license(new License().name("Concept pilot, not for production use")));
+                    "Tokenise cards, charge them once per idempotency key, post the payment to the guest folio in OPERA, turn booking events "
+                        + "and app requests into payment links, announce outcomes by signed webhook, and reconcile against the acquirer's "
+                        + "settlement. Card numbers are accepted only by POST /api/v1/cards and are never returned. Money is an integer in "
+                        + "minor units plus an ISO 4217 currency. Errors are RFC 9457 problem details with a stable code. The version is in "
+                        + "the path; a version only grows (new endpoints, optional fields, enum values), and a retired endpoint carries "
+                        + "Deprecation and Sunset headers before it goes."));
   }
 }

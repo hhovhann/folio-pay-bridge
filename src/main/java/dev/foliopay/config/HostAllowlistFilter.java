@@ -1,6 +1,7 @@
 package dev.foliopay.config;
 
 import dev.foliopay.api.error.ErrorCode;
+import dev.foliopay.api.error.Problems;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,7 +35,7 @@ class HostAllowlistFilter extends OncePerRequestFilter {
   protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
     String name = request.getServerName() == null ? "" : request.getServerName().toLowerCase(); // Tomcat derives it from the Host header
     if (!allowed.contains(name) && !isHealthProbe(request)) {
-      JsonErrors.write(response, HttpServletResponse.SC_BAD_REQUEST, ErrorCode.INVALID_REQUEST, "Host not allowed");
+      Problems.write(response, HttpServletResponse.SC_BAD_REQUEST, ErrorCode.INVALID_REQUEST, "Host not allowed");
       return;
     }
     chain.doFilter(request, response);

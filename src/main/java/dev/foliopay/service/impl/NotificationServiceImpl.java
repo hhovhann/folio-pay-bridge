@@ -56,6 +56,9 @@ class NotificationServiceImpl implements NotificationService {
     queued += queueCharges(Charge.Status.DECLINED, Type.PAYMENT_DECLINED);
     queued += queuePostings(Posting.Status.POSTED, Type.FOLIO_POSTED);
     queued += queuePostings(Posting.Status.DEAD_LETTER, Type.FOLIO_DEAD_LETTERED);
+    if (queued > 0) {
+      log.debug("Queued {} webhook events", queued);
+    }
     return queued;
   }
 
@@ -140,9 +143,10 @@ class NotificationServiceImpl implements NotificationService {
       failure = "The receiver did not answer: " + noAnswer.getClass().getSimpleName();
     }
     if (failure == null) {
-      n.delivered(clock.instant());
+      n.markDelivered(clock.instant());
+      log.debug("Webhook {} delivered on attempt {}", n.getEventId(), n.getAttempts());
     } else {
-      n.failed(failure, clock.instant(), settings.maxAttempts());
+      n.recordFailure(failure, clock.instant(), settings.maxAttempts());
       if (n.getStatus() == Notification.Status.FAILED) {
         log.error("Webhook {} failed after {} attempts: {}", n.getEventId(), n.getAttempts(), n.getLastError());
       } else {
@@ -161,6 +165,7 @@ class NotificationServiceImpl implements NotificationService {
   @Override
   public Notification redeliver(String id) {
     Notification n = repository.findById(id).orElseThrow(() -> new NotFoundException("Unknown notification"));
+    log.info("Redelivery requested for webhook {} ({})", n.getEventId(), n.getStatus());
     n.redeliver(clock.instant());
     return repository.save(n);
   }

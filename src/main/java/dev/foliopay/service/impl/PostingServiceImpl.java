@@ -54,6 +54,7 @@ class PostingServiceImpl implements PostingService {
   @Override
   public Posting post(String chargeId, String folioId, Money amount, LocalDate businessDate, String pspRef) {
     String key = "post:" + chargeId;
+    log.debug("Posting requested for charge {}: folio {} amount {} {} business date {}", chargeId, folioId, amount.minor(), amount.currency(), businessDate);
     Posting posting =
         store.findOrCreate(
             () -> repository.findByIdempotencyKey(key),
@@ -63,6 +64,7 @@ class PostingServiceImpl implements PostingService {
 
   @Override
   public Posting replay(String postingId) {
+    log.info("Replay requested for posting {}", postingId);
     return resume(repository.findById(postingId).orElseThrow(() -> new NotFoundException("Unknown posting")));
   }
 
@@ -79,6 +81,7 @@ class PostingServiceImpl implements PostingService {
    */
   private Posting resume(Posting posting) {
     if (posting.isPosted() || posting.isRejected()) {
+      log.debug("Posting {} is {} ({}): nothing to do", posting.getId(), posting.getStatus(), posting.getFailureCategory());
       return posting;
     }
     String owner = UUID.randomUUID().toString();
@@ -87,6 +90,7 @@ class PostingServiceImpl implements PostingService {
       log.info("Posting {} is being posted by another request", posting.getId());
       return stored(posting);
     }
+    log.debug("Posting {} leased until {} by {}", posting.getId(), now.plus(lease), owner);
     return attempt(stored(posting), owner);
   }
 
@@ -95,24 +99,24 @@ class PostingServiceImpl implements PostingService {
   }
 
   private Posting attempt(Posting posting, String owner) {
-    posting.attempt();
+    posting.recordAttempt();
     try {
       String operaRef = postWithRetry(posting, owner);
-      posting.posted(operaRef);
+      posting.markPosted(operaRef);
       log.info("Posting {} posted to folio {} as {}", posting.getId(), posting.getFolioId(), operaRef);
     } catch (LeaseLost e) {
       log.warn("Posting {} not posted: its lease ran out and another request took it over", posting.getId());
       return stored(posting); // the new holder owns the outcome; writing ours could hide its post
     } catch (OperaRejectedException e) {
-      posting.deadLetter(FailureCategory.REJECTED_BY_OPERA, e.getMessage());
+      posting.moveToDeadLetter(FailureCategory.REJECTED_BY_OPERA, e.getMessage());
       log.warn("Posting {} rejected by OPERA: {}", posting.getId(), posting.getLastError());
     } catch (OperaUnavailableException e) {
-      posting.deadLetter(FailureCategory.OPERA_UNAVAILABLE, e.getMessage());
+      posting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, e.getMessage());
       log.warn("Posting {} dead-lettered after retries: {}", posting.getId(), posting.getLastError());
     } catch (RuntimeException e) {
       // Anything else (a reply we could not read, a bug) must not leave a captured payment PENDING with no replay button. It is
       // replayable: replay looks for the post first, so it cannot post twice.
-      posting.deadLetter(FailureCategory.OPERA_UNAVAILABLE, "Unexpected error while posting: " + e.getClass().getSimpleName());
+      posting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "Unexpected error while posting: " + e.getClass().getSimpleName());
       log.error("Posting {} dead-lettered after an unexpected error", posting.getId(), Redacted.of(e));
     }
     return store.saveMerging(
@@ -133,8 +137,12 @@ class PostingServiceImpl implements PostingService {
             settings.hotelId(), posting.getFolioId(), settings.folioWindow(), settings.paymentCode(), settings.cashierId(),
             posting.amount(), posting.getBusinessDate(), posting.getIdempotencyKey(), posting.getPspRef());
     return folioRetry.executeSupplier(
-        () -> opera.find(settings.hotelId(), payment.externalRef()).map(OperaClient.Posted::operaRef).orElseGet(() -> {
+        () -> opera.find(settings.hotelId(), payment.externalRef()).map(found -> {
+          log.info("Posting {} was already on the folio as {}: not posted again", posting.getId(), found.operaRef());
+          return found.operaRef();
+        }).orElseGet(() -> {
           stillHeld(posting, owner);
+          log.debug("Posting {} not found in OPERA: posting it", posting.getId());
           return opera.postPayment(payment);
         }));
   }

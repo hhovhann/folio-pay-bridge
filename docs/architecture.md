@@ -44,14 +44,14 @@ sequenceDiagram
   participant K as AWS KMS
   participant P as PSP / acquirer
   participant O as OPERA (OHIP)
-  MW->>B: POST /api/booking-events (NEW, rate plan, arrival, total)
+  MW->>B: POST /api/v1/booking-events (NEW, rate plan, arrival, total)
   B->>B: policy decides the deposit and due date, stores an OPEN payment link
   Note over B: the guest opens the link
   B->>K: GenerateDataKey (context: token id)
   K-->>B: plaintext data key + wrapped copy + key ARN
   B->>B: AES-256-GCM encrypt the card number, store ciphertext + wrapped key + ARN, drop the plaintext key
   B-->>MW: card token (tok_...)
-  MW->>B: POST /api/links/{id}/pay (token)
+  MW->>B: POST /api/v1/links/{id}/pay (token)
   B->>B: claim the link for this card (atomic OPEN to PAYING)
   B->>O: business date for the hotel
   B->>B: store charge PENDING under a unique idempotency key
@@ -106,10 +106,10 @@ dashboard/       the operator dashboard: React + TypeScript single page, built i
 Ports and adapters (hexagonal) at the edges: a different acquirer or OPERA 5 instead of OPERA Cloud is a new adapter behind the same interface, and the core does not change. Each rule has a unit test with test doubles; an integration test exists only for what needs a real database or real HTTP. See D-14.
 
 ### The operator dashboard
-A single page (`/dashboard/`) for the people who run payments: an overview of money captured today per currency and every queue that needs a person (pending charges, postings waiting for OPERA or rejected by it, failed webhooks), the payments with their folio status and a Replay button, payment links with a form for new requests, the webhook log with redeliver, and reconciliation by period. It uses only the public API, with the same scopes as any client, so it can never do more than an integrator with the same rights. Its figures come from `GET /api/overview`, computed with count and sum queries in the database. In production people sign in at the company's identity provider (OpenID Connect with PKCE). The classic console at `/` remains for the recorded demo.
+A single page (`/dashboard/`) for the people who run payments: an overview of money captured today per currency and every queue that needs a person (pending charges, postings waiting for OPERA or rejected by it, failed webhooks), the payments with their folio status and a Replay button, payment links with a form for new requests, the webhook log with redeliver, and reconciliation by period. It uses only the public API, with the same scopes as any client, so it can never do more than an integrator with the same rights. Its figures come from `GET /api/v1/overview`, computed with count and sum queries in the database. In production people sign in at the company's identity provider (OpenID Connect with PKCE). The classic console at `/` remains for the recorded demo.
 
 ## 6. Card data: envelope encryption with AWS KMS
-- **Tokenisation.** The card number (PAN) arrives once, at `POST /api/cards`. The bridge returns a token (`tok_...`) and stores only: the ciphertext, the wrapped data key, the KMS key ARN, the first six and last four digits, and the expiry. Never the PAN, never the CVV.
+- **Tokenisation.** The card number (PAN) arrives once, at `POST /api/v1/cards`. The bridge returns a token (`tok_...`) and stores only: the ciphertext, the wrapped data key, the KMS key ARN, the first six and last four digits, and the expiry. Never the PAN, never the CVV.
 - **Envelope encryption.** KMS keeps a master key that never leaves it. For each card the bridge asks KMS for a fresh 256-bit **data key**: it gets the key in plain and a copy encrypted ("wrapped") by the master key. It encrypts the PAN locally with AES-256-GCM, stores the wrapped copy beside the ciphertext, and throws the plain key away. To read the card it sends the wrapped key back to KMS to unwrap. Why: KMS is only ever asked to handle 32-byte keys, one key compromise exposes one card, and every unwrap is a CloudTrail event.
 - **Encryption context.** Each KMS call carries `{"token": "tok_..."}`. KMS refuses to unwrap with a different context, and the IAM policy can require it, so a stolen wrapped key cannot be opened under another token. The same token id is the AES-GCM associated data, so a ciphertext moved to another row fails to decrypt.
 - **Lent, not handed out.** `CardVault.withCard(token, fn)` decrypts, calls `fn`, then zeroes the buffers. The only production caller is the processor adapter; retries happen outside it, so the card is not in memory while a retry waits (D-6, D-15).

@@ -13,7 +13,7 @@ class RequestIdFilterTest {
 
   @Test
   void aPlainIdFromTheCallerIsKeptInTheLogContextAndEchoed() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/charges");
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/charges");
     request.addHeader("X-Request-Id", "pms-42.a_b");
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicReference<String> inLogs = new AtomicReference<>();
@@ -28,7 +28,7 @@ class RequestIdFilterTest {
   /** Fails if a caller's id goes into the logs unchecked: a line break in it would forge a log entry. */
   @Test
   void anIdThatCouldForgeALogLineIsReplacedNotLogged() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/charges");
+    MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/charges");
     request.addHeader("X-Request-Id", "x\nERROR forged entry");
     MockHttpServletResponse response = new MockHttpServletResponse();
     AtomicReference<String> inLogs = new AtomicReference<>();

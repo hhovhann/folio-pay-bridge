@@ -108,7 +108,7 @@ class FullFlowHttpIntegrationTest {
 
   private PaymentService.Result pay(String reservation, long amount) {
     LocalDate day = LocalDate.parse(state(operaUrl).path("businessDate").asText());
-    return payments.pay(new PaymentCommand("k-" + UUID.randomUUID(), "BK-1", reservation, token, new Money(amount, "USD"), day));
+    return payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", reservation, token, new Money(amount, "USD"), day));
   }
 
   @Test
@@ -258,7 +258,7 @@ class FullFlowHttpIntegrationTest {
     fault(operaUrl, "DOWN");
 
     assertThat(businessDates.resolve(null)).isEqualTo(known);
-    var result = payments.pay(new PaymentCommand("k-" + UUID.randomUUID(), "BK-1", "RES-1", token, new Money(6_000, "USD"), businessDates.resolve(null)));
+    var result = payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", "RES-1", token, new Money(6_000, "USD"), businessDates.resolve(null)));
 
     assertThat(result.outcome()).isEqualTo(Outcome.CHARGED_NOT_POSTED);
     assertThat(state(pspUrl).path("capturedMinor").asLong()).isEqualTo(6_000);

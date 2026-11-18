@@ -69,7 +69,9 @@ class BusinessDateServiceImpl implements BusinessDateService {
     long request = requests.incrementAndGet();
     try {
       LocalDate date = opera.businessDate(settings.hotelId());
-      return lastKnown.accumulateAndGet(new Known(date, now, request), Known::newer).date();
+      LocalDate kept = lastKnown.accumulateAndGet(new Known(date, now, request), Known::newer).date();
+      log.debug("PMS business date for hotel {}: answered {}, using {}", settings.hotelId(), date, kept);
+      return kept;
     } catch (OperaUnavailableException down) {
       if (usable(known, now)) {
         log.warn("PMS unreachable: using the last known business date {}", known.date());

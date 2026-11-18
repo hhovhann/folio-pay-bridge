@@ -19,17 +19,17 @@ class DemoControlsOffIntegrationTest {
 
   @Test
   void demoEndpointsAndTheApiDescriptionAreNotServed() throws Exception {
-    mvc.perform(get("/api/vault")).andExpect(status().isNotFound());
-    mvc.perform(get("/api/logs")).andExpect(status().isNotFound());
-    mvc.perform(post("/api/sim").contentType(MediaType.APPLICATION_JSON).content("{\"reset\":true}")).andExpect(status().isNotFound());
+    mvc.perform(get("/api/v1/vault")).andExpect(status().isNotFound());
+    mvc.perform(get("/api/v1/logs")).andExpect(status().isNotFound());
+    mvc.perform(post("/api/v1/sim").contentType(MediaType.APPLICATION_JSON).content("{\"reset\":true}")).andExpect(status().isNotFound());
     mvc.perform(get("/v3/api-docs")).andExpect(status().isNotFound());
     mvc.perform(get("/swagger-ui/index.html")).andExpect(status().isNotFound());
-    mvc.perform(post("/api/shadow").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isNotFound());
+    mvc.perform(post("/api/v1/shadow").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isNotFound());
   }
 
   @Test
   void theRealEndpointsStillWork() throws Exception {
-    mvc.perform(get("/api/charges")).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/charges")).andExpect(status().isOk());
   }
 
   /** Fails if the demo console is the front page of a real deployment: outside the demo, people land on the operator dashboard. */

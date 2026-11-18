@@ -228,7 +228,31 @@ def finish(clips, work, video_path):
     fit = next(s for cid, s, _e, _t in R.timeline if cid == "outage")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{fit + 14:.1f}", "-i", str(mp4), "-frames:v", "1", str(OUT / f"{NAME}.png")], check=True)
     (OUT / f"{NAME}.chapters.json").write_text(json.dumps([{"id": c, "start": round(s, 1), "end": round(e, 1)} for c, s, e, _ in R.timeline], indent=1), encoding="utf-8")
+    check_output(mp4, expected_rate=sr, expected_seconds=total)
     print("done", mp4, round(total), "s")
+
+
+KOKORO_RATE = 24000
+
+
+def check_output(mp4, expected_rate=KOKORO_RATE, expected_seconds=None):
+    """Reads the finished file back with ffprobe and refuses it unless its audio is what the published video must be: Kokoro's 24 kHz
+    (a stand-in voice only when DEMO_MACOS_VOICE asked for it by name) and the length of the recording. Run it on any file before it is
+    uploaded: `python demo/recorder.py --check demo/out/<name>.mp4` (agent log 42: a 22.05 kHz fallback was once published unnoticed)."""
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=sample_rate:format=duration",
+                            "-of", "json", str(mp4)], capture_output=True, text=True, check=True)
+    info = json.loads(probe.stdout)
+    streams = info.get("streams") or []
+    if not streams:
+        raise SystemExit(f"{mp4}: no audio stream")
+    rate, seconds = int(streams[0]["sample_rate"]), float(info["format"]["duration"])
+    if rate != expected_rate:
+        raise SystemExit(f"{mp4}: audio is {rate} Hz, expected {expected_rate} Hz: not the published Kokoro voice")
+    if expected_rate != KOKORO_RATE and not os.environ.get("DEMO_MACOS_VOICE"):
+        raise SystemExit(f"{mp4}: a {rate} Hz stand-in voice that nobody asked for by name")
+    if expected_seconds is not None and abs(seconds - expected_seconds) > 1.0:
+        raise SystemExit(f"{mp4}: {seconds:.1f} s long, the recording was {expected_seconds:.1f} s")
+    print(f"checked {mp4}: {rate} Hz, {seconds:.1f} s", flush=True)
 
 
 def check_test_count(minimum=170):
@@ -238,3 +262,8 @@ def check_test_count(minimum=170):
     total = sum(int(ET.parse(f).getroot().get("tests", 0)) for f in glob.glob(str(ROOT / "target/surefire-reports/TEST-*.xml")))
     if total < minimum:
         raise SystemExit(f"Run ./mvnw test first: the narration claims over {minimum} tests and the last run had {total}")
+
+
+if __name__ == "__main__" and sys.argv[1:2] == ["--check"]:
+    for path in sys.argv[2:]:
+        check_output(path)

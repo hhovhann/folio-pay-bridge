@@ -13,6 +13,7 @@ import dev.foliopay.gateway.OperaUnavailableException;
 import dev.foliopay.gateway.PspDeclinedException;
 import dev.foliopay.gateway.PspRejectedException;
 import dev.foliopay.gateway.PspTransientException;
+import dev.foliopay.gateway.PspUnreadableReplyException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -61,9 +62,9 @@ class HttpAdapterRepliesTest {
 
   private void answer(HttpExchange exchange) throws IOException {
     String path = exchange.getRequestURI().getPath();
-    Reply reply = path.equals("/oauth/v1/tokens")
-        ? new Reply(200, "{\"access_token\":\"t" + tokensIssued.incrementAndGet() + "\",\"expires_in\":3600}")
-        : replies.getOrDefault(path, new Reply(404, "{}"));
+    Reply reply = replies.containsKey(path) ? replies.get(path)
+        : path.equals("/oauth/v1/tokens") ? new Reply(200, "{\"access_token\":\"t" + tokensIssued.incrementAndGet() + "\",\"expires_in\":3600}")
+        : new Reply(404, "{}");
     byte[] body = reply.body().getBytes(StandardCharsets.UTF_8);
     exchange.getResponseHeaders().add("Content-Type", "application/json");
     exchange.sendResponseHeaders(reply.status(), body.length);
@@ -81,6 +82,53 @@ class HttpAdapterRepliesTest {
 
   private static OperaPayment payment() {
     return new OperaPayment("H1", "RES-1", 1, "VCC", "CASH1", TEN, LocalDate.of(2026, 11, 17), "post:c1", "cap_1");
+  }
+
+  private static final String OPERA_PAYMENTS = "/v1/hotels/H1/reservations/RES-1/payments";
+
+  /**
+   * Fails if OPERA refusing our credentials dead-letters the posting as a rejection: a rejection is never replayed, so every payment taken
+   * while a rotated secret is being fixed would need a database repair, though each folio is fine (review finding, the twin of D-34).
+   */
+  @Test
+  void operaRefusingOurCredentialsIsReplayableNotARejectionOfTheFolio() {
+    for (int status : new int[] {400, 401}) {
+      replies.put("/oauth/v1/tokens", new Reply(status, "{\"error\":\"invalid_client\"}"));
+      assertThatThrownBy(() -> opera().postPayment(payment())).as("token endpoint HTTP %d", status)
+          .isInstanceOf(OperaUnavailableException.class).isNotInstanceOf(OperaRejectedException.class).hasMessageContaining("credentials");
+    }
+    replies.put("/oauth/v1/tokens", new Reply(200, "{\"expires_in\":3600}"));
+    assertThatThrownBy(() -> opera().postPayment(payment())).as("a token reply without a token").isInstanceOf(OperaUnavailableException.class)
+        .hasMessageContaining("without a token");
+    replies.remove("/oauth/v1/tokens");
+    replies.put(OPERA_PAYMENTS, new Reply(403, "{\"code\":\"APPLICATION_NOT_ALLOWED\"}"));
+    assertThatThrownBy(() -> opera().postPayment(payment())).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("credentials");
+  }
+
+  /** Fails if a wrong address or a proxy's 404 (no error code of theirs) declines a card or rejects a folio for good. */
+  @Test
+  void a404WithoutTheirOwnErrorCodeIsAWrongAddressNotARefusal() {
+    replies.put(OPERA_PAYMENTS, new Reply(404, "<html>Not Found</html>"));
+    assertThatThrownBy(() -> opera().postPayment(payment())).isInstanceOf(OperaUnavailableException.class);
+    replies.put(OPERA_PAYMENTS, new Reply(404, "{\"code\":\"RESERVATION_NOT_FOUND\"}"));
+    assertThatThrownBy(() -> opera().postPayment(payment())).as("OPERA's own answer about the reservation")
+        .isInstanceOf(OperaRejectedException.class).hasMessageContaining("RESERVATION_NOT_FOUND");
+
+    replies.put("/v1/captures", new Reply(404, "<html>Not Found</html>"));
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspTransientException.class);
+    replies.put("/v1/captures", new Reply(408, ""));
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).as("request timeout").isInstanceOf(PspTransientException.class);
+    replies.put("/v1/captures", new Reply(404, "{\"code\":\"UNKNOWN_AUTHORIZATION\"}"));
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).as("the processor's own answer").isInstanceOf(PspRejectedException.class);
+  }
+
+  /** Fails if a success without a reference becomes a blank reference: a capture of "" declines the card and a void of "" keeps the hold. */
+  @Test
+  void aProcessorSuccessWithoutAReferenceIsUnreadableNeverABlankReference() {
+    replies.put("/v1/authorizations", new Reply(201, "{\"id\":\"auth_1\"}"));
+    assertThatThrownBy(() -> psp().authorize("k:auth", new Pan("4111111111111111"), "12/29", TEN)).isInstanceOf(PspUnreadableReplyException.class);
+    replies.put("/v1/captures", new Reply(200, "{}"));
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspUnreadableReplyException.class);
   }
 
   @Test

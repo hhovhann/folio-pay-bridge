@@ -53,7 +53,7 @@ class OpenApiContractTest {
       JsonNode schema = doc.path("components").path("schemas").path(schemaRef.substring(schemaRef.lastIndexOf('/') + 1));
       if (schema.path("properties").has("pan")) acceptingPan.add(op.getKey().toUpperCase() + " " + path.getKey());
     }));
-    assertThat(acceptingPan).containsExactly("POST /api/cards");
+    assertThat(acceptingPan).containsExactly("POST /api/v1/cards");
   }
 
   @Test
@@ -71,7 +71,7 @@ class OpenApiContractTest {
   @Test
   void paymentOperationsAreDocumented() throws Exception {
     JsonNode paths = served().path("paths");
-    assertThat(paths.fieldNames()).toIterable().contains("/api/cards", "/api/payments", "/api/postings/{id}/replay", "/api/booking-events", "/api/links/{id}/pay", "/api/reconcile");
-    assertThat(paths.path("/api/payments").path("post").path("description").asText()).contains("never charges twice");
+    assertThat(paths.fieldNames()).toIterable().contains("/api/v1/cards", "/api/v1/payments", "/api/v1/postings/{id}/replay", "/api/v1/booking-events", "/api/v1/links/{id}/pay", "/api/v1/reconcile");
+    assertThat(paths.path("/api/v1/payments").path("post").path("description").asText()).contains("never charges twice");
   }
 }

@@ -10,7 +10,7 @@ const CURRENCIES = ['USD', 'AED', 'EUR', 'GBP', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR
 const REFERENCE = /^[A-Za-z0-9._-]{1,64}$/;
 
 export function LinksPage({ live }: { live: boolean }) {
-  const links = useLive<Link[]>(['/api/links'], live);
+  const links = useLive<Link[]>(['/api/v1/links'], live);
   const toast = useToast();
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({ reference: '', folioId: '', amount: '', currency: 'USD', dueDate: today, description: '' });
@@ -29,7 +29,7 @@ export function LinksPage({ live }: { live: boolean }) {
     if (problems.length) return;
     setBusy(true);
     try {
-      const out = await api<{ note: string }>('/api/links', {
+      const out = await api<{ note: string }>('/api/v1/links', {
         method: 'POST',
         body: { reference: form.reference, folioId: form.folioId, amountMinor, currency: form.currency, dueDate: form.dueDate, description: form.description || undefined },
       });

@@ -16,17 +16,18 @@ public interface NotificationRepository extends JpaRepository<Notification, Stri
   long countByStatus(Notification.Status status);
 
   /**
-   * Charges in {@code status} created since {@code since}, with no event of {@code type} yet; shadow runs are not revenue and are never
-   * announced. Oldest first. The window keeps each run to recent rows instead of rescanning all history every few seconds.
+   * Charges in {@code status} that changed since {@code since}, with no event of {@code type} yet; shadow runs are not revenue and are never
+   * announced. Oldest change first. The window keeps each run to recent rows instead of rescanning all history every few seconds, and it is
+   * on the last change, not the creation, so a charge resumed weeks later is still announced.
    */
-  @Query("select c from Charge c where c.status = :status and c.createdAt >= :since and c.idempotencyKey not like 'shadow-%' "
-      + "and not exists (select n.id from Notification n where n.eventId = concat(:prefix, c.id)) order by c.createdAt")
+  @Query("select c from Charge c where c.status = :status and c.updatedAt >= :since and c.idempotencyKey not like 'shadow-%' "
+      + "and not exists (select n.id from Notification n where n.eventId = concat(:prefix, c.id)) order by c.updatedAt")
   List<Charge> chargesToAnnounce(@Param("status") Charge.Status status, @Param("prefix") String eventIdPrefix, @Param("since") Instant since, Pageable page);
 
-  /** Postings in {@code status} with no event of {@code type} yet, leaving out postings of shadow runs. Oldest first. */
-  @Query("select p from Posting p where p.status = :status and p.createdAt >= :since "
+  /** Postings in {@code status} that changed since {@code since}, with no event of {@code type} yet, leaving out shadow runs. Oldest first. */
+  @Query("select p from Posting p where p.status = :status and p.updatedAt >= :since "
       + "and not exists (select c.id from Charge c where c.id = p.chargeId and c.idempotencyKey like 'shadow-%') "
-      + "and not exists (select n.id from Notification n where n.eventId = concat(:prefix, p.id)) order by p.createdAt")
+      + "and not exists (select n.id from Notification n where n.eventId = concat(:prefix, p.id)) order by p.updatedAt")
   List<Posting> postingsToAnnounce(@Param("status") Posting.Status status, @Param("prefix") String eventIdPrefix, @Param("since") Instant since, Pageable page);
 
   @Query("select n from Notification n where n.status = dev.foliopay.domain.model.Notification.Status.PENDING "

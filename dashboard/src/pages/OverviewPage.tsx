@@ -6,8 +6,8 @@ import { Card, Empty, ErrorBanner, Icon, Kpi, Pill } from '../components/ui';
 type Props = { live: boolean; go: (route: string) => void };
 
 export function OverviewPage({ live, go }: Props) {
-  const overview = useLive<Overview>(['/api/overview'], live);
-  const ledger = useLive<[Charge[], Posting[]]>(['/api/charges', '/api/postings'], live);
+  const overview = useLive<Overview>(['/api/v1/overview'], live);
+  const ledger = useLive<[Charge[], Posting[]]>(['/api/v1/charges', '/api/v1/postings'], live);
   const health = useLive<{ status: string }>(['/actuator/health'], live);
   const o = overview.data;
   const recent = ledger.data ? paymentRows(ledger.data[0], ledger.data[1]).filter((r) => !r.charge.idempotencyKey.startsWith('shadow-')).slice(0, 8) : [];

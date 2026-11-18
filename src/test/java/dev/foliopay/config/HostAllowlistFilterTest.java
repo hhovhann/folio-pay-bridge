@@ -29,7 +29,7 @@ class HostAllowlistFilterTest {
   @Test
   void theApiUnderAnUnknownHostIsStillRefused() throws Exception {
     MockHttpServletResponse response = new MockHttpServletResponse();
-    filter.doFilter(to("10.0.3.17", "/api/charges"), response, (req, res) -> { throw new AssertionError("reached"); });
+    filter.doFilter(to("10.0.3.17", "/api/v1/charges"), response, (req, res) -> { throw new AssertionError("reached"); });
     assertThat(response.getStatus()).isEqualTo(400);
     assertThat(response.getContentAsString()).contains("Host not allowed");
   }

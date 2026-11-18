@@ -2,11 +2,8 @@
   "openapi" : "3.1.0",
   "info" : {
     "title" : "Folio Pay Bridge API",
-    "description" : "Concept pilot: tokenise virtual cards, charge them once per idempotency key, post to the guest folio, turn booking events into payment links, and reconcile against an acquirer statement. Synthetic data only: the processor and the PMS are simulated (in-memory fakes, or HTTP simulators in the Compose profile). Card numbers are accepted only by POST /api/cards and are never returned. Money is an integer in minor units (cents) plus an ISO 4217 currency.",
-    "license" : {
-      "name" : "Concept pilot, not for production use"
-    },
-    "version" : "0.1.0"
+    "description" : "Tokenise cards, charge them once per idempotency key, post the payment to the guest folio in OPERA, turn booking events and app requests into payment links, announce outcomes by signed webhook, and reconcile against the acquirer's settlement. Card numbers are accepted only by POST /api/v1/cards and are never returned. Money is an integer in minor units plus an ISO 4217 currency. Errors are RFC 9457 problem details with a stable code. The version is in the path; a version only grows (new endpoints, optional fields, enum values), and a retired endpoint carries Deprecation and Sunset headers before it goes.",
+    "version" : "v1"
   },
   "servers" : [ {
     "url" : "http://localhost",
@@ -35,7 +32,7 @@
     "description" : "Booking events become payment requests under the written policy; the guest pays a link."
   } ],
   "paths" : {
-    "/api/sim" : {
+    "/api/v1/sim" : {
       "get" : {
         "tags" : [ "Demo" ],
         "summary" : "Simulator state",
@@ -81,7 +78,7 @@
         }
       }
     },
-    "/api/shadow" : {
+    "/api/v1/shadow" : {
       "post" : {
         "tags" : [ "Demo" ],
         "summary" : "Run shadow mode",
@@ -111,7 +108,7 @@
         }
       }
     },
-    "/api/reconcile" : {
+    "/api/v1/reconcile" : {
       "post" : {
         "tags" : [ "Reconciliation" ],
         "summary" : "Reconcile",
@@ -141,7 +138,7 @@
         }
       }
     },
-    "/api/postings/{id}/replay" : {
+    "/api/v1/postings/{id}/replay" : {
       "post" : {
         "tags" : [ "Payments" ],
         "summary" : "Replay a posting",
@@ -169,11 +166,11 @@
         }
       }
     },
-    "/api/payments" : {
+    "/api/v1/payments" : {
       "post" : {
         "tags" : [ "Payments" ],
         "summary" : "Pay",
-        "description" : "Idempotent on idempotencyKey: repeating a request returns the first result and never charges twice. The same key with different parameters is 409. The outcome says which half happened: OK, DECLINED, CHARGE_PENDING (retry with the same key; after night audit, leave the date out and the charge keeps the date it was taken on), CHARGED_NOT_POSTED (captured; the folio posting is in progress or waiting in the dead-letter queue).",
+        "description" : "Idempotent on idempotencyKey, per client: repeating a request returns the first result and never charges twice; another client's identical key is another payment. The same key with different parameters is 409 IDEMPOTENCY_KEY_REUSED. The outcome says which half happened: OK, DECLINED, CHARGE_PENDING (retry with the same key; after night audit, leave the date out and the charge keeps the date it was taken on), CHARGED_NOT_POSTED (captured; the folio posting is in progress or waiting in the dead-letter queue).",
         "operationId" : "pay",
         "requestBody" : {
           "content" : {
@@ -199,7 +196,7 @@
         }
       }
     },
-    "/api/notifications/{id}/redeliver" : {
+    "/api/v1/notifications/{id}/redeliver" : {
       "post" : {
         "tags" : [ "Notifications" ],
         "summary" : "Send a failed event again",
@@ -227,10 +224,11 @@
         }
       }
     },
-    "/api/links" : {
+    "/api/v1/links" : {
       "get" : {
         "tags" : [ "Payment links" ],
         "summary" : "List payment links",
+        "description" : "Newest first, at most 500.",
         "operationId" : "links",
         "responses" : {
           "200" : {
@@ -251,7 +249,7 @@
       "post" : {
         "tags" : [ "Payment links" ],
         "summary" : "Create a payment request",
-        "description" : "Remote creation by a third-party app (F&B, events, spa, guest messaging): a link for a set amount and due date, posted to the given folio when paid. One live request per reference: the same request again changes nothing; different terms replace the open request; a request being paid is not changed.",
+        "description" : "Remote creation by a third-party app (F&B, events, spa, guest messaging): a link for a set amount and due date, posted to the given folio when paid. Needs the links:write scope, which cannot charge a card. One live request per reference: the same request again changes nothing; different terms replace the open request; a request being paid is not changed.",
         "operationId" : "create",
         "requestBody" : {
           "content" : {
@@ -277,7 +275,7 @@
         }
       }
     },
-    "/api/links/{id}/pay" : {
+    "/api/v1/links/{id}/pay" : {
       "post" : {
         "tags" : [ "Payment links" ],
         "summary" : "Pay a link",
@@ -315,7 +313,7 @@
         }
       }
     },
-    "/api/cards" : {
+    "/api/v1/cards" : {
       "post" : {
         "tags" : [ "Cards" ],
         "summary" : "Tokenise a card",
@@ -345,7 +343,7 @@
         }
       }
     },
-    "/api/booking-events" : {
+    "/api/v1/booking-events" : {
       "post" : {
         "tags" : [ "Payment links" ],
         "summary" : "Handle a booking event",
@@ -375,7 +373,7 @@
         }
       }
     },
-    "/api/vault" : {
+    "/api/v1/vault" : {
       "get" : {
         "tags" : [ "Demo" ],
         "summary" : "What the vault stores",
@@ -398,7 +396,7 @@
         }
       }
     },
-    "/api/public/dashboard-config" : {
+    "/api/v1/public/dashboard-config" : {
       "get" : {
         "tags" : [ "Dashboard" ],
         "summary" : "How the dashboard signs in",
@@ -418,10 +416,11 @@
         }
       }
     },
-    "/api/postings" : {
+    "/api/v1/postings" : {
       "get" : {
         "tags" : [ "Payments" ],
         "summary" : "List folio postings",
+        "description" : "Newest first, at most 500.",
         "operationId" : "postings",
         "responses" : {
           "200" : {
@@ -440,7 +439,7 @@
         }
       }
     },
-    "/api/overview" : {
+    "/api/v1/overview" : {
       "get" : {
         "tags" : [ "Dashboard" ],
         "summary" : "Overview",
@@ -460,7 +459,7 @@
         }
       }
     },
-    "/api/notifications" : {
+    "/api/v1/notifications" : {
       "get" : {
         "tags" : [ "Notifications" ],
         "summary" : "List webhook events",
@@ -483,7 +482,7 @@
         }
       }
     },
-    "/api/logs" : {
+    "/api/v1/logs" : {
       "get" : {
         "tags" : [ "Demo" ],
         "summary" : "Masked log tail",
@@ -505,10 +504,11 @@
         }
       }
     },
-    "/api/charges" : {
+    "/api/v1/charges" : {
       "get" : {
         "tags" : [ "Payments" ],
         "summary" : "List charges",
+        "description" : "Newest first, at most 500.",
         "operationId" : "charges",
         "responses" : {
           "200" : {
@@ -804,7 +804,7 @@
         "properties" : {
           "idempotencyKey" : {
             "type" : "string",
-            "description" : "Client-chosen key. Repeating it returns the first result; never charges twice.",
+            "description" : "Client-chosen key, unique per client. Repeating it returns the first result; never charges twice.",
             "example" : "order-7731-attempt-1",
             "maxLength" : 100,
             "minLength" : 0,
@@ -967,7 +967,7 @@
             "type" : "string",
             "maxLength" : 120,
             "minLength" : 0,
-            "pattern" : "[^\\p{Cntrl}]*"
+            "pattern" : "[^\\p{Cntrl}\\p{Cf}]*"
           }
         },
         "required" : [ "currency", "dueDate", "folioId", "reference" ]

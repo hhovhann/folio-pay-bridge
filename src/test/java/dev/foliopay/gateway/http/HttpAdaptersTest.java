@@ -67,10 +67,12 @@ class HttpAdaptersTest {
   }
 
   // ---- OPERA
+  /** Fails if wrong credentials dead-letter postings as rejections: those are never replayed, though the folios are fine (review finding). */
   @Test
-  void wrongCredentialsAreARejectionNotARetry() {
+  void wrongCredentialsAreOursToFixAndReplayableNotARejectionOfTheFolio() {
     HttpOperaClient client = new HttpOperaClient(props(opera.url(), psp.url(), "wrong-secret", "k"), RestClient.builder(), java.time.Clock.systemUTC());
-    assertThatThrownBy(() -> client.businessDate("DEMO1")).isInstanceOf(OperaRejectedException.class).hasMessageContaining("refused our credentials");
+    assertThatThrownBy(() -> client.businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class).isNotInstanceOf(OperaRejectedException.class)
+        .hasMessageContaining("refused our credentials");
   }
 
   @Test

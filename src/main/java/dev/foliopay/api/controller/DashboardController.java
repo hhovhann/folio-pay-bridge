@@ -1,5 +1,6 @@
 package dev.foliopay.api.controller;
 
+import dev.foliopay.api.ApiPaths;
 import dev.foliopay.config.security.DashboardAuth;
 import dev.foliopay.service.OverviewService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,7 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Dashboard", description = "What the operator dashboard reads: the overview, and how to sign in.")
 @RestController
-@RequestMapping("/api")
+@RequestMapping(ApiPaths.V1)
 class DashboardController {
   private final OverviewService overview;
   private final DashboardAuth auth;

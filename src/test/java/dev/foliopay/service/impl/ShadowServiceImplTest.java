@@ -32,7 +32,7 @@ class ShadowServiceImplTest {
 
   private Posting posted(String key) {
     Posting posting = Fixtures.posting(key, "c", "F", new Money(1, "USD"), Fixtures.DAY);
-    posting.posted("OP-1");
+    posting.markPosted("OP-1");
     return posting;
   }
 

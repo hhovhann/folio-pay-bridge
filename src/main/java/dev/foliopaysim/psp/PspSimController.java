@@ -37,10 +37,16 @@ class PspSimController {
   @PostMapping("/v1/authorizations")
   ResponseEntity<Object> authorize(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization, @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody AuthRequest request) {
     ResponseEntity<Object> refused = guard(authorization, key);
-    if (refused != null) return refused;
+    if (refused != null) {
+      return refused;
+    }
     var repeat = psp.seen(key);
-    if (repeat.isPresent()) return replay(repeat.get(), request.amountMinor(), request.currency());
-    if (psp.consume(PspSimulator.Fault.DECLINE_NEXT)) return error(HttpStatus.PAYMENT_REQUIRED, "DO_NOT_HONOR", "Do not honor");
+    if (repeat.isPresent()) {
+      return replay(repeat.get(), request.amountMinor(), request.currency());
+    }
+    if (psp.consume(PspSimulator.Fault.DECLINE_NEXT)) {
+      return error(HttpStatus.PAYMENT_REQUIRED, "DO_NOT_HONOR", "Do not honor");
+    }
     PspSimulator.Entry auth = psp.once(key, () -> psp.entry("AUTH", last4(request.pan()), request.amountMinor(), request.currency(), "APPROVED", ""));
     return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("ref", auth.ref()));
   }
@@ -48,15 +54,23 @@ class PspSimController {
   @PostMapping("/v1/captures")
   ResponseEntity<Object> capture(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization, @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody CaptureRequest request) throws InterruptedException {
     ResponseEntity<Object> refused = guard(authorization, key);
-    if (refused != null) return refused;
+    if (refused != null) {
+      return refused;
+    }
     var repeat = psp.seen(key);
-    if (repeat.isPresent()) return replay(repeat.get(), request.amountMinor(), request.currency());
+    if (repeat.isPresent()) {
+      return replay(repeat.get(), request.amountMinor(), request.currency());
+    }
     var auth = psp.authorisation(request.authRef());
-    if (auth.isEmpty()) return error(HttpStatus.NOT_FOUND, "UNKNOWN_AUTHORIZATION", "No such authorisation");
+    if (auth.isEmpty()) {
+      return error(HttpStatus.NOT_FOUND, "UNKNOWN_AUTHORIZATION", "No such authorisation");
+    }
     if (auth.get().amountMinor() != request.amountMinor() || !auth.get().currency().equals(request.currency())) {
       return error(HttpStatus.UNPROCESSABLE_ENTITY, "AMOUNT_MISMATCH", "The capture does not match the authorised amount");
     }
-    if (psp.consume(PspSimulator.Fault.DECLINE_CAPTURE_NEXT)) return error(HttpStatus.PAYMENT_REQUIRED, "CAPTURE_DECLINED", "Capture declined");
+    if (psp.consume(PspSimulator.Fault.DECLINE_CAPTURE_NEXT)) {
+      return error(HttpStatus.PAYMENT_REQUIRED, "CAPTURE_DECLINED", "Capture declined");
+    }
     PspSimulator.Entry capture = psp.once(key, () -> psp.entry("CAPTURE", "", request.amountMinor(), request.currency(), "CAPTURED", request.authRef()));
     if (psp.consume(PspSimulator.Fault.TIMEOUT_AFTER_CAPTURE)) Thread.sleep(TIMEOUT_AFTER_CAPTURE_MILLIS); // captured, but the reply arrives too late
     return created(capture);
@@ -65,17 +79,25 @@ class PspSimController {
   @PostMapping("/v1/voids")
   ResponseEntity<Object> voidAuthorization(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization, @RequestHeader(value = "Idempotency-Key", required = false) String key, @RequestBody VoidRequest request) {
     ResponseEntity<Object> refused = guard(authorization, key);
-    if (refused != null) return refused;
+    if (refused != null) {
+      return refused;
+    }
     var repeat = psp.seen(key);
-    if (repeat.isPresent()) return created(repeat.get());
-    if (psp.authorisation(request.authRef()).isEmpty()) return error(HttpStatus.NOT_FOUND, "UNKNOWN_AUTHORIZATION", "No such authorisation");
+    if (repeat.isPresent()) {
+      return created(repeat.get());
+    }
+    if (psp.authorisation(request.authRef()).isEmpty()) {
+      return error(HttpStatus.NOT_FOUND, "UNKNOWN_AUTHORIZATION", "No such authorisation");
+    }
     PspSimulator.Entry voided = psp.once(key, () -> psp.entry("VOID", "", 0, "", "RELEASED", request.authRef()));
     return created(voided);
   }
 
   @GetMapping("/v1/settlements")
   ResponseEntity<Object> settlements(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
-    if (!("Bearer " + apiKey).equals(authorization)) return error(HttpStatus.UNAUTHORIZED, "BAD_API_KEY", "Missing or wrong API key");
+    if (!("Bearer " + apiKey).equals(authorization)) {
+      return error(HttpStatus.UNAUTHORIZED, "BAD_API_KEY", "Missing or wrong API key");
+    }
     List<Map<String, Object>> lines = psp.settlement().stream().map(e -> Map.<String, Object>of("pspRef", e.ref(), "amountMinor", e.amountMinor(), "currency", e.currency())).toList();
     return ResponseEntity.ok(Map.of("lines", lines));
   }
@@ -103,8 +125,12 @@ class PspSimController {
   ResponseEntity<Void> home() { return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, "/sim/psp.html").build(); }
 
   private ResponseEntity<Object> guard(String authorization, String idempotencyKey) {
-    if (!("Bearer " + apiKey).equals(authorization)) return error(HttpStatus.UNAUTHORIZED, "BAD_API_KEY", "Missing or wrong API key");
-    if (idempotencyKey == null || idempotencyKey.isBlank()) return error(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Every money call needs an Idempotency-Key");
+    if (!("Bearer " + apiKey).equals(authorization)) {
+      return error(HttpStatus.UNAUTHORIZED, "BAD_API_KEY", "Missing or wrong API key");
+    }
+    if (idempotencyKey == null || idempotencyKey.isBlank()) {
+      return error(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED", "Every money call needs an Idempotency-Key");
+    }
     return null;
   }
 

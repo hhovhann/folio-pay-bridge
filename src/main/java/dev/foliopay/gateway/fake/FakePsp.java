@@ -16,11 +16,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /** In-memory processor with the failure that matters: it captures the money, then the response is lost. Synthetic; no network. Wired only when foliopay.gateway=fake. */
 @Component
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "foliopay.gateway", havingValue = "fake")
+@ConditionalOnProperty(name = "foliopay.gateway", havingValue = "fake")
 public class FakePsp implements PspClient {
   /** LOSE_CAPTURE_REPLIES stays armed: every capture happens and its reply is lost, so retries run out with the money taken (D-27). */
   public enum Fault { NONE, TIMEOUT_AFTER_CAPTURE, DECLINE_NEXT, DECLINE_CAPTURE_NEXT, LOSE_CAPTURE_REPLIES }

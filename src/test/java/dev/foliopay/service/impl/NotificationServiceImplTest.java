@@ -65,7 +65,7 @@ class NotificationServiceImplTest {
   @Test
   void aDeadLetteredPostingIsAnnouncedWithItsCategoryAndReasonSoTheHotelKnowsWhyItIsNotOnTheFolio() {
     Posting p = Fixtures.posting("post:ch-1", "ch-1", "RES-1", new Money(5_000, "USD"), Fixtures.DAY);
-    p.deadLetter(Posting.FailureCategory.REJECTED_BY_OPERA, "FOLIO_CLOSED");
+    p.moveToDeadLetter(Posting.FailureCategory.REJECTED_BY_OPERA, "FOLIO_CLOSED");
     when(repository.postingsToAnnounce(eq(Posting.Status.DEAD_LETTER), eq("folio.dead_lettered:"), any(), any())).thenReturn(List.of(p));
 
     assertThat(service.collect()).isEqualTo(1);
@@ -79,7 +79,7 @@ class NotificationServiceImplTest {
   @Test
   void anEventAnotherInstanceQueuedFirstIsNotCountedTwice() {
     Charge c = Fixtures.charge("k-1", "BK-1", "tok_secret", new Money(100, "USD"));
-    c.captured("cap_1");
+    c.markCaptured("cap_1");
     when(repository.chargesToAnnounce(eq(Charge.Status.CAPTURED), anyString(), any(), any())).thenReturn(List.of(c));
     when(repository.saveAndFlush(any(Notification.class))).thenThrow(new DataIntegrityViolationException("uk_notification_event_id"));
 
@@ -89,7 +89,7 @@ class NotificationServiceImplTest {
   @Test
   void theCardTokenIsNeverInAPayload() {
     Charge c = Fixtures.charge("k-1", "BK-1", "tok_secret", new Money(100, "USD"));
-    c.captured("cap_1");
+    c.markCaptured("cap_1");
     when(repository.chargesToAnnounce(eq(Charge.Status.CAPTURED), anyString(), any(), any())).thenReturn(List.of(c));
 
     service.collect();
@@ -124,7 +124,7 @@ class NotificationServiceImplTest {
   @Test
   void aFailedEventCanBeRedeliveredAndAnUnknownOneIsNotFound() {
     Notification n = due();
-    n.failed("down", NOW, 1);
+    n.recordFailure("down", NOW, 1);
 
     assertThat(service.redeliver(n.getId()).getStatus()).isEqualTo(Notification.Status.PENDING);
     when(repository.findById("nope")).thenReturn(Optional.empty());

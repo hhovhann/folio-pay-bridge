@@ -35,13 +35,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionTemplate;
 
 class BookingEventServiceImplTest {
   private static final LocalDate TODAY = Fixtures.DAY;
@@ -98,8 +98,8 @@ class BookingEventServiceImplTest {
 
   private Charge chargeWith(String status, PaymentLink link) {
     Charge charge = Fixtures.charge("k", "B1", CARD_A, link.amount());
-    if (status.equals("CAPTURED")) charge.captured("cap_1");
-    if (status.equals("DECLINED")) charge.declined("Do not honor");
+    if (status.equals("CAPTURED")) charge.markCaptured("cap_1");
+    if (status.equals("DECLINED")) charge.markDeclined("Do not honor");
     return charge;
   }
 
@@ -255,7 +255,7 @@ class BookingEventServiceImplTest {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
     when(payments.pay(any())).thenThrow(new InvalidRequestException("Unknown card token"));
-    when(charges.find(anyString())).thenReturn(Optional.empty());
+    when(charges.find(anyString(), anyString())).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_A, TODAY)).isInstanceOf(InvalidRequestException.class);
     verify(links).release(link.getId(), Fingerprint.of(CARD_A));
@@ -267,7 +267,7 @@ class BookingEventServiceImplTest {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
     when(payments.pay(any())).thenThrow(new ConflictException("Idempotency key was already used with different parameters"));
-    when(charges.find("link:" + link.getId() + ":" + Fingerprint.of(CARD_A))).thenReturn(Optional.of(chargeWith("PENDING", link)));
+    when(charges.find(Charge.BRIDGE_CLIENT, "link:" + link.getId() + ":" + Fingerprint.of(CARD_A))).thenReturn(Optional.of(chargeWith("PENDING", link)));
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_A, TODAY)).isInstanceOf(ConflictException.class);
     verify(links, never()).release(anyString(), anyString());
@@ -279,7 +279,7 @@ class BookingEventServiceImplTest {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
     when(payments.pay(any())).thenThrow(new IllegalStateException("posting blew up after the capture"));
-    when(charges.find(anyString())).thenReturn(Optional.of(chargeWith("CAPTURED", link)));
+    when(charges.find(anyString(), anyString())).thenReturn(Optional.of(chargeWith("CAPTURED", link)));
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_A, TODAY)).isInstanceOf(IllegalStateException.class);
     verify(links).complete(link.getId(), Fingerprint.of(CARD_A));
@@ -291,7 +291,7 @@ class BookingEventServiceImplTest {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
     when(payments.pay(any())).thenThrow(new IllegalStateException("failed after the decline was stored"));
-    when(charges.find(anyString())).thenReturn(Optional.of(chargeWith("DECLINED", link)));
+    when(charges.find(anyString(), anyString())).thenReturn(Optional.of(chargeWith("DECLINED", link)));
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_A, TODAY)).isInstanceOf(IllegalStateException.class);
     verify(links).release(link.getId(), Fingerprint.of(CARD_A));
@@ -302,7 +302,7 @@ class BookingEventServiceImplTest {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
     when(payments.pay(any())).thenThrow(new IllegalStateException("database gone"));
-    when(charges.find(anyString())).thenThrow(new IllegalStateException("database gone"));
+    when(charges.find(anyString(), anyString())).thenThrow(new IllegalStateException("database gone"));
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_A, TODAY)).isInstanceOf(IllegalStateException.class);
     verify(links, never()).release(anyString(), anyString());

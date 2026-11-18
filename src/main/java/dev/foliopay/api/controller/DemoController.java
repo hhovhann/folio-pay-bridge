@@ -1,5 +1,6 @@
 package dev.foliopay.api.controller;
 
+import dev.foliopay.api.ApiPaths;
 import dev.foliopay.api.dto.SimRequest;
 import dev.foliopay.service.DemoService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Fault switches, a look inside the vault and the masked log tail. Not registered at all unless demo controls are on (OWASP A05). */
 @Tag(name = "Demo", description = "Present only when foliopay.demo-controls=true.")
 @RestController
-@RequestMapping("/api")
+@RequestMapping(ApiPaths.V1)
 @ConditionalOnProperty(name = "foliopay.demo-controls", havingValue = "true")
 class DemoController {
   private static final int LOG_LINES = 40;

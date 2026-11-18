@@ -145,8 +145,8 @@ class PostingServiceImplTest {
   @Test
   void aReplayLooksForTheEarlierPostBeforePostingAgain() {
     Posting waiting = stored();
-    waiting.attempt(); // it was tried before
-    waiting.deadLetter(FailureCategory.OPERA_UNAVAILABLE, "timeout");
+    waiting.recordAttempt(); // it was tried before
+    waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "timeout");
     when(opera.find("HOTEL9", "post:ch-1")).thenReturn(Optional.of(new Posted("OP-5", "RES-1", AMOUNT, DAY)));
 
     Posting result = service.replay(waiting.getId());
@@ -159,7 +159,7 @@ class PostingServiceImplTest {
   @Test
   void replayingARejectedPostingNeverCallsOperaAgain() {
     Posting rejected = stored();
-    rejected.deadLetter(FailureCategory.REJECTED_BY_OPERA, "Folio is closed");
+    rejected.moveToDeadLetter(FailureCategory.REJECTED_BY_OPERA, "Folio is closed");
 
     Posting result = service.replay(rejected.getId());
 
@@ -171,7 +171,7 @@ class PostingServiceImplTest {
   @Test
   void replayingAnOutageDeadLetterPostsItOnceOperaIsBack() {
     Posting waiting = stored();
-    waiting.deadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
+    waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
     when(opera.postPayment(any())).thenReturn("OP-9");
 
     Posting result = service.replay(waiting.getId());
@@ -184,7 +184,7 @@ class PostingServiceImplTest {
   @Test
   void whileAnotherRequestHoldsTheLeaseOperaIsNotCalledAndTheStoredStateIsReturned() {
     Posting waiting = stored();
-    waiting.deadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
+    waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
     when(repository.lease(anyString(), anyString(), any(), any())).thenReturn(0); // a parallel replay is talking to OPERA right now
 
     Posting result = service.replay(waiting.getId());
@@ -222,7 +222,7 @@ class PostingServiceImplTest {
   @Test
   void replayingAPostedEntryDoesNothing() {
     Posting posted = stored();
-    posted.posted("OP-1");
+    posted.markPosted("OP-1");
     service.replay(posted.getId());
     verify(opera, never()).postPayment(any());
   }
@@ -230,7 +230,7 @@ class PostingServiceImplTest {
   @Test
   void aRepeatedPaymentForAPostedChargeDoesNotPostAgain() {
     Posting posted = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
-    posted.posted("OP-1");
+    posted.markPosted("OP-1");
     when(repository.findByIdempotencyKey("post:ch-1")).thenReturn(Optional.of(posted));
 
     assertThat(service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1")).isSameAs(posted);
@@ -278,7 +278,7 @@ class PostingServiceImplTest {
     newPosting();
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("503"));
     Posting storedPosted = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
-    storedPosted.posted("OP-OTHER");
+    storedPosted.markPosted("OP-OTHER");
     when(repository.save(any(Posting.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Posting.class, "id"));
     when(repository.findById(anyString())).thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPosted));
 

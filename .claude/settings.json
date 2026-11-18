@@ -18,7 +18,18 @@
       "Bash(git push --delete:*)",
       "Bash(git reset --hard:*)",
       "Bash(curl * | sh)",
-      "Bash(curl * | bash)"
+      "Bash(curl * | bash)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f *)",
+      "Bash(git push * -f)",
+      "Bash(git push * +*)",
+      "Bash(git push * :*)",
+      "Bash(git push -d *)",
+      "Bash(git push * --delete *)",
+      "Bash(git push --mirror*)",
+      "Bash(git clean -f*)",
+      "Bash(gh repo delete*)",
+      "Bash(gh release delete*)"
     ],
     "ask": [
       "Bash(git push:*)",
@@ -36,6 +47,15 @@
           {
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR\"/tools/guard_secrets.py --hook"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/tools/guard_commands.py --hook"
           }
         ]
       }

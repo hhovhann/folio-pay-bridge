@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.endsWith;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,9 +13,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.foliopay.Fixtures;
 import dev.foliopay.domain.exception.ConflictException;
 import dev.foliopay.domain.exception.InvalidRequestException;
-import dev.foliopay.Fixtures;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
@@ -23,6 +24,7 @@ import dev.foliopay.gateway.PspClient.PspResult;
 import dev.foliopay.gateway.PspDeclinedException;
 import dev.foliopay.gateway.PspRejectedException;
 import dev.foliopay.gateway.PspTransientException;
+import dev.foliopay.gateway.PspUnreadableReplyException;
 import dev.foliopay.repository.ChargeRepository;
 import dev.foliopay.service.BusinessDateService;
 import dev.foliopay.service.CardVault;
@@ -85,30 +87,33 @@ class ChargeServiceImplTest {
 
   private static ChargeCommand command() { return Fixtures.command("key-1", "BK-1", "tok_1", TEN); }
 
-  private void noExistingCharge() { when(repository.findByIdempotencyKey("key-1")).thenReturn(Optional.empty()); }
+  private void noExistingCharge() { when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.empty()); }
 
   @Test
   void authorisesThenCapturesAndStoresTheProcessorReference() {
     noExistingCharge();
-    when(psp.authorize(eq("key-1:auth"), any(), eq("12/29"), eq(TEN))).thenReturn(new PspResult("auth_1"));
-    when(psp.capture("key-1:cap", "auth_1", TEN)).thenReturn(new PspResult("cap_1"));
+    when(psp.authorize(endsWith(":auth"), any(), eq("12/29"), eq(TEN))).thenReturn(new PspResult("auth_1"));
+    when(psp.capture(endsWith(":cap"), eq("auth_1"), eq(TEN))).thenReturn(new PspResult("cap_1"));
 
     Charge charge = service.charge(command());
 
     assertThat(charge.getStatus()).isEqualTo(Charge.Status.CAPTURED);
     assertThat(charge.getPspRef()).isEqualTo("cap_1");
+    // The processor's keys are the charge's own id, not the client's key: unique across clients, the same on every retry (D-3, D-40).
+    verify(psp).authorize(eq(charge.getId() + ":auth"), any(), eq("12/29"), eq(TEN));
+    verify(psp).capture(charge.getId() + ":cap", "auth_1", TEN);
   }
 
   @Test
   void aTransientFailureIsRetriedWithTheSameKeyUntilItSucceeds() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
-    when(psp.capture("key-1:cap", "auth_1", TEN)).thenThrow(new PspTransientException("timeout")).thenThrow(new PspTransientException("timeout")).thenReturn(new PspResult("cap_1"));
+    when(psp.capture(endsWith(":cap"), eq("auth_1"), eq(TEN))).thenThrow(new PspTransientException("timeout")).thenThrow(new PspTransientException("timeout")).thenReturn(new PspResult("cap_1"));
 
     Charge charge = service.charge(command());
 
     assertThat(charge.getStatus()).isEqualTo(Charge.Status.CAPTURED);
-    verify(psp, times(3)).capture("key-1:cap", "auth_1", TEN); // same key every time: the processor can deduplicate
+    verify(psp, times(3)).capture(charge.getId() + ":cap", "auth_1", TEN); // same key every time: the processor can deduplicate
     verify(psp, times(1)).authorize(anyString(), any(), anyString(), any());
   }
 
@@ -135,7 +140,7 @@ class ChargeServiceImplTest {
     Charge charge = service.charge(command());
 
     assertThat(charge.getStatus()).isEqualTo(Charge.Status.DECLINED);
-    verify(psp).voidAuthorization("key-1:void", "auth_1");
+    verify(psp).voidAuthorization(charge.getId() + ":void", "auth_1");
   }
 
   @Test
@@ -178,7 +183,7 @@ class ChargeServiceImplTest {
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
     when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
     Charge storedCaptured = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
-    storedCaptured.captured("cap_other");
+    storedCaptured.markCaptured("cap_other");
     when(repository.save(any(Charge.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "id"));
     when(repository.findById(anyString())).thenReturn(Optional.of(storedCaptured));
 
@@ -195,11 +200,11 @@ class ChargeServiceImplTest {
 
   @Test
   void theSameKeyWithADifferentFolioOrBusinessDateIsAConflictNotASilentReplayOfTheFirst() {
-    when(repository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
 
-    assertThatThrownBy(() -> service.charge(new ChargeCommand("key-1", "BK-1", "F-OTHER", Fixtures.DAY, "tok_1", TEN))).isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.charge(new ChargeCommand("key-1", "BK-1", "F-1", Fixtures.DAY.plusDays(1), "tok_1", TEN))).isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.charge(new ChargeCommand("key-1", "BK-OTHER", "F-1", Fixtures.DAY, "tok_1", TEN))).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-OTHER", Fixtures.DAY, "tok_1", TEN))).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-1", Fixtures.DAY.plusDays(1), "tok_1", TEN))).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-OTHER", "F-1", Fixtures.DAY, "tok_1", TEN))).isInstanceOf(ConflictException.class);
     verifyNoInteractions(psp);
   }
 
@@ -210,7 +215,7 @@ class ChargeServiceImplTest {
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
     when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
 
-    Charge charge = service.charge(new ChargeCommand("key-1", "BK-1", "F-1", null, "tok_1", TEN));
+    Charge charge = service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-1", null, "tok_1", TEN));
 
     assertThat(charge.getBusinessDate()).isEqualTo(Fixtures.DAY.plusDays(3));
   }
@@ -218,16 +223,16 @@ class ChargeServiceImplTest {
   @Test
   void aPendingChargeIsResumedAfterNightAuditWhenTheRepeatNamesNoDateAndKeepsItsOwnDate() {
     Charge pending = Fixtures.charge("key-1", "BK-1", "tok_1", TEN); // taken on DAY, the capture reply was lost
-    when(repository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(pending));
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(pending));
     when(businessDates.resolve(any())).thenReturn(Fixtures.DAY.plusDays(1)); // night audit has run since
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
     when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
 
-    Charge charge = service.charge(new ChargeCommand("key-1", "BK-1", "F-1", null, "tok_1", TEN));
+    Charge charge = service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-1", null, "tok_1", TEN));
 
     assertThat(charge.getStatus()).isEqualTo(Charge.Status.CAPTURED);
     assertThat(charge.getBusinessDate()).as("the date it was taken on").isEqualTo(Fixtures.DAY);
-    verify(psp).capture(eq("key-1:cap"), anyString(), any());
+    verify(psp).capture(eq(pending.getId() + ":cap"), anyString(), any());
     verifyNoInteractions(businessDates); // a repeat never asks the PMS: it resumes even while the PMS is down
   }
 
@@ -260,8 +265,8 @@ class ChargeServiceImplTest {
   @Test
   void aCapturedChargeIsReturnedWithoutTouchingTheProcessor() {
     Charge done = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
-    done.captured("cap_1");
-    when(repository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(done));
+    done.markCaptured("cap_1");
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(done));
 
     assertThat(service.charge(command())).isSameAs(done);
     verifyNoInteractions(psp);
@@ -270,7 +275,7 @@ class ChargeServiceImplTest {
   @Test
   void theSameKeyWithADifferentAmountIsAConflictAndNeverReachesTheProcessor() {
     Charge existing = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
-    when(repository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(existing));
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(existing));
 
     assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_1", new Money(9_999, "USD"))))
         .isInstanceOf(ConflictException.class).hasMessageContaining("different parameters");
@@ -279,7 +284,7 @@ class ChargeServiceImplTest {
 
   @Test
   void theSameKeyWithADifferentCardIsAConflict() {
-    when(repository.findByIdempotencyKey("key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
     assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_other", TEN))).isInstanceOf(ConflictException.class);
   }
 
@@ -300,7 +305,7 @@ class ChargeServiceImplTest {
 
     assertThat(charge.getStatus()).isEqualTo(Charge.Status.DECLINED);
     assertThat(charge.getLastError()).contains("AMOUNT_MISMATCH");
-    verify(psp).voidAuthorization("key-1:void", "auth_1");
+    verify(psp).voidAuthorization(charge.getId() + ":void", "auth_1");
     verify(psp, times(1)).capture(anyString(), anyString(), any());
     verify(repository).save(charge);
   }
@@ -320,6 +325,45 @@ class ChargeServiceImplTest {
     verify(repository).save(charge);
   }
 
+  /** Fails if a success without a reference is recorded as captured (blank reference) or declined (the hold released): it may have happened. */
+  @Test
+  void aCaptureAnsweredWithoutAReferenceStaysPendingAndKeepsTheHold() {
+    noExistingCharge();
+    when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
+    when(psp.capture(anyString(), anyString(), any())).thenThrow(new PspUnreadableReplyException("The processor accepted the capture but sent no reference"));
+
+    Charge charge = service.charge(command());
+
+    assertThat(charge.getStatus()).isEqualTo(Charge.Status.PENDING);
+    assertThat(charge.getPspRef()).isNull();
+    assertThat(charge.getLastError()).contains("sent no reference");
+    verify(psp, never()).voidAuthorization(anyString(), anyString());
+    verify(psp, times(1)).capture(anyString(), anyString(), any()); // not retried: the same key would get the same unreadable answer
+  }
+
+  /** Fails if the lookup ignores the client: another client's charge under the same key would be returned (and its result read). */
+  @Test
+  void aKeyIsLookedUpInTheCallersOwnNamespace() {
+    when(repository.findByClientIdAndIdempotencyKey("client-b", "key-1")).thenReturn(Optional.empty());
+    when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
+    when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
+
+    Charge charge = service.charge(new ChargeCommand("client-b", "key-1", "BK-1", "F-1", Fixtures.DAY, "tok_1", TEN));
+
+    assertThat(charge.getClientId()).isEqualTo("client-b");
+    verify(repository, never()).findByClientIdAndIdempotencyKey(eq(Charge.BRIDGE_CLIENT), anyString());
+  }
+
+  /** How a caller learns whether money moved after a failed request: by its own key, never by another client's. */
+  @Test
+  void aStoredChargeIsFoundUnderItsClientAndKey() {
+    Charge stored = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(stored));
+
+    assertThat(service.find(Charge.BRIDGE_CLIENT, "key-1")).contains(stored);
+    assertThat(service.find("client-b", "key-1")).isEmpty();
+  }
+
   @Test
   void aNewChargeLooksItsKeyUpOnceBeforeInserting() {
     noExistingCharge();
@@ -328,6 +372,6 @@ class ChargeServiceImplTest {
 
     service.charge(command());
 
-    verify(repository, times(1)).findByIdempotencyKey("key-1");
+    verify(repository, times(1)).findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1");
   }
 }

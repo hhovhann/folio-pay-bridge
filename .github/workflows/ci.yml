@@ -9,6 +9,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: No card numbers or credentials in the repository (AI and human guardrail)
         run: python3 tools/guard_secrets.py --repo
+      - name: The command guard still blocks every force-push and deletion form it lists
+        run: python3 tools/guard_commands.py --self-test
       - uses: actions/setup-java@v4
         with: { distribution: corretto, java-version: '17', cache: maven }
       - run: ./mvnw -B verify

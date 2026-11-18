@@ -5,12 +5,12 @@ import { fakeApi } from '../testing';
 describe('OverviewPage', () => {
   it('shows money per currency, never one total across currencies, and counts what needs attention', async () => {
     fakeApi({
-      'GET /api/overview': {
+      'GET /api/v1/overview': {
         at: '2026-11-18T08:00:00Z',
         capturedToday: [{ currency: 'AED', amountMinor: 45000, count: 1 }, { currency: 'USD', amountMinor: 160000, count: 2 }],
         chargesPending: 1, postingsPending: 0, deadLettersReplayable: 2, deadLettersRejected: 0, webhooksPending: 0, webhooksFailed: 1, linksOpen: 4, linksPaying: 1,
       },
-      'GET /api/charges': [], 'GET /api/postings': [], 'GET /actuator/health': { status: 'UP' },
+      'GET /api/v1/charges': [], 'GET /api/v1/postings': [], 'GET /actuator/health': { status: 'UP' },
     });
 
     render(<OverviewPage live={false} go={() => {}} />);

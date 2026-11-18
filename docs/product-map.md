@@ -7,10 +7,10 @@ This is a work sample, not any company's software, and it does not claim to matc
 ## Payment links and booking automation
 | Capability | Here | Where |
 |---|---|---|
-| Bookings arrive from the PMS (new, modified, cancelled) and become payment requests under the hotel's booking policy (advance purchase, flexible) | **Built** | `POST /api/booking-events`, `PaymentRequestPolicy`, `BookingEventServiceImpl` (D-19) |
+| Bookings arrive from the PMS (new, modified, cancelled) and become payment requests under the hotel's booking policy (advance purchase, flexible) | **Built** | `POST /api/v1/booking-events`, `PaymentRequestPolicy`, `BookingEventServiceImpl` (D-19) |
 | One live request per booking; a change replaces it; a request being paid is not changed; a cancellation after payment flags a refund review | **Built** | `LinkPaymentIntegrationTest`, `BookingEventServiceImplTest` |
 | A payer pays a link; a double-click charges once; a second card cannot pay a link being paid or already paid | **Built** | `ReviewFindingsIntegrationTest.twoCardsRacingOnOneOpenLinkProduceExactlyOneCapture` |
-| Requests created by other teams and apps (F&B, events, spa) with their own amount and due date: a "remote creation" API | **Built** | `POST /api/links`, `RemoteCreationIntegrationTest` |
+| Requests created by other teams and apps (F&B, events, spa) with their own amount and due date: a "remote creation" API | **Built** | `POST /api/v1/links`, `RemoteCreationIntegrationTest` |
 | Payment posted to the PMS automatically (OPERA folio window, payment code, cashier, business date), never twice, never lost | **Simulated** (OPERA) | `PostingServiceImpl`, `FullFlowHttpIntegrationTest` (D-5, D-23, D-28) |
 | "Payment responses sent via API": the integrator is told a payment was captured, declined, posted or stuck | **Built** | Signed webhooks, `WebhookIntegrationTest` (D-35) |
 | Branded messages by email, SMS, WhatsApp; reminder workflows; scheduling | **Not built** | A notification channel per tenant (template, sender, schedule) reading the same events as the webhooks |

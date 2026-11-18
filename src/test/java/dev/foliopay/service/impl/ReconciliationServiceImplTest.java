@@ -1,15 +1,16 @@
 package dev.foliopay.service.impl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.when;
 
 import dev.foliopay.Fixtures;
+import dev.foliopay.domain.exception.InvalidRequestException;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Posting;
@@ -19,15 +20,14 @@ import dev.foliopay.domain.model.SettlementLine;
 import dev.foliopay.gateway.PspClient;
 import dev.foliopay.repository.ChargeRepository;
 import dev.foliopay.repository.PostingRepository;
-import java.time.LocalDate;
 import dev.foliopay.service.ReconciliationService.Period;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import dev.foliopay.domain.exception.InvalidRequestException;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import org.mockito.ArgumentCaptor;
 
 class ReconciliationServiceImplTest {
   private final ChargeRepository charges = mock(ChargeRepository.class);
@@ -40,11 +40,11 @@ class ReconciliationServiceImplTest {
   /** A captured charge, optionally posted to the folio. */
   private Charge capture(String pspRef, long amount, boolean postedToPms) {
     Charge charge = Fixtures.charge("key-" + pspRef, "BK-" + pspRef, "tok", new Money(amount, "USD"));
-    charge.captured(pspRef);
+    charge.markCaptured(pspRef);
     captured.add(charge);
     if (postedToPms) {
       Posting posting = Fixtures.posting("post:" + charge.getId(), charge.getId(), "F-1", charge.amount(), LocalDate.of(2026, 11, 17));
-      posting.posted("OP-1");
+      posting.markPosted("OP-1");
       posted.add(posting);
     }
     return charge;
@@ -143,7 +143,7 @@ class ReconciliationServiceImplTest {
   void totalsAreKeptPerCurrencySoYenAndDollarsAreNeverAddedUp() {
     capture("cap_1", 1_000, true);
     Charge yen = Fixtures.charge("k-yen", "BK-Y", "tok", new Money(100, "JPY"));
-    yen.captured("cap_yen");
+    yen.markCaptured("cap_yen");
     captured.add(yen);
 
     ReconReport report = reconcile(new SettlementLine("cap_1", 1_000, "USD"), new SettlementLine("cap_yen", 90, "JPY"));
@@ -173,7 +173,7 @@ class ReconciliationServiceImplTest {
   @Test
   void shadowRunsAreNotRevenueAndStayOutOfTheReport() {
     Charge shadow = Fixtures.charge("shadow-run1-BK-1", "BK-1", "tok", new Money(9_000, "USD"));
-    shadow.captured("cap_shadow");
+    shadow.markCaptured("cap_shadow");
     captured.add(shadow);
     capture("cap_real", 1_000, true);
 

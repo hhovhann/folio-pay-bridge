@@ -43,7 +43,7 @@ export function App() {
   }, [theme]);
 
   useEffect(() => {
-    api<DashboardConfig>('/api/public/dashboard-config')
+    api<DashboardConfig>('/api/v1/public/dashboard-config')
       .then(async (c) => {
         setConfig(c);
         if (c.auth === 'unavailable') return;

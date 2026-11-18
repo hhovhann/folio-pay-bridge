@@ -4,7 +4,7 @@ const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DIGITS={KWD:3,BHD:3,OMR:3,JPY:0,KRW:0};
 const money=(m,c='USD')=>{const d=c in DIGITS?DIGITS[c]:2;return (m/10**d).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d})};
-async function api(path,method='GET',body){const r=await fetch('/api'+path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});let j=null;try{j=await r.json()}catch(e){}return{status:r.status,body:j}}
+async function api(path,method='GET',body){const r=await fetch('/api/v1'+path,{method,headers:{'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});let j=null;try{j=await r.json()}catch(e){}return{status:r.status,body:j}}
 const pill=s=>s?`<span class="pill ${s}">${s.replace('_',' ')}</span>`:'';
 async function refresh(){
   const [links,charges,posts,sim,logs]=await Promise.all([api('/links'),api('/charges'),api('/postings'),api('/sim'),api('/logs')]);
@@ -18,7 +18,7 @@ async function refresh(){
   const v=await api('/vault');$('[data-testid=vault-rows]').textContent=v.body.length?v.body.slice(-1).map(r=>`token       ${r.token}\nbin6/last4  ${r.bin6} ... ${r.last4}\nsealed PAN  ${r.sealedPanHex}\nwrapped key ${r.wrappedKeyHex}\nkey id      ${r.keyId}`).join('\n'):'(nothing)';
 }
 async function tokenise(){const r=await api('/cards','POST',{pan:$('#pan').value,expiry:$('#exp').value});
-  if(r.status===201){TOKEN=r.body.token;$('[data-testid=token-note]').innerHTML=`<span class="good">Token ${r.body.token.slice(0,12)}...</span> for card ending ${r.body.last4}. The number is not stored.`}else $('[data-testid=token-note]').innerHTML=`<span class="bad">${esc((r.body&&(r.body.error||r.body.message))||'Rejected')}</span>`;
+  if(r.status===201){TOKEN=r.body.token;$('[data-testid=token-note]').innerHTML=`<span class="good">Token ${r.body.token.slice(0,12)}...</span> for card ending ${r.body.last4}. The number is not stored.`}else $('[data-testid=token-note]').innerHTML=`<span class="bad">${esc((r.body&&(r.body.detail||r.body.message))||'Rejected')}</span>`;
   await refresh()}
 async function sendEvent(type,ref,plan,days,total){const a=new Date(TODAY+'T00:00:00Z');a.setUTCDate(a.getUTCDate()+days);
   const r=await api('/booking-events','POST',{type,bookingRef:ref,folioId:'F-'+ref,ratePlan:plan,arrival:a.toISOString().slice(0,10),totalMinor:total,currency:'USD',today:TODAY});
@@ -34,7 +34,7 @@ async function recon(mode){const r=await api('/reconcile','POST',{mode});const b
   const amt=(m,c)=>c?esc(c)+' '+money(m,c):'';
   $('[data-testid=recon-items] tbody').innerHTML=b.items.map(i=>`<tr><td><span class="pill DEAD_LETTER">${esc(i.category)}</span></td><td>${esc(i.pspRef)}</td><td>${amt(i.expectedMinor,i.expectedCurrency)}</td><td>${amt(i.settledMinor,i.settledCurrency)}</td></tr>`).join('')}
 async function shadow(mode){$('[data-testid=shadow-note]').textContent='Running...';const r=await api('/shadow','POST',{bookings:200,seed:42,mode});const b=r.body;
-  if(r.status!==200){$('[data-testid=shadow-note]').textContent=(b&&b.error)||'Shadow mode is not available here';return}
+  if(r.status!==200){$('[data-testid=shadow-note]').textContent=(b&&b.detail)||'Shadow mode is not available here';return}
   $('[data-testid=shadow-note]').innerHTML=`${b.bookings} bookings: <b class="good">${b.matched} match</b>, <b class="${b.mismatched?'bad':'good'}">${b.mismatched} differ</b>${Object.keys(b.byField).length?' ('+Object.entries(b.byField).map(([k,v])=>k+' '+v).join(', ')+')':''}. Rules: tax ${b.config.rounding.toLowerCase().replace('_',' ')}, date ${b.config.dateRule.toLowerCase().replace('_',' ')}.`;
   $('[data-testid=shadow-items] tbody').innerHTML=b.samples.slice(0,6).map(s=>`<tr><td>${esc(s.bookingRef)}</td><td>${esc(s.field)}</td><td>${esc(s.legacy)}</td><td>${esc(s.candidate)}</td></tr>`).join('');await refresh()}
 refresh();

@@ -27,7 +27,7 @@ export function ReconciliationPage({ demo }: { demo: boolean }) {
     setBusy(true);
     setError(null);
     try {
-      setReport(await api<ReconReport>('/api/reconcile', { method: 'POST', body: { mode, csv: csv.trim() || undefined, from: from || undefined, to: to || undefined } }));
+      setReport(await api<ReconReport>('/api/v1/reconcile', { method: 'POST', body: { mode, csv: csv.trim() || undefined, from: from || undefined, to: to || undefined } }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Reconciliation failed');
     } finally {

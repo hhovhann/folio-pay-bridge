@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.foliopay.TestBase;
 import dev.foliopay.domain.model.Charge;
+import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
 import dev.foliopay.domain.model.Posting;
 import dev.foliopay.gateway.fake.FakeOpera;
@@ -14,7 +15,6 @@ import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.Outcome;
 import dev.foliopay.service.PaymentService.PaymentCommand;
 import dev.foliopay.service.PostingService;
-import dev.foliopay.domain.model.Money;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +42,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   private PaymentService.Result pay(String key, String folio, long amount) { return pay(key, folio, amount, token); }
 
   private PaymentService.Result pay(String key, String folio, long amount, String cardToken) {
-    return payments.pay(new PaymentCommand(key, "BK-1", folio, cardToken, new Money(amount, "USD"), DAY));
+    return payments.pay(PaymentCommand.bridge(key, "BK-1", folio, cardToken, new Money(amount, "USD"), DAY));
   }
 
   @Test

@@ -26,7 +26,7 @@ class DashboardIntegrationTest extends TestBase {
   @Autowired private PaymentService payments;
 
   private void pay(long minor, String currency) {
-    payments.pay(new PaymentCommand("k-" + UUID.randomUUID(), "BK-D", "RES-D", token, new Money(minor, currency), null));
+    payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-D", "RES-D", token, new Money(minor, currency), null));
   }
 
   /** Fails if amounts in different currencies are added up, or a queue that needs a person is not counted. */
@@ -49,7 +49,7 @@ class DashboardIntegrationTest extends TestBase {
 
   @Test
   void theOverviewLeavesShadowRunsOut() {
-    payments.pay(new PaymentCommand("shadow-run-9-BK-S", "BK-S", "RES-S", token, new Money(5_000, "USD"), null));
+    payments.pay(PaymentCommand.bridge("shadow-run-9-BK-S", "BK-S", "RES-S", token, new Money(5_000, "USD"), null));
     assertThat(overview.overview().capturedToday()).isEmpty();
   }
 
@@ -57,8 +57,8 @@ class DashboardIntegrationTest extends TestBase {
   void theDashboardIsServedAtItsOwnPathAndToldItNeedsNoSignInWhenTheApiIsOpen() throws Exception {
     mvc.perform(get("/dashboard")).andExpect(redirectedUrl("/dashboard/"));
     mvc.perform(get("/")).andExpect(status().isOk()); // in the demo the classic console stays the front page
-    mvc.perform(get("/api/public/dashboard-config")).andExpect(status().isOk())
+    mvc.perform(get("/api/v1/public/dashboard-config")).andExpect(status().isOk())
         .andExpect(jsonPath("$.auth").value("none")).andExpect(jsonPath("$.demo").value(true));
-    mvc.perform(get("/api/overview")).andExpect(status().isOk()).andExpect(jsonPath("$.capturedToday").isArray());
+    mvc.perform(get("/api/v1/overview")).andExpect(status().isOk()).andExpect(jsonPath("$.capturedToday").isArray());
   }
 }

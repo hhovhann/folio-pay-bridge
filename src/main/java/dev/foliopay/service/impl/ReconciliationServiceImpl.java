@@ -18,8 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,6 +32,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 class ReconciliationServiceImpl implements ReconciliationService {
+  private static final Logger log = LoggerFactory.getLogger(ReconciliationServiceImpl.class);
   private static final int MIN_LINES_TO_DISTORT = 3;
   static final int IN_LIST_CHUNK = 1_000;
   private static final long SHORT_SETTLEMENT_MINOR = 150;
@@ -75,6 +79,7 @@ class ReconciliationServiceImpl implements ReconciliationService {
         byCurrency(lines).forEach((currency, sum) -> items.add(new Item(Category.UNKNOWN_IN_SETTLEMENT, ref, "", 0, "", sum, currency)));
       }
     });
+    log.info("Reconciled {} statement lines against {} captures: {} matched, {} exceptions", statement.size(), captured.size(), matched, items.size());
     return new ReconReport(matched, countByCategory(items), items, totals);
   }
 
@@ -140,7 +145,7 @@ class ReconciliationServiceImpl implements ReconciliationService {
    * Runs an {@code IN (...)} query in slices: PostgreSQL's driver refuses a statement with more than 65,535 bind parameters, and a
    * statement with tens of thousands is slow to plan anyway. Nothing is queried for an empty list.
    */
-  static <T> List<T> inChunks(List<String> values, java.util.function.Function<List<String>, List<T>> query) {
+  static <T> List<T> inChunks(List<String> values, Function<List<String>, List<T>> query) {
     List<T> all = new ArrayList<>();
     for (int from = 0; from < values.size(); from += IN_LIST_CHUNK) {
       all.addAll(query.apply(values.subList(from, Math.min(values.size(), from + IN_LIST_CHUNK))));

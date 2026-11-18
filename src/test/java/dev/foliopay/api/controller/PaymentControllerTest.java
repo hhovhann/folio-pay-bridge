@@ -10,10 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import dev.foliopay.Fixtures;
 import dev.foliopay.domain.exception.ConflictException;
 import dev.foliopay.domain.exception.GoneException;
 import dev.foliopay.domain.exception.NotFoundException;
-import dev.foliopay.Fixtures;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.service.ChargeService;
@@ -59,14 +59,14 @@ class PaymentControllerTest {
       "{\"idempotencyKey\":\"k-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + TOKEN + "\",\"amountMinor\":12345,\"currency\":\"USD\"}";
 
   private ResultActions pay(String body) throws Exception {
-    return mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON).content(body));
+    return mvc.perform(post("/api/v1/payments").contentType(MediaType.APPLICATION_JSON).content(body));
   }
 
   @Test
   void aValidPaymentWithoutADateLeavesTheDateToTheServiceSoARepeatAfterNightAuditCanResume() throws Exception {
     Mockito.when(businessDates.checkRequested(any())).thenCallRealMethod();
     Charge charge = Fixtures.charge("k-1", "BK-1", "tok_secret_token", new Money(12_345, "USD"));
-    charge.captured("cap_1");
+    charge.markCaptured("cap_1");
     when(payments.pay(any())).thenReturn(new PaymentService.Result(Outcome.CHARGE_PENDING, charge, null));
 
     String json = pay(VALID).andExpect(status().isOk()).andExpect(jsonPath("$.outcome").value("CHARGE_PENDING"))
@@ -83,7 +83,7 @@ class PaymentControllerTest {
   @Test
   void aConcurrentChangeToTheSameRecordIsAConflictToRetryNotAServerError() throws Exception {
     when(payments.pay(any())).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
-    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("send it again")));
+    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("send it again")));
   }
 
   @Test
@@ -127,7 +127,7 @@ class PaymentControllerTest {
   @Test
   void domainErrorsMapToTheirHttpStatus() throws Exception {
     doThrow(new ConflictException("Idempotency key was already used with different parameters")).when(payments).pay(any());
-    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("different parameters")));
+    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("different parameters")));
 
     doThrow(new NotFoundException("Unknown payment link")).when(payments).pay(any());
     pay(VALID).andExpect(status().isNotFound());

@@ -19,24 +19,24 @@ import software.amazon.awssdk.services.kms.model.GenerateDataKeyResponse;
 @Component
 @ConditionalOnProperty(name = "foliopay.keys", havingValue = "kms")
 public class KmsKeyService implements KeyService {
-    private final KmsClient kms;
-    private final String keyId;
+  private final KmsClient kms;
+  private final String keyId;
 
-    public KmsKeyService(KmsClient kms, @Value("${foliopay.kms.key-id}") String keyId) {
-        this.kms = kms;
-        this.keyId = keyId;
-    }
+  public KmsKeyService(KmsClient kms, @Value("${foliopay.kms.key-id}") String keyId) {
+    this.kms = kms;
+    this.keyId = keyId;
+  }
 
-    @Override
-    public DataKey newDataKey(String context) {
-        GenerateDataKeyResponse r = kms.generateDataKey(GenerateDataKeyRequest.builder()
-                .keyId(keyId).keySpec(DataKeySpec.AES_256).encryptionContext(Map.of("token", context)).build());
-        return new DataKey(r.plaintext().asByteArray(), r.ciphertextBlob().asByteArray(), r.keyId());
-    }
+  @Override
+  public DataKey newDataKey(String context) {
+    GenerateDataKeyResponse r = kms.generateDataKey(GenerateDataKeyRequest.builder()
+        .keyId(keyId).keySpec(DataKeySpec.AES_256).encryptionContext(Map.of("token", context)).build());
+    return new DataKey(r.plaintext().asByteArray(), r.ciphertextBlob().asByteArray(), r.keyId());
+  }
 
-    @Override
-    public byte[] unwrap(byte[] wrapped, String context, String wrappingKeyId) {
-        return kms.decrypt(DecryptRequest.builder().keyId(wrappingKeyId).ciphertextBlob(SdkBytes.fromByteArray(wrapped))
-                .encryptionContext(Map.of("token", context)).build()).plaintext().asByteArray();
-    }
+  @Override
+  public byte[] unwrap(byte[] wrapped, String context, String wrappingKeyId) {
+    return kms.decrypt(DecryptRequest.builder().keyId(wrappingKeyId).ciphertextBlob(SdkBytes.fromByteArray(wrapped))
+        .encryptionContext(Map.of("token", context)).build()).plaintext().asByteArray();
+  }
 }

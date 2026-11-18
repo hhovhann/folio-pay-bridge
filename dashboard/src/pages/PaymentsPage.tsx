@@ -9,7 +9,7 @@ import { useToast } from '../components/Toasts';
 type Filter = 'all' | 'attention' | 'CAPTURED' | 'PENDING' | 'DECLINED';
 
 export function PaymentsPage({ live, initialFilter }: { live: boolean; initialFilter?: string }) {
-  const ledger = useLive<[Charge[], Posting[], Notification[]]>(['/api/charges', '/api/postings', '/api/notifications'], live);
+  const ledger = useLive<[Charge[], Posting[], Notification[]]>(['/api/v1/charges', '/api/v1/postings', '/api/v1/notifications'], live);
   const [filter, setFilter] = useState<Filter>((initialFilter as Filter) ?? 'all');
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState<PaymentRow | null>(null);
@@ -30,7 +30,7 @@ export function PaymentsPage({ live, initialFilter }: { live: boolean; initialFi
 
   async function replay(posting: Posting) {
     try {
-      const after = await api<Posting>(`/api/postings/${encodeURIComponent(posting.id)}/replay`, { method: 'POST' });
+      const after = await api<Posting>(`/api/v1/postings/${encodeURIComponent(posting.id)}/replay`, { method: 'POST' });
       toast(after.status === 'POSTED' ? `Posted to folio ${after.folioId} as ${after.operaRef}` : `Still not posted: ${after.lastError ?? after.failureCategory}`, after.status === 'POSTED' ? 'good' : 'bad');
       await ledger.reload();
     } catch (e) {

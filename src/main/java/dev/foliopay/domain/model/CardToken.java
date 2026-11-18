@@ -4,6 +4,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 
 /**
@@ -14,6 +15,12 @@ import java.time.Instant;
 @Table(name = "card_token")
 public class CardToken {
   @Id private String token;
+
+  /**
+   * Never changes after tokenisation; it is here so Spring Data sees a new card as new (a null version) and inserts it directly, instead
+   * of reading the row first to decide between insert and update, as it must for an entity whose id is assigned in code.
+   */
+  @Version private Long version;
 
   @Column(name = "sealed_pan", nullable = false, length = 256)
   private byte[] sealedPan;

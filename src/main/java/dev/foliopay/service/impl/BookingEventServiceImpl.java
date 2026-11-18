@@ -19,6 +19,7 @@ import dev.foliopay.service.PaymentService.PaymentCommand;
 import dev.foliopay.service.support.Fingerprint;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -52,6 +53,8 @@ class BookingEventServiceImpl implements BookingEventService {
 
   @Override
   public Outcome handle(BookingEvent event, LocalDate today) {
+    log.debug("Booking event {} for booking {}: rate plan {} arrival {} total {} {}", event.type(), event.bookingRef(), event.ratePlan(),
+        event.arrival(), event.total().minor(), event.total().currency());
     return onceOrAsTheRepeat(() -> apply(event, today));
   }
 
@@ -62,6 +65,7 @@ class BookingEventServiceImpl implements BookingEventService {
     }
     Money amount = request.amount().requirePositive();
     String reference = REMOTE_PREFIX + request.reference();
+    log.debug("Payment request {} for folio {}: {} {} due {}", reference, request.folioId(), amount.minor(), amount.currency(), request.dueDate());
     return onceOrAsTheRepeat(() -> {
       Links state = Links.of(links.findByBookingRef(reference));
       if (state.paying()) {
@@ -79,7 +83,7 @@ class BookingEventServiceImpl implements BookingEventService {
    * A parallel twin got there first: it created the live link (we lose the unique slot) or superseded the open one (we lose the version
    * check). Either way, re-read and treat this as the repeat it is, so the same request twice is "no change", never a 409.
    */
-  private static Outcome onceOrAsTheRepeat(java.util.function.Supplier<Outcome> work) {
+  private static Outcome onceOrAsTheRepeat(Supplier<Outcome> work) {
     try {
       return work.get();
     } catch (DataIntegrityViolationException | OptimisticLockingFailureException twin) {
@@ -111,6 +115,7 @@ class BookingEventServiceImpl implements BookingEventService {
   public PaymentService.Result pay(String linkId, String cardToken, LocalDate businessDate) {
     PaymentLink link = links.findById(linkId).orElseThrow(() -> new NotFoundException("Unknown payment link"));
     String fingerprint = Fingerprint.of(cardToken);
+    log.debug("Link {} ({}) paid by card {}", linkId, link.getStatus(), fingerprint);
     if (link.isOpen()) {
       if (links.claim(linkId, fingerprint) == 0) {
         throw new ConflictException("Another payment on this link is in progress");
@@ -121,7 +126,7 @@ class BookingEventServiceImpl implements BookingEventService {
     String key = "link:" + linkId + ":" + fingerprint;
     PaymentService.Result result;
     try {
-      result = payments.pay(new PaymentCommand(key, link.getBookingRef(), link.getFolioId(), cardToken, link.amount(), businessDate));
+      result = payments.pay(PaymentCommand.bridge(key, link.getBookingRef(), link.getFolioId(), cardToken, link.amount(), businessDate));
     } catch (RuntimeException failure) {
       // Whether money may have moved is a fact in the database, not something the type of the exception can tell.
       settleClaim(linkId, fingerprint, storedStatus(key));
@@ -149,7 +154,7 @@ class BookingEventServiceImpl implements BookingEventService {
   /** Null when no charge was created. If even that cannot be read, PENDING: keeping the claim is the answer that can never charge twice. */
   private Charge.Status storedStatus(String key) {
     try {
-      return charges.find(key).map(Charge::getStatus).orElse(null);
+      return charges.find(Charge.BRIDGE_CLIENT, key).map(Charge::getStatus).orElse(null);
     } catch (RuntimeException unreadable) {
       return Charge.Status.PENDING;
     }
@@ -190,6 +195,7 @@ class BookingEventServiceImpl implements BookingEventService {
       }
       links.saveAndFlush(new PaymentLink(reference, folioId, amount, dueDate, reason));
     });
+    log.info("Payment request for {} is now {} {} due {}{}", reference, amount.minor(), amount.currency(), dueDate, open != null ? " (replaced the open one)" : "");
     return new Outcome(links.findByBookingRef(reference), false, reason);
   }
 }

@@ -1,16 +1,19 @@
 package dev.foliopay.api.controller;
 
+import dev.foliopay.api.ApiPaths;
 import dev.foliopay.api.dto.ChargeView;
 import dev.foliopay.api.dto.PayRequest;
 import dev.foliopay.api.dto.PaymentResponse;
 import dev.foliopay.api.dto.PostingView;
+import dev.foliopay.service.BusinessDateService;
 import dev.foliopay.service.ChargeService;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PostingService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import dev.foliopay.service.BusinessDateService;
+import java.security.Principal;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,8 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Payments", description = "Charge a tokenised card, post to the folio, inspect the ledger, replay dead-lettered postings.")
 @RestController
-@RequestMapping("/api")
+@RequestMapping(ApiPaths.V1)
 class PaymentController {
+  /** The key namespace of a caller with no credentials: only possible when authentication is off (the demo profiles). */
+  static final String ANONYMOUS = "anonymous";
+
   private final PaymentService payments;
   private final ChargeService charges;
   private final PostingService postings;
@@ -35,21 +41,27 @@ class PaymentController {
     this.businessDates = businessDates;
   }
 
-  @Operation(summary = "Pay", description = "Idempotent on idempotencyKey: repeating a request returns the first result and never charges twice. The same key with different parameters is 409. The outcome says which half happened: OK, DECLINED, CHARGE_PENDING (retry with the same key; after night audit, leave the date out and the charge keeps the date it was taken on), CHARGED_NOT_POSTED (captured; the folio posting is in progress or waiting in the dead-letter queue).")
+  @Operation(summary = "Pay", description = "Idempotent on idempotencyKey, per client: repeating a request returns the first result and never "
+      + "charges twice; another client's identical key is another payment. The same key with different parameters is 409 "
+      + "IDEMPOTENCY_KEY_REUSED. The outcome says which half happened: OK, DECLINED, CHARGE_PENDING (retry with the same key; after night "
+      + "audit, leave the date out and the charge keeps the date it was taken on), CHARGED_NOT_POSTED (captured; the folio posting is in "
+      + "progress or waiting in the dead-letter queue).")
   @PostMapping("/payments")
-  PaymentResponse pay(@Valid @RequestBody PayRequest request) {
-    return PaymentResponse.from(payments.pay(request.toCommand(businessDates.checkRequested(request.businessDate()))));
+  PaymentResponse pay(@Valid @RequestBody PayRequest request, @Parameter(hidden = true) Principal caller) {
+    String client = caller == null ? ANONYMOUS : caller.getName();
+    return PaymentResponse.from(payments.pay(request.toCommand(client, businessDates.checkRequested(request.businessDate()))));
   }
 
-  @Operation(summary = "List charges")
+  @Operation(summary = "List charges", description = "Newest first, at most 500.")
   @GetMapping("/charges")
   List<ChargeView> charges() { return charges.findAll().stream().map(ChargeView::from).toList(); }
 
-  @Operation(summary = "List folio postings")
+  @Operation(summary = "List folio postings", description = "Newest first, at most 500.")
   @GetMapping("/postings")
   List<PostingView> postings() { return postings.findAll().stream().map(PostingView::from).toList(); }
 
-  @Operation(summary = "Replay a posting", description = "Tries a dead-lettered posting again. A posting rejected by the PMS is returned untouched; an outage can be replayed. Safe to repeat.")
+  @Operation(summary = "Replay a posting", description = "Tries a dead-lettered posting again. A posting rejected by the PMS is returned "
+      + "untouched; an outage can be replayed. Safe to repeat.")
   @PostMapping("/postings/{id}/replay")
   PostingView replay(@PathVariable String id) { return PostingView.from(postings.replay(id)); }
 }

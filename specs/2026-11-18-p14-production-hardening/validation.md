@@ -42,6 +42,6 @@
 - [x] `DashboardAuthTest.aProtectedApiWithoutAnIdentityProviderSaysSignInIsUnavailable`
 - [x] The dashboard's own tests (Vitest, run by `./mvnw test`): Replay offered only where OPERA was unavailable, money per currency, exact minor units from the form, error codes read from the body (2026-11-18)
 - [x] `demo/check_dashboard.py`: every screen in a real browser against the running app, Replay and a new request through the UI, dark theme, phone width, no browser error and no content security policy violation (2026-11-18)
-- [ ] The dashboard's sign-in against a real identity provider (Cognito, Okta or Keycloak)
-- [ ] KMS, Cognito and the runbook exercised in a real AWS account
-- [ ] A real OHIP sandbox and an acquirer's test environment
+- [ ] The dashboard's sign-in against a real identity provider (Cognito, Okta or Keycloak) (manual)
+- [ ] KMS, Cognito and the runbook exercised in a real AWS account (manual)
+- [ ] A real OHIP sandbox and an acquirer's test environment (manual)

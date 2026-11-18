@@ -24,7 +24,7 @@ class RequestSizeFilterTest {
   /** An HTTP/2 stream: no declared length and, by the protocol's rules, no Transfer-Encoding header either. */
   private static MockHttpServletRequest undeclared(byte[] body) {
     MockHttpServletRequest request =
-        new MockHttpServletRequest("POST", "/api/reconcile") {
+        new MockHttpServletRequest("POST", "/api/v1/reconcile") {
           @Override public long getContentLengthLong() { return -1; }
           @Override public int getContentLength() { return -1; }
         };
@@ -80,7 +80,7 @@ class RequestSizeFilterTest {
 
   @Test
   void aDeclaredLengthOverTheLimitIsRefusedOnTheHeaderAlone() throws Exception {
-    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/reconcile");
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reconcile");
     request.setContent(new byte[RequestSizeFilter.MAX_BYTES + 1]);
     MockHttpServletResponse response = new MockHttpServletResponse();
     filter.doFilter(request, response, (req, res) -> { throw new AssertionError("must not be reached"); });

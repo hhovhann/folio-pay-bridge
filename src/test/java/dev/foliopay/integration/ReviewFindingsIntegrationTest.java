@@ -93,9 +93,9 @@ class ReviewFindingsIntegrationTest extends TestBase {
   @Test
   void theSameKeyWithADifferentFolioIsAConflictNotAnOkForTheOriginal() {
     String key = "k-" + UUID.randomUUID();
-    payments.pay(new PaymentCommand(key, "BK-A", "F-A", token, new Money(5_000, "USD"), DAY));
+    payments.pay(PaymentCommand.bridge(key, "BK-A", "F-A", token, new Money(5_000, "USD"), DAY));
 
-    assertThatThrownBy(() -> payments.pay(new PaymentCommand(key, "BK-B", "F-B", token, new Money(5_000, "USD"), DAY.plusDays(1))))
+    assertThatThrownBy(() -> payments.pay(PaymentCommand.bridge(key, "BK-B", "F-B", token, new Money(5_000, "USD"), DAY.plusDays(1))))
         .isInstanceOf(ConflictException.class);
     assertThat(opera.postCount()).as("nothing was posted to the folio the client corrected to").isEqualTo(1);
   }
@@ -104,7 +104,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   void aCaptureDeclinedAfterAuthorisationReleasesTheHold() {
     psp.arm(FakePsp.Fault.DECLINE_CAPTURE_NEXT);
 
-    var result = payments.pay(new PaymentCommand("k-" + UUID.randomUUID(), "BK-1", "F-1", token, new Money(5_000, "USD"), DAY));
+    var result = payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", "F-1", token, new Money(5_000, "USD"), DAY));
 
     assertThat(result.outcome()).isEqualTo(Outcome.DECLINED);
     assertThat(psp.voidCount()).isEqualTo(1);
@@ -116,21 +116,21 @@ class ReviewFindingsIntegrationTest extends TestBase {
     PaymentLink link = newLink("R3");
     bookings.pay(link.getId(), token, DAY);
 
-    String listing = mvc.perform(get("/api/charges")).andReturn().getResponse().getContentAsString();
+    String listing = mvc.perform(get("/api/v1/charges")).andReturn().getResponse().getContentAsString();
     assertThat(listing).contains("link:" + link.getId()).doesNotContain(token);
   }
 
   @Test
   void aRequestWithAForeignHostHeaderIsRefused() throws Exception {
-    mvc.perform(get("/api/charges").header("Host", "attacker.example")).andExpect(status().isBadRequest());
-    mvc.perform(get("/api/charges").header("Host", "127.0.0.1:8081")).andExpect(status().isOk());
-    mvc.perform(get("/api/charges").header("Host", "localhost")).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/charges").header("Host", "attacker.example")).andExpect(status().isBadRequest());
+    mvc.perform(get("/api/v1/charges").header("Host", "127.0.0.1:8081")).andExpect(status().isOk());
+    mvc.perform(get("/api/v1/charges").header("Host", "localhost")).andExpect(status().isOk());
   }
 
   @Test
   void anOversizedBodyIsRefusedBeforeItIsParsed() throws Exception {
     String huge = "{\"mode\":\"clean\",\"csv\":\"" + "x".repeat(1_100_000) + "\"}";
-    mvc.perform(post("/api/reconcile").contentType(MediaType.APPLICATION_JSON).content(huge)).andExpect(status().isPayloadTooLarge());
+    mvc.perform(post("/api/v1/reconcile").contentType(MediaType.APPLICATION_JSON).content(huge)).andExpect(status().isPayloadTooLarge());
   }
 
   @Test
@@ -138,15 +138,15 @@ class ReviewFindingsIntegrationTest extends TestBase {
     opera.setBusinessDate(LocalDate.of(2026, 11, 16)); // after midnight but before night audit
     String body = "{\"idempotencyKey\":\"bd-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + token + "\",\"amountMinor\":500,\"currency\":\"USD\"%s}";
 
-    mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON).content(String.format(body, ",\"businessDate\":\"2026-11-17\"")))
+    mvc.perform(post("/api/v1/payments").contentType(MediaType.APPLICATION_JSON).content(String.format(body, ",\"businessDate\":\"2026-11-17\"")))
         .andExpect(status().isBadRequest());
-    mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON).content(String.format(body, ""))).andExpect(status().isOk());
+    mvc.perform(post("/api/v1/payments").contentType(MediaType.APPLICATION_JSON).content(String.format(body, ""))).andExpect(status().isOk());
     assertThat(charges.findAll()).singleElement().satisfies(c -> assertThat(c.getBusinessDate()).isEqualTo(LocalDate.of(2026, 11, 16)));
   }
 
   @Test
   void aStoredUpstreamMessageIsBoundedAndSingleLine() {
-    var result = payments.pay(new PaymentCommand("k-" + UUID.randomUUID(), "BK-1", "F-CLOSED", token, new Money(5_000, "USD"), DAY));
+    var result = payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", "F-CLOSED", token, new Money(5_000, "USD"), DAY));
     assertThat(result.posting().getLastError()).doesNotContain("\n").hasSizeLessThanOrEqualTo(255);
   }
 }

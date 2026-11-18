@@ -1,5 +1,6 @@
 package dev.foliopay.api.controller;
 
+import dev.foliopay.api.ApiPaths;
 import dev.foliopay.api.dto.ReconcileRequest;
 import dev.foliopay.domain.model.ReconReport;
 import dev.foliopay.service.ReconciliationService;
@@ -15,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Reconciliation", description = "Revenue assurance against an acquirer settlement statement.")
 @RestController
-@RequestMapping("/api/reconcile")
+@RequestMapping(ApiPaths.V1 + "/reconcile")
 class ReconciliationController {
   private final ReconciliationService reconciliation;
   private final boolean demoControls;

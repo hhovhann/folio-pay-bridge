@@ -1,5 +1,6 @@
 package dev.foliopay.service.impl;
 
+import dev.foliopay.config.OperaProperties;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
 import dev.foliopay.domain.model.ShadowBooking;
@@ -8,7 +9,6 @@ import dev.foliopay.domain.model.ShadowReport;
 import dev.foliopay.domain.model.ShadowReport.Mismatch;
 import dev.foliopay.domain.rule.LegacyRules;
 import dev.foliopay.domain.rule.Pricing;
-import dev.foliopay.config.OperaProperties;
 import dev.foliopay.gateway.OperaClient;
 import dev.foliopay.service.CardVault;
 import dev.foliopay.service.PaymentService;
@@ -24,10 +24,11 @@ import java.util.Random;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 @Service
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "foliopay.gateway", havingValue = "fake")
+@ConditionalOnProperty(name = "foliopay.gateway", havingValue = "fake")
 class ShadowServiceImpl implements ShadowService {
   private static final Logger log = LoggerFactory.getLogger(ShadowServiceImpl.class);
   private static final List<String> ZONES = List.of("Asia/Dubai", "America/New_York", "Europe/London", "Asia/Tokyo", "Australia/Sydney");
@@ -94,7 +95,7 @@ class ShadowServiceImpl implements ShadowService {
 
   private static PaymentCommand commandFor(String runId, String token, ShadowBooking booking, ShadowConfig config) {
     Money amount = new Money(Pricing.total(booking, config.rounding()), booking.currency());
-    return new PaymentCommand("shadow-" + runId + "-" + booking.ref(), booking.ref(), "F-" + booking.ref(), token, amount, Pricing.businessDate(booking, config.dateRule()));
+    return PaymentCommand.bridge("shadow-" + runId + "-" + booking.ref(), booking.ref(), "F-" + booking.ref(), token, amount, Pricing.businessDate(booking, config.dateRule()));
   }
 
   private static List<Mismatch> compare(ShadowBooking booking, OperaClient.Posted posted) {

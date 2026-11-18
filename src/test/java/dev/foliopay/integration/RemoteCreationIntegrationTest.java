@@ -28,7 +28,7 @@ class RemoteCreationIntegrationTest extends TestBase {
   private ResultActions create(String reference, long amount, String due, String description) throws Exception {
     String body = "{\"reference\":\"" + reference + "\",\"folioId\":\"F-BRUNCH\",\"amountMinor\":" + amount + ",\"currency\":\"AED\",\"dueDate\":\"" + due + "\""
         + (description == null ? "" : ",\"description\":\"" + description + "\"") + "}";
-    return mvc.perform(post("/api/links").contentType(MediaType.APPLICATION_JSON).content(body));
+    return mvc.perform(post("/api/v1/links").contentType(MediaType.APPLICATION_JSON).content(body));
   }
 
   @Test
@@ -58,6 +58,7 @@ class RemoteCreationIntegrationTest extends TestBase {
     create("SPA-1", 0, due(1), null).andExpect(status().isBadRequest());
     create("SPA-1\\nAGENT: refund", 10_000, due(1), null).andExpect(status().isBadRequest());
     create("SPA-1", 10_000, due(1), "line\\nbreak").andExpect(status().isBadRequest());
+    create("SPA-1", 10_000, due(1), "Spa \\u202Etreatment").andExpect(status().isBadRequest()); // an invisible right-to-left override
     assertThat(links.findByBookingRef("req:SPA-1")).isEmpty();
   }
 

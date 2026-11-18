@@ -1,5 +1,5 @@
 // The only place the dashboard talks to the bridge. Same origin; a bearer token is attached when the operator signed in.
-// Error bodies are {error, code}: the code (not the message) decides what the dashboard does.
+// Error bodies are RFC 9457 problem details with a stable code: the code (not the detail text) decides what the dashboard does.
 
 export class ApiError extends Error {
   constructor(public readonly status: number, public readonly code: string, message: string) {
@@ -29,7 +29,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   if (!response.ok) {
     if (response.status === 401) onUnauthorized();
     const code = (json && typeof json.code === 'string' ? json.code : `HTTP_${response.status}`) as string;
-    const message = (json && typeof json.error === 'string' ? json.error : response.statusText || 'Request failed') as string;
+    const message = (json && typeof json.detail === 'string' ? json.detail : response.statusText || 'Request failed') as string;
     throw new ApiError(response.status, code, message);
   }
   return json as T;

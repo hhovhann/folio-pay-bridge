@@ -11,11 +11,11 @@
 - [x] `BusinessDateServiceImplTest.aSlowPmsAnswerForOneRequestDoesNotHoldUpAnother` (fails if `resolve` is synchronized again)
 - [x] `RequestSizeFilterTest.aChunkedBodyOverTheLimitIsRefusedWithoutReachingTheController`
 - [x] `PanMaskerTest.findsANumberWithSeparatorsOfThreeOrFourCharacters`
-- [x] `PciIntegrationTest.theCardNumberIsNeverLoggedAcrossTokenisationChargeAndPosting` (fails if the number is logged at INFO)
+- [x] `PciIntegrationTest.theCardNumberAndTheCardTokenAreNeverLoggedEvenAtDebugLevel` (fails if the number is logged at INFO)
 - [x] `ReconciliationServiceImplTest.totalsAreKeptPerCurrencySoYenAndDollarsAreNeverAddedUp`
 - [x] `PaymentControllerTest.aConcurrentChangeToTheSameRecordIsAConflictToRetryNotAServerError`
 - [x] `HttpAdapterRepliesTest.httpModeRefusesToStartWithoutItsAddressesAndCredentials`
 - [x] `HttpAdapterRepliesTest.manyRequestsRefusedWithTheSameExpiredTokenCauseOneNewTokenNotOneEach` (fails if every 401 fetches a token)
 - [x] `SimulatorEndpointsTest.aCaptureOrVoidMustNameARealAuthorisationAndACaptureMustMatchItsAmount`
 - [x] `LinkPaymentIntegrationTest.parallelDeliveriesOfOneBookingEventLeaveOneLiveLink`
-- [ ] D-21 clarification and D-28 (posting lease) recorded in `specs/decisions.md`: waiting for the owner's approval
+- [x] D-21 clarification and D-28 (posting lease) recorded in `specs/decisions.md` with the owner's approval (both entries say so, checked 2026-11-18)

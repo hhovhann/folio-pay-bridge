@@ -7,8 +7,8 @@ import { fakeApi } from '../testing';
 describe('LinksPage', () => {
   it('sends the amount in exact minor units and shows an app request apart from bookings', async () => {
     const calls = fakeApi({
-      'GET /api/links': [{ id: 'lnk_1', bookingRef: 'req:FNB-1', folioId: 'RES-1', amountMinor: 45000, currency: 'USD', dueDate: '2030-01-01', reason: 'Brunch', status: 'OPEN' }],
-      'POST /api/links': { links: [], refundReview: false, note: 'Brunch' },
+      'GET /api/v1/links': [{ id: 'lnk_1', bookingRef: 'req:FNB-1', folioId: 'RES-1', amountMinor: 45000, currency: 'USD', dueDate: '2030-01-01', reason: 'Brunch', status: 'OPEN' }],
+      'POST /api/v1/links': { links: [], refundReview: false, note: 'Brunch' },
     });
     render(<ToastProvider><LinksPage live={false} /></ToastProvider>);
 
@@ -18,12 +18,12 @@ describe('LinksPage', () => {
     await userEvent.type(screen.getByLabelText('Amount'), '0.29');
     await userEvent.click(screen.getByRole('button', { name: 'Create request' }));
 
-    const sent = calls.find((c) => c.method === 'POST' && c.path === '/api/links');
+    const sent = calls.find((c) => c.method === 'POST' && c.path === '/api/v1/links');
     expect(sent?.body).toMatchObject({ reference: 'FNB-2', folioId: 'RES-2', amountMinor: 29, currency: 'USD' });
   });
 
   it('will not send an amount the currency cannot have', async () => {
-    const calls = fakeApi({ 'GET /api/links': [] });
+    const calls = fakeApi({ 'GET /api/v1/links': [] });
     render(<ToastProvider><LinksPage live={false} /></ToastProvider>);
     await userEvent.type(screen.getByLabelText('Reference'), 'FNB-3');
     await userEvent.type(screen.getByLabelText('Folio (reservation)'), 'RES-3');

@@ -1,5 +1,6 @@
 package dev.foliopay.api.controller;
 
+import dev.foliopay.api.ApiPaths;
 import dev.foliopay.api.dto.NotificationView;
 import dev.foliopay.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Notifications", description = "Signed webhooks telling the integrator a payment was captured or declined and posted to the folio or dead-lettered.")
 @RestController
-@RequestMapping("/api/notifications")
+@RequestMapping(ApiPaths.V1 + "/notifications")
 class NotificationController {
   private final NotificationService notifications;
 

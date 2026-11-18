@@ -41,13 +41,13 @@ def wait_up():
 
 def seed():
     """Synthetic data through the public API only: two currencies, a link, and one payment left waiting for OPERA."""
-    token = call("POST", "/api/cards", {"pan": "4111111111111111", "expiry": "12/29"})["token"]
+    token = call("POST", "/api/v1/cards", {"pan": "4111111111111111", "expiry": "12/29"})["token"]
     for key, ref, amount, cur in [("k-1", "BK-1001", 80000, "USD"), ("k-2", "BK-1002", 45000, "AED"), ("k-3", "BK-1003", 125000, "USD")]:
-        call("POST", "/api/payments", {"idempotencyKey": key, "bookingRef": ref, "folioId": "RES-" + ref[3:], "token": token, "amountMinor": amount, "currency": cur})
-    call("POST", "/api/sim", {"psp": "NONE", "opera": "DOWN"})
-    call("POST", "/api/payments", {"idempotencyKey": "k-4", "bookingRef": "BK-1004", "folioId": "RES-1004", "token": token, "amountMinor": 60000, "currency": "USD"})
-    call("POST", "/api/sim", {"psp": "NONE", "opera": "NONE"})
-    call("POST", "/api/booking-events", {"type": "NEW", "bookingRef": "BK-2001", "folioId": "RES-2001", "ratePlan": "FLEXIBLE", "arrival": "2030-06-01", "totalMinor": 300000, "currency": "USD"})
+        call("POST", "/api/v1/payments", {"idempotencyKey": key, "bookingRef": ref, "folioId": "RES-" + ref[3:], "token": token, "amountMinor": amount, "currency": cur})
+    call("POST", "/api/v1/sim", {"psp": "NONE", "opera": "DOWN"})
+    call("POST", "/api/v1/payments", {"idempotencyKey": "k-4", "bookingRef": "BK-1004", "folioId": "RES-1004", "token": token, "amountMinor": 60000, "currency": "USD"})
+    call("POST", "/api/v1/sim", {"psp": "NONE", "opera": "NONE"})
+    call("POST", "/api/v1/booking-events", {"type": "NEW", "bookingRef": "BK-2001", "folioId": "RES-2001", "ratePlan": "FLEXIBLE", "arrival": "2030-06-01", "totalMinor": 300000, "currency": "USD"})
 
 
 def main():

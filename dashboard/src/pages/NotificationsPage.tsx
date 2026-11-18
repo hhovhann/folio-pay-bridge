@@ -9,7 +9,7 @@ import { useToast } from '../components/Toasts';
 type Filter = 'all' | 'PENDING' | 'DELIVERED' | 'FAILED';
 
 export function NotificationsPage({ live, initialFilter }: { live: boolean; initialFilter?: string }) {
-  const list = useLive<Notification[]>(['/api/notifications'], live);
+  const list = useLive<Notification[]>(['/api/v1/notifications'], live);
   const [filter, setFilter] = useState<Filter>((initialFilter as Filter) ?? 'all');
   const [open, setOpen] = useState<Notification | null>(null);
   const toast = useToast();
@@ -19,7 +19,7 @@ export function NotificationsPage({ live, initialFilter }: { live: boolean; init
 
   async function redeliver(n: Notification) {
     try {
-      await api<Notification>(`/api/notifications/${encodeURIComponent(n.id)}/redeliver`, { method: 'POST' });
+      await api<Notification>(`/api/v1/notifications/${encodeURIComponent(n.id)}/redeliver`, { method: 'POST' });
       toast('Queued again: it will be sent on the next run', 'good');
       setOpen(null);
       await list.reload();

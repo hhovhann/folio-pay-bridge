@@ -14,7 +14,7 @@ class EntityStateTest {
 
   @Test
   void aChargeMatchesARepeatOnlyWhenEveryFieldThatDecidesWhereTheMoneyGoesIsTheSame() {
-    Charge charge = new Charge("k", "BK-1", "F-1", DAY, "tok_1", TEN);
+    Charge charge = new Charge(Charge.BRIDGE_CLIENT, "k", "BK-1", "F-1", DAY, "tok_1", TEN);
     assertThat(charge.matches("BK-1", "F-1", DAY, "tok_1", TEN)).isTrue();
     assertThat(charge.matches("BK-2", "F-1", DAY, "tok_1", TEN)).isFalse();
     assertThat(charge.matches("BK-1", "F-2", DAY, "tok_1", TEN)).isFalse();
@@ -30,9 +30,9 @@ class EntityStateTest {
   void aCaptureBeatsADeclineWhichBeatsPending() {
     Charge pending = Fixtures.charge("k", "BK", "tok", TEN);
     Charge declined = Fixtures.charge("k", "BK", "tok", TEN);
-    declined.declined("no");
+    declined.markDeclined("no");
     Charge captured = Fixtures.charge("k", "BK", "tok", TEN);
-    captured.captured("cap_1");
+    captured.markCaptured("cap_1");
 
     assertThat(pending.isBehind(declined)).isTrue();
     assertThat(pending.isBehind(captured)).isTrue();
@@ -45,10 +45,10 @@ class EntityStateTest {
   @Test
   void adoptingACaptureCarriesTheResultAndNeverLowersTheAttemptCount() {
     Charge stored = Fixtures.charge("k", "BK", "tok", TEN);
-    stored.failedAttempt("timeout");
-    stored.failedAttempt("timeout");
+    stored.recordFailedAttempt("timeout");
+    stored.recordFailedAttempt("timeout");
     Charge ours = Fixtures.charge("k", "BK", "tok", TEN);
-    ours.captured("cap_9");
+    ours.markCaptured("cap_9");
 
     stored.adopt(ours);
 
@@ -60,7 +60,7 @@ class EntityStateTest {
 
   @Test
   void aChargeExposesWhatItWasCreatedWith() {
-    Charge charge = new Charge("k", "BK-1", "F-1", DAY, "tok_1", TEN);
+    Charge charge = new Charge(Charge.BRIDGE_CLIENT, "k", "BK-1", "F-1", DAY, "tok_1", TEN);
     assertThat(charge.getId()).isNotBlank();
     assertThat(charge.getIdempotencyKey()).isEqualTo("k");
     assertThat(charge.getBookingRef()).isEqualTo("BK-1");
@@ -79,9 +79,9 @@ class EntityStateTest {
   void aPostedBeatsADeadLetterWhichBeatsPending() {
     Posting pending = Fixtures.posting("p", "c", "F", TEN, DAY);
     Posting dead = Fixtures.posting("p", "c", "F", TEN, DAY);
-    dead.deadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
+    dead.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
     Posting posted = Fixtures.posting("p", "c", "F", TEN, DAY);
-    posted.posted("OP-1");
+    posted.markPosted("OP-1");
 
     assertThat(pending.isBehind(dead)).isTrue();
     assertThat(pending.isBehind(posted)).isTrue();
@@ -93,10 +93,10 @@ class EntityStateTest {
   @Test
   void adoptingAPostCarriesItAndClearsTheFailure() {
     Posting stored = Fixtures.posting("p", "c", "F", TEN, DAY);
-    stored.attempt();
-    stored.deadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
+    stored.recordAttempt();
+    stored.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
     Posting ours = Fixtures.posting("p", "c", "F", TEN, DAY);
-    ours.posted("OP-7");
+    ours.markPosted("OP-7");
 
     stored.adopt(ours);
 
@@ -119,7 +119,7 @@ class EntityStateTest {
     assertThat(posting.getCurrency()).isEqualTo("USD");
     assertThat(posting.getCreatedAt()).isNotNull();
     assertThat(posting.isRejected()).isFalse();
-    posting.deadLetter(FailureCategory.REJECTED_BY_OPERA, "closed");
+    posting.moveToDeadLetter(FailureCategory.REJECTED_BY_OPERA, "closed");
     assertThat(posting.isRejected()).isTrue();
     assertThat(posting.getFailureCategory()).isEqualTo(FailureCategory.REJECTED_BY_OPERA);
   }

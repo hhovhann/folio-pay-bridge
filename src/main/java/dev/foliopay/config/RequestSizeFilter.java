@@ -1,6 +1,7 @@
 package dev.foliopay.config;
 
 import dev.foliopay.api.error.ErrorCode;
+import dev.foliopay.api.error.Problems;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ReadListener;
 import jakarta.servlet.ServletException;
@@ -56,7 +57,7 @@ class RequestSizeFilter extends OncePerRequestFilter {
   }
 
   private static void tooLarge(HttpServletResponse response) throws IOException {
-    JsonErrors.write(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, ErrorCode.BODY_TOO_LARGE, "Request body too large");
+    Problems.write(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, ErrorCode.BODY_TOO_LARGE, "Request body too large");
   }
 
   /** A request whose body has already been read, within the limit, and is served again from memory. */

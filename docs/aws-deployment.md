@@ -74,14 +74,15 @@ aws secretsmanager create-secret --name folio/api-keys --secret-string '{"entrie
 POOL=$(aws cognito-idp create-user-pool --pool-name folio-integrators --query UserPool.Id --output text)
 aws cognito-idp create-resource-server --user-pool-id "$POOL" --identifier https://pay.<your domain> --name folio-pay-bridge \
   --scopes ScopeName=cards:write,ScopeDescription=tokenise ScopeName=payments:write,ScopeDescription=pay \
-           ScopeName=bookings:write,ScopeDescription=bookings ScopeName=payments:read,ScopeDescription=read ScopeName=operations,ScopeDescription=ops
+           ScopeName=links:write,ScopeDescription=request ScopeName=bookings:write,ScopeDescription=bookings \
+           ScopeName=payments:read,ScopeDescription=read ScopeName=operations,ScopeDescription=ops
 aws cognito-idp create-user-pool-domain --user-pool-id "$POOL" --domain <prefix>
 # one app client per integrator, client-credentials grant, only the scopes it needs
 aws cognito-idp create-user-pool-client --user-pool-id "$POOL" --client-name pms-middleware --generate-secret \
   --allowed-o-auth-flows client_credentials --allowed-o-auth-flows-user-pool-client \
   --allowed-o-auth-scopes https://pay.<your domain>/bookings:write https://pay.<your domain>/payments:read
 ```
-The bridge's settings: `FOLIOPAY_AUTH_JWT_JWK_SET_URI=https://cognito-idp.<region>.amazonaws.com/<pool id>/.well-known/jwks.json`, `FOLIOPAY_AUTH_JWT_ISSUER=https://cognito-idp.<region>.amazonaws.com/<pool id>`, `FOLIOPAY_AUTH_JWT_SCOPE_PREFIX=https://pay.<your domain>/`. Cognito access tokens from the client-credentials grant carry `client_id` but **no `aud` claim**: either set `FOLIOPAY_AUTH_JWT_AUDIENCE` to a value your authorization server does put in `aud` (Okta, Keycloak, Auth0 do), or add a pre-token-generation Lambda in Cognito that sets it. Check this against Cognito's current documentation before going live; the bridge refuses tokens without the configured audience by design.
+The bridge's settings: `FOLIOPAY_AUTH_JWT_JWK_SET_URI=https://cognito-idp.<region>.amazonaws.com/<pool id>/.well-known/jwks.json`, `FOLIOPAY_AUTH_JWT_ISSUER=https://cognito-idp.<region>.amazonaws.com/<pool id>`, `FOLIOPAY_AUTH_JWT_SCOPE_PREFIX=https://pay.<your domain>/`. Cognito access tokens from the client-credentials grant carry `client_id`, `token_use=access` and scopes prefixed with the resource server id, but **no `aud` claim**: leave `FOLIOPAY_AUTH_JWT_AUDIENCE` unset, and the scope prefix binds the token to this API (only scopes carrying it count, and an ID token is refused, D-30). With Okta, Keycloak or Entra ID, which do set `aud`, set `FOLIOPAY_AUTH_JWT_AUDIENCE` as well. The client id becomes the client's name in the logs and the owner of its idempotency keys (D-40). Tested against Cognito-shaped tokens, not yet against a real user pool.
 Rotate them on a schedule. They reach the container as environment variables (see 2.6); nothing is in the image or in git.
 
 ### 2.5 Image
@@ -108,6 +109,8 @@ Task definition essentials:
     "readonlyRootFilesystem": true,
     "environment": [
       { "name": "SPRING_PROFILES_ACTIVE", "value": "postgres" },
+      { "name": "LOGGING_CONFIG", "value": "classpath:logback-json.xml" },
+      { "name": "DB_POOL_SIZE", "value": "10" },
       { "name": "FOLIOPAY_KEYS", "value": "kms" },
       { "name": "FOLIOPAY_KMS_KEY_ID", "value": "alias/folio-pay-bridge" },
       { "name": "FOLIOPAY_GATEWAY", "value": "http" },
@@ -119,7 +122,6 @@ Task definition essentials:
       { "name": "DB_URL", "value": "jdbc:postgresql://<rds endpoint>:5432/folio?sslmode=verify-full&sslrootcert=/app/rds-ca.pem" },
       { "name": "FOLIOPAY_AUTH_JWT_JWK_SET_URI", "value": "https://cognito-idp.<region>.amazonaws.com/<pool id>/.well-known/jwks.json" },
       { "name": "FOLIOPAY_AUTH_JWT_ISSUER", "value": "https://cognito-idp.<region>.amazonaws.com/<pool id>" },
-      { "name": "FOLIOPAY_AUTH_JWT_AUDIENCE", "value": "<audience your tokens carry>" },
       { "name": "FOLIOPAY_AUTH_JWT_SCOPE_PREFIX", "value": "https://pay.<your domain>/" },
       { "name": "FOLIOPAY_WEBHOOK_URL", "value": "https://<integrator endpoint>" }
     ],

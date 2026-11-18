@@ -1,5 +1,6 @@
 package dev.foliopay.api.controller;
 
+import dev.foliopay.api.ApiPaths;
 import dev.foliopay.api.dto.CardRequest;
 import dev.foliopay.api.dto.CardResponse;
 import dev.foliopay.domain.model.Pan;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Cards", description = "Tokenisation. The only endpoint that accepts a card number.")
 @RestController
-@RequestMapping("/api/cards")
+@RequestMapping(ApiPaths.V1 + "/cards")
 class CardController {
   private final CardVault vault;
 
