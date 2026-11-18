@@ -112,12 +112,18 @@ def until(t_end, pad=0.6):
 
 
 def synth(texts, folder):
+    # The video's voice is Kokoro (af_heart). The macOS voice is a stand-in for a machine without the model files, and only when asked for by
+    # name (DEMO_MACOS_VOICE=Samantha): a silent fallback once replaced the published voice without anyone noticing.
     k = None
-    if MODELS:
+    macos_voice = os.environ.get("DEMO_MACOS_VOICE")
+    if MODELS and os.path.isfile(os.path.join(MODELS, "kokoro-v1.0.onnx")):
         from kokoro_onnx import Kokoro
         k = Kokoro(os.path.join(MODELS, "kokoro-v1.0.onnx"), os.path.join(MODELS, "voices-v1.0.bin"))
-    elif sys.platform != "darwin" or shutil.which("say") is None:
-        raise SystemExit("Set KOKORO_MODELS, or run on macOS with the 'say' command available")
+        print(f"voice: Kokoro {VOICE} (24 kHz)", flush=True)
+    elif macos_voice and sys.platform == "darwin" and shutil.which("say"):
+        print(f"voice: macOS {macos_voice} (22.05 kHz), not the published voice", flush=True)
+    else:
+        raise SystemExit("Set KOKORO_MODELS to the directory with kokoro-v1.0.onnx and voices-v1.0.bin (or DEMO_MACOS_VOICE=Samantha for a stand-in)")
     clips = {}
     for cid, text in texts.items():
         spoken = text
@@ -129,7 +135,7 @@ def synth(texts, folder):
             source = folder / f"{cid}.txt"
             output = folder / f"{cid}.aiff"
             source.write_text(spoken, encoding="utf-8")
-            subprocess.run(["say", "-v", os.environ.get("DEMO_MACOS_VOICE", "Samantha"), "-r",
+            subprocess.run(["say", "-v", macos_voice, "-r",
                             os.environ.get("DEMO_MACOS_RATE", "178"), "-f", str(source), "-o", str(output)], check=True)
             audio, sr = sf.read(str(output), dtype="float32")
         if audio.size == 0:

@@ -1,203 +1,203 @@
 WEBVTT
 
-00:00:00.899 --> 00:00:08.921
+00:00:00.935 --> 00:00:08.957
 This is the full flow, not a mock-up, and it is explained step
 by step. Four containers talk over real network calls: the
 
-00:00:08.921 --> 00:00:17.208
+00:00:08.957 --> 00:00:17.244
 payment bridge I built, a database, a simulator of a hotel P M
 S in the style of the Oracle Hospitality Integration Platform,
 
-00:00:17.208 --> 00:00:22.645
+00:00:17.244 --> 00:00:22.681
 and a simulator of a card processor. Everything is synthetic.
 Here is the picture.
 
-00:00:23.313 --> 00:00:31.118
+00:00:23.286 --> 00:00:31.092
 A booking reaches the bridge as an event. The bridge applies a
 payment rule and creates a payment link. The guest pays, and
 
-00:00:31.118 --> 00:00:38.734
+00:00:31.092 --> 00:00:38.707
 the card is tokenised the moment it arrives: only a token
 comes back, and only ciphertext is stored. The bridge asks the
 
-00:00:38.734 --> 00:00:46.031
+00:00:38.707 --> 00:00:46.005
 processor to authorise and capture, then posts the payment to
 the guest's folio in the P M S. Every step carries an
 
-00:00:46.031 --> 00:00:53.710
+00:00:46.005 --> 00:00:53.683
 idempotency key, and every failure ends in one of two places:
 posted, or kept in a dead letter queue with the reason. Now
 
-00:00:53.710 --> 00:00:56.566
+00:00:53.683 --> 00:00:56.539
 let me show it, and then break it on purpose.
 
-00:00:58.058 --> 00:01:05.509
+00:00:58.024 --> 00:01:05.476
 First, the happy path. The P M S front desk announces a new
 reservation and pushes a booking event to the bridge. The
 
-00:01:05.509 --> 00:01:13.152
+00:01:05.476 --> 00:01:13.118
 bridge answers with the payment rule: advance purchase, the
 full amount within twenty four hours. Note the business date
 
-00:01:13.152 --> 00:01:18.055
+00:01:13.118 --> 00:01:18.022
 at the top. In a real property it moves only at night audit,
 not at midnight.
 
-00:01:19.620 --> 00:01:27.088
+00:01:19.587 --> 00:01:27.055
 In the bridge, a payment request now exists. The guest
 tokenises a test card and pays. The card number is encrypted
 
-00:01:27.088 --> 00:01:29.945
+00:01:27.055 --> 00:01:29.912
 on arrival, and the guest sees only a token.
 
-00:01:31.517 --> 00:01:38.976
+00:01:31.450 --> 00:01:38.910
 On the processor side there is an authorisation and a capture,
 and only the last four digits of the card. The processor
 
-00:01:38.976 --> 00:01:43.427
+00:01:38.910 --> 00:01:43.360
 deduplicates on an idempotency key, so a repeat can never
 charge twice.
 
-00:01:44.912 --> 00:01:52.298
+00:01:44.900 --> 00:01:52.287
 And at the front desk, the payment is on the guest's folio:
 the reservation, folio window one, a payment code, a cashier,
 
-00:01:52.298 --> 00:01:59.074
+00:01:52.287 --> 00:01:59.063
 eight hundred dollars, our reference and the processor's
 reference. It is posted as a payment, not as a charge.
 
-00:01:59.738 --> 00:02:07.624
+00:01:59.739 --> 00:02:07.625
 The bridge also tells the hotel's own systems what happened.
 Payment captured, and payment posted, each arrive as a signed
 
-00:02:07.624 --> 00:02:15.381
+00:02:07.625 --> 00:02:15.381
 webhook. The receiving side checks the signature before it
 trusts the message, and every event has an id, so a repeat is
 
-00:02:15.381 --> 00:02:17.966
+00:02:15.381 --> 00:02:17.967
 ignored. The card number is never in it.
 
-00:02:18.566 --> 00:02:26.428
+00:02:18.612 --> 00:02:26.474
 Edge case one: the same booking event arrives again after the
 guest has paid. The bridge does not create a new request, and
 
-00:02:26.428 --> 00:02:33.587
+00:02:26.474 --> 00:02:33.633
 does not ask for money twice. It flags the booking for a
 refund or balance review, because a changed total after
 
-00:02:33.587 --> 00:02:34.993
+00:02:33.633 --> 00:02:35.039
 payment needs a human.
 
-00:02:35.616 --> 00:02:43.253
+00:02:35.643 --> 00:02:43.280
 Edge case two: a lost reply. This P M S does not deduplicate,
 like the real world. I make it record the next payment and
 
-00:02:43.253 --> 00:02:50.889
+00:02:43.280 --> 00:02:50.916
 then answer too late. The bridge times out, but before it
 retries it looks for its own reference, finds the payment, and
 
-00:02:50.889 --> 00:02:54.453
+00:02:50.916 --> 00:02:54.480
 does not post twice. One new line on the folio, not two.
 
-00:02:55.135 --> 00:03:02.733
+00:02:55.143 --> 00:03:02.741
 Edge case three: the P M S goes down after the card is
 charged. The bridge says so plainly and keeps the payment in a
 
-00:03:02.733 --> 00:03:10.591
+00:03:02.741 --> 00:03:10.599
 dead letter queue with the reason. The money is not lost, and
 it is not hidden. When the P M S is back, one click replays
 
-00:03:10.591 --> 00:03:12.799
+00:03:10.599 --> 00:03:12.807
 it, and it is posted exactly once.
 
-00:03:13.829 --> 00:03:21.133
+00:03:13.778 --> 00:03:21.082
 Edge case four: the processor approves the authorisation, then
 declines the capture. The bridge does not leave the hold on
 
-00:03:21.133 --> 00:03:28.197
+00:03:21.082 --> 00:03:28.146
 the card. It releases it, and you can see the void in the
 processor ledger. The payment link goes back to open, so the
 
-00:03:28.197 --> 00:03:30.832
+00:03:28.146 --> 00:03:30.780
 guest can try again, and this time it works.
 
-00:03:31.492 --> 00:03:39.610
+00:03:31.430 --> 00:03:39.548
 Edge case five: night audit runs and the business date moves,
 and I also expire the access token. The next payment makes the
 
-00:03:39.610 --> 00:03:47.401
+00:03:39.548 --> 00:03:47.339
 processor capture the money and then go quiet. The bridge
 fetches a new token, reads the new business date from the P M
 
-00:03:47.401 --> 00:03:51.395
+00:03:47.339 --> 00:03:51.333
 S, retries with the same key, and the processor charges once.
 
-00:03:54.208 --> 00:04:01.341
+00:03:54.093 --> 00:04:01.225
 At the end of the day, finance reconciles. The bridge
 downloads the processor's own settlement file and matches
 
-00:04:01.341 --> 00:04:08.730
+00:04:01.225 --> 00:04:08.615
 every capture against what was posted. Five captures, five
 matches. Now a messy statement: one capture missing, one
 
-00:04:08.730 --> 00:04:13.806
+00:04:08.615 --> 00:04:13.691
 settled short, one we never made. Each exception has a name
 finance can act on.
 
-00:04:14.419 --> 00:04:21.302
+00:04:14.321 --> 00:04:21.204
 The operator log shows all of this with the card number
 masked. A mask catches mistakes, but the code never logs the
 
-00:04:21.302 --> 00:04:26.108
+00:04:21.204 --> 00:04:26.011
 number in the first place, and the vault view shows
 ciphertext, never the number.
 
-00:04:26.762 --> 00:04:33.292
+00:04:26.658 --> 00:04:33.188
 How do I know the other cases hold? Nearly four hundred
 automated tests, and a coverage report above ninety nine
 
-00:04:33.292 --> 00:04:40.288
+00:04:33.188 --> 00:04:40.184
 percent of lines. The important tests were checked the hard
 way: I put each bug back on purpose, thirty six of them, and
 
-00:04:40.288 --> 00:04:47.459
+00:04:40.184 --> 00:04:47.355
 every one made its test fail. A page in the repository lists
 every edge case and the test that fails if it breaks, and also
 
-00:04:47.459 --> 00:04:48.625
+00:04:47.355 --> 00:04:48.521
 what is not covered.
 
-00:04:49.232 --> 00:04:56.704
+00:04:49.224 --> 00:04:56.696
 How it should work in production. The simulators become real
 adapters: Oracle's own sandbox for the P M S, and the
 
-00:04:56.704 --> 00:05:04.504
+00:04:56.696 --> 00:05:04.496
 acquirer's checkout for the processor, with three D secure and
 hosted card entry so a guest's number never reaches this
 
-00:05:04.504 --> 00:05:12.500
+00:05:04.496 --> 00:05:12.492
 service. Authentication is already in: OAuth2 tokens or hashed
 API keys, each limited to what that client may do. Still to
 
-00:05:12.500 --> 00:05:20.628
+00:05:12.492 --> 00:05:20.620
 add: tenants for many operators and properties, a sweeper for
 crashes between steps, chargeback cases with scheme deadlines,
 
-00:05:20.628 --> 00:05:23.512
+00:05:20.620 --> 00:05:23.504
 and key management proven in a real account.
 
-00:05:24.198 --> 00:05:32.419
+00:05:24.197 --> 00:05:32.418
 That is the full flow: idempotent charges, a repeated event, a
 lost reply, an outage and a replay, a released hold, a token
 
-00:05:32.419 --> 00:05:40.372
+00:05:32.418 --> 00:05:40.371
 refresh, and reconciliation, against separate systems. The P M
 S here is a simulator I wrote in the shape of the Oracle
 
-00:05:40.372 --> 00:05:48.392
+00:05:40.371 --> 00:05:48.391
 Hospitality Integration Platform. It is not Oracle software,
 and the real thing needs Oracle's own sandbox, which is the
 
-00:05:48.392 --> 00:05:55.142
+00:05:48.391 --> 00:05:55.141
 next step. The code, the tests and the log of what the agents
 got wrong are in the public repository.

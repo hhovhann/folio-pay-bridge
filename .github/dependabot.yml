@@ -1,14 +1,25 @@
 version: 2
+# Minor and patch updates are proposed automatically; a major version of a library or the base image is a planned migration
+# (its own branch and tests), not a bump. GitHub Actions are the exception.
 updates:
   - package-ecosystem: maven
     directory: "/"
     schedule: { interval: weekly }
-  - package-ecosystem: github-actions
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions   # majors included: they carry runtime fixes (Node 20 deprecation) and rarely break a workflow
     directory: "/"
     schedule: { interval: weekly }
   - package-ecosystem: docker
     directory: "/"
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: "/dashboard"
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

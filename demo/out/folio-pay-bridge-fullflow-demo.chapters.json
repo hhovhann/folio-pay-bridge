@@ -2,17 +2,17 @@
  {
   "id": "intro",
   "start": 0.9,
-  "end": 22.6
+  "end": 22.7
  },
  {
   "id": "how",
   "start": 23.3,
-  "end": 56.6
+  "end": 56.5
  },
  {
   "id": "pms",
-  "start": 58.1,
-  "end": 78.1
+  "start": 58.0,
+  "end": 78.0
  },
  {
   "id": "link",
@@ -56,23 +56,23 @@
  },
  {
   "id": "audit",
-  "start": 211.5,
-  "end": 231.4
+  "start": 211.4,
+  "end": 231.3
  },
  {
   "id": "recon",
-  "start": 234.2,
-  "end": 253.8
+  "start": 234.1,
+  "end": 253.7
  },
  {
   "id": "logs",
-  "start": 254.4,
-  "end": 266.1
+  "start": 254.3,
+  "end": 266.0
  },
  {
   "id": "coverage",
-  "start": 266.8,
-  "end": 288.6
+  "start": 266.7,
+  "end": 288.5
  },
  {
   "id": "production",
