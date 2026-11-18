@@ -134,10 +134,10 @@ class PostingServiceImpl implements PostingService {
   private String postWithRetry(Posting posting, String owner) {
     OperaPayment payment =
         new OperaPayment(
-            settings.hotelId(), posting.getFolioId(), settings.folioWindow(), settings.paymentCode(), settings.cashierId(),
-            posting.amount(), posting.getBusinessDate(), posting.getIdempotencyKey(), posting.getPspRef());
+            settings.hotelId(), posting.getFolioId(), settings.folioWindow(), settings.paymentMethod(), settings.cashierId(),
+            posting.amount(), posting.getIdempotencyKey(), posting.getPspRef());
     return folioRetry.executeSupplier(
-        () -> opera.find(settings.hotelId(), payment.externalRef()).map(found -> {
+        () -> opera.find(settings.hotelId(), payment.reservationId(), payment.externalRef()).map(found -> {
           log.info("Posting {} was already on the folio as {}: not posted again", posting.getId(), found.operaRef());
           return found.operaRef();
         }).orElseGet(() -> {

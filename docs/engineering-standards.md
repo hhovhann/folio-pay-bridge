@@ -13,6 +13,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - Verify a claim against the primary source before repeating it, a reviewer's included; a review finding is confirmed by a failing test or by reading the code before it is fixed (log 47).
 - "Fixed" is a claim: name the test or command that proves it, in the commit, the validation box and the agent log (log 43, 44).
 - Prefer the reviewed standard (Spring Security, Flyway, Resilience4j) to a hand-written version, and ask before adding it (CLAUDE.md rule 7) (log 38).
+- Before choosing a dependency's version, read its POM: what it pulls in (Jackson, Netty) must converge with what Spring Boot manages, and a test-only library is still in the build (log 53).
 
 ## 2. Architecture and design
 - Layers (D-14): `api` -> `service` interfaces -> `service.impl` -> `domain`, `repository`, `gateway` ports, `crypto`. A controller never touches a repository, an adapter or a fake; a service never touches HTTP; the domain knows no Spring. **Enforced** by `ArchitectureTest` (log 14).
@@ -74,6 +75,8 @@ Config in the environment, with no default that moves money (III); backing servi
 - A downstream outage fails only what needs it: the payment proceeds on the last known business date and the posting waits in the dead-letter queue; a client gets 503 with `Retry-After`, not 500 (log 27).
 - Lease lengths and retry budgets are derived from the timeouts, not fixed (log 32).
 - Test clients use the same protocol settings as production adapters; reproduce a surprise with `curl` before blaming the code (log 26).
+- An adapter and the simulator that stands in for its system follow the system's published contract, and a test checks every exchange against it (`OhipContractTest`, D-42). A simulator that is easier than the real system proves nothing about it, and a story told from it is checked against the contract before it is told (log 51).
+- Amounts on the wire are read as exact decimals with their trailing zeros kept, never as binary floating point; a test round-trips a whole amount (800.00) and a currency with three decimals (log 52).
 
 ## 9. Logging and observability
 INFO for every state change, DEBUG for decisions, with ids, keys, amounts and statuses; never a card number or a card token (`PciIntegrationTest` runs at DEBUG); the request id and client in every line; JSON in production (D-41). No aspect that logs every parameter.

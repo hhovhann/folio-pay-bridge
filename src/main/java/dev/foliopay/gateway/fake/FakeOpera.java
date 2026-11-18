@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Stand-in for OPERA with an outage switch and the lost-response case. Reservation F-CLOSED is always rejected, and a payment without a
- * payment code or cashier is rejected as OPERA would. Like OPERA (D-23) it does not deduplicate: every call is a new folio entry and is
+ * payment method or cashier is rejected as OPERA would. Like OPERA it posts on its own business date. Like OPERA (D-23) it does not deduplicate: every call is a new folio entry and is
  * counted, so a test sees a second post of the same payment. {@code find} returns the first entry with a reference.
  * Synthetic; no network. Wired only when foliopay.gateway=fake.
  */
@@ -60,10 +60,10 @@ public class FakeOpera implements OperaClient {
     if (CLOSED_FOLIO.equals(p.reservationId())) {
       throw new OperaRejectedException("Folio is closed");
     }
-    if (p.paymentCode() == null || p.paymentCode().isBlank() || p.cashierId() == null || p.cashierId().isBlank()) {
-      throw new OperaRejectedException("Payment code and cashier are required");
+    if (p.paymentMethod() == null || p.paymentMethod().isBlank() || p.cashierId() <= 0) {
+      throw new OperaRejectedException("Payment method and cashier are required");
     }
-    Posted posted = new Posted("OP-" + UUID.randomUUID().toString().substring(0, 8), p.reservationId(), p.amount(), p.businessDate());
+    Posted posted = new Posted("OP-" + UUID.randomUUID().toString().substring(0, 8), p.reservationId(), p.amount(), businessDate(p.hotelId()));
     posts.putIfAbsent(p.externalRef(), posted);
     postCount.incrementAndGet();
     log.info("OPERA post {} reservation {} {} {} window {} (ref {})", posted.operaRef(), p.reservationId(), p.amount().toDecimalString(), p.amount().currency(), p.folioWindow(), p.externalRef());
@@ -74,7 +74,9 @@ public class FakeOpera implements OperaClient {
   }
 
   @Override
-  public Optional<Posted> find(String hotelId, String externalRef) { return Optional.ofNullable(posts.get(externalRef)); }
+  public Optional<Posted> find(String hotelId, String reservationId, String externalRef) {
+    return Optional.ofNullable(posts.get(externalRef)).filter(posted -> posted.reservationId().equals(reservationId));
+  }
 
   @Override
   public LocalDate businessDate(String hotelId) {

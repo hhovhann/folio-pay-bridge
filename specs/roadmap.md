@@ -62,9 +62,14 @@ Status: done 2026-11-18
 Status: done 2026-11-18
 - The final review's findings fixed (credentials never reject a folio, asking for money is not taking it, idempotency keys per client, Cognito tokens, unreadable processor replies, the webhook window); the API versioned with a deprecation path; RFC 9457 errors; logging that is safe at DEBUG and JSON in production; foreign keys and Hibernate settings; the layer rules as a test; a command guard that reads every argument.
 
+## Phase 16 - OPERA on Oracle's published contract
+Status: done 2026-11-18
+- The OPERA adapter and the simulator on Oracle's OHIP operations and shapes (token, business date, billing payment, folio), checked exchange by exchange against Oracle's Swagger files; the simulator becomes a front desk (reservations, folios with room charges and payments, balance, check-in and check-out, night audit). OPERA cannot be run locally: the sandbox questions below are what the first day with real access answers.
+
 ## Next
 1. Multi-tenancy: operators and properties on every row, credential and webhook; per-property settings; data residency (`docs/architecture.md` section 9).
 2. Hosted card entry and 3-D Secure, so the card number never reaches the service; chargeback evidence.
 3. A sweeper for payments stranded by a crash between two steps; alarms on dead letters and failed webhooks.
-4. Real adapters: OHIP sandbox, an acquirer's test environment, KMS and Cognito in an AWS account.
+4. Real adapters: OHIP sandbox, an acquirer's test environment, KMS and Cognito in an AWS account. For OHIP, the first sandbox session settles what Oracle's specification leaves open (D-42): does `postBillingPayment`'s 201 carry the postings or only a `Location`; the sign of a payment on a folio; whether payments before arrival must be deposits (`action: Deposit`, `getDepositFolio`) at each hotel; the status OHIP gives a locked reservation; the rate limits. Then run Oracle's Postman collections against the sandbox, and point the bridge at it by configuration (`FOLIOPAY_HTTP_OPERA_*`).
+5. Store the business date OPERA posted on (read back by `find`) beside the bridge's own, so reconciliation can explain a charge booked before night audit and posted after it.
 

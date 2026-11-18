@@ -40,7 +40,7 @@ import org.springframework.web.client.RestClient;
 @SpringBootTest(properties = {
     "foliopay.keys=local", "foliopay.gateway=http", "foliopay.demo-controls=false",
     "foliopay.retry.initial-backoff=10ms", "foliopay.http.read-timeout=1s", "foliopay.http.connect-timeout=1s",
-    "foliopay.http.opera-app-key=demo-app-key", "foliopay.http.opera-client-id=fpbridge", "foliopay.http.opera-client-secret=fpbridge-secret",
+    "foliopay.http.opera-app-key=demo-app-key", "foliopay.http.opera-client-id=fpbridge", "foliopay.http.opera-client-secret=fpbridge-secret", "foliopay.http.opera-enterprise-id=DEMOENT", "foliopay.http.opera-scope=demo-scope",
     "foliopay.http.psp-api-key=demo-psp-key", "spring.datasource.url=jdbc:h2:mem:fullflow;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
     "foliopay.auth.api-keys=tests:0000000000000000000000000000000000000000000000000000000000000000:payments:read"}) // a real gateway needs API keys
 class FullFlowHttpIntegrationTest {
@@ -120,10 +120,12 @@ class FullFlowHttpIntegrationTest {
     assertThat(payment.path("hotelId").asText()).isEqualTo(HOTEL);
     assertThat(payment.path("reservationId").asText()).isEqualTo("RES-1");
     assertThat(payment.path("folioWindow").asInt()).isEqualTo(1);
-    assertThat(payment.path("paymentCode").asText()).isEqualTo("CC");
-    assertThat(payment.path("amount").asText()).as("OPERA takes a decimal string, not minor units").isEqualTo("123.45");
+    assertThat(payment.path("code").asText()).as("the hotel's payment method code").isEqualTo("CC");
+    assertThat(payment.path("cashierId").asLong()).as("the bridge's interface cashier").isEqualTo(9001);
+    assertThat(payment.path("amount").asText()).as("OPERA takes a decimal, not minor units").isEqualTo("123.45");
+    assertThat(payment.path("businessDate").asText()).as("posted on OPERA's own business date").isEqualTo(state(operaUrl).path("businessDate").asText());
     assertThat(payment.path("reference").asText()).isEqualTo(result.posting().getIdempotencyKey());
-    assertThat(payment.path("pspRef").asText()).isEqualTo(result.charge().getPspRef());
+    assertThat(payment.path("remark").asText()).contains(result.charge().getPspRef());
     assertThat(state(pspUrl).path("ledger")).extracting(e -> e.path("kind").asText()).containsExactly("AUTH", "CAPTURE");
   }
 
@@ -227,10 +229,10 @@ class FullFlowHttpIntegrationTest {
 
   @Test
   void operaRefusesACallWithoutTheApplicationKeyOrTheHotelHeader() {
-    String token = CONTROL.post().uri(operaUrl + "/oauth/v1/tokens").header("x-app-key", "demo-app-key")
-        .contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
-        .body("grant_type=client_credentials&client_id=fpbridge&client_secret=fpbridge-secret").retrieve().body(JsonNode.class).path("access_token").asText();
-    var business = operaUrl + "/v1/hotels/" + HOTEL + "/business-date";
+    String token = CONTROL.post().uri(operaUrl + "/oauth/v1/tokens").header("x-app-key", "demo-app-key").header("enterpriseId", "DEMOENT")
+        .headers(h -> h.setBasicAuth("fpbridge", "fpbridge-secret")).contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+        .body("grant_type=client_credentials&scope=demo-scope").retrieve().body(JsonNode.class).path("access_token").asText();
+    var business = operaUrl + "/bof/v1/hotels/" + HOTEL + "/businessDate";
     assertThat(statusOf(business, token, null, HOTEL)).as("no x-app-key").isEqualTo(401);
     assertThat(statusOf(business, token, "demo-app-key", "OTHER")).as("x-hotelid names another hotel").isEqualTo(400);
     assertThat(statusOf(business, token, "demo-app-key", HOTEL)).isEqualTo(200);

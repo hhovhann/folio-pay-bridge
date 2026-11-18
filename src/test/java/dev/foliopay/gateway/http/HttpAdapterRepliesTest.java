@@ -73,7 +73,7 @@ class HttpAdapterRepliesTest {
   }
 
   private HttpGatewayProperties settings() {
-    return new HttpGatewayProperties(url, "app", "client", "secret", url, "psp-key", Duration.ofSeconds(2), Duration.ofSeconds(3));
+    return new HttpGatewayProperties(url, "app", "client", "secret", "ENT", "scope", url, "psp-key", Duration.ofSeconds(2), Duration.ofSeconds(3));
   }
 
   private HttpPspClient psp() { return new HttpPspClient(settings(), RestClient.builder()); }
@@ -81,10 +81,18 @@ class HttpAdapterRepliesTest {
   private HttpOperaClient opera() { return new HttpOperaClient(settings(), RestClient.builder(), Clock.systemUTC()); }
 
   private static OperaPayment payment() {
-    return new OperaPayment("H1", "RES-1", 1, "VCC", "CASH1", TEN, LocalDate.of(2026, 11, 17), "post:c1", "cap_1");
+    return new OperaPayment("H1", "RES-1", 1, "VCC", 7001, TEN, "post:c1", "cap_1");
   }
 
-  private static final String OPERA_PAYMENTS = "/v1/hotels/H1/reservations/RES-1/payments";
+  private static final String OPERA_PAYMENTS = "/csh/v1/hotels/H1/reservations/RES-1/payments";
+  private static final String OPERA_FOLIO = "/csh/v1/hotels/H1/reservations/RES-1/folios";
+  private static final String OPERA_DATE = "/bof/v1/hotels/H1/businessDate";
+
+  /** A folio holding one Payment posting with our reference, as getFolio returns it; {@code posting} adds the posting's other fields. */
+  private static String folio(String posting) {
+    return "{\"reservationFolioInformation\":{\"folioWindows\":[{\"folioWindowNo\":1,\"folios\":[{\"postings\":[{\"transactionType\":\"Payment\",\"reference\":\"post:c1\","
+        + posting + "}]}]}]}}";
+  }
 
   /**
    * Fails if OPERA refusing our credentials dead-letters the posting as a rejection: a rejection is never replayed, so every payment taken
@@ -168,40 +176,49 @@ class HttpAdapterRepliesTest {
   @Test
   void aTruncatedOrNonJsonRejectionFromOperaIsStillARejectionNotACrash() {
     for (String body : List.of("{\"code\":\"FOLIO_CLOSED", "<html>Bad gateway</html>", "")) {
-      replies.put("/v1/hotels/H1/reservations/RES-1/payments", new Reply(400, body));
+      replies.put(OPERA_PAYMENTS, new Reply(400, body));
       assertThatThrownBy(() -> opera().postPayment(payment())).as(body).isInstanceOf(OperaRejectedException.class).hasMessageContaining("no reason given");
     }
-    replies.put("/v1/hotels/H1/reservations/RES-1/payments", new Reply(400, "{\"code\":\"FOLIO_CLOSED\"}"));
+    replies.put(OPERA_PAYMENTS, new Reply(400, "{\"type\":\"about:blank\",\"title\":\"Bad Request\",\"o:errorCode\":\"FOLIO_CLOSED\"}"));
     assertThatThrownBy(() -> opera().postPayment(payment())).isInstanceOf(OperaRejectedException.class).hasMessageContaining("FOLIO_CLOSED");
   }
 
   /** Fails if a payment OPERA lists without a transaction number is returned as found: it would be recorded POSTED with a blank reference. */
   @Test
   void aFoundPaymentWithoutATransactionNumberIsNeitherPostedAgainNorRecordedAsPosted() {
-    replies.put("/v1/hotels/H1/payments", new Reply(200, "{\"payments\":[{\"transactionNo\":\"\",\"amount\":\"10.00\",\"currency\":\"USD\",\"businessDate\":\"2026-11-17\"}]}"));
-    assertThatThrownBy(() -> opera().find("H1", "post:c1")).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("transaction number");
+    replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":\"\",\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\"")));
+    assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("transaction number");
   }
 
   @Test
   void anOperaReplyWithoutATransactionNumberIsNotRecordedAsPostedWithABlankReference() {
-    replies.put("/v1/hotels/H1/reservations/RES-1/payments", new Reply(201, "{}"));
-    assertThatThrownBy(() -> opera().postPayment(payment())).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("transaction number");
+    for (String reply : List.of("{}", "", // OHIP may answer 201 with only a Location
+        "{\"postings\":[{\"transactionType\":\"Revenue\",\"transactionNo\":1001}]}", // a generated charge (a surcharge), not our payment
+        "{\"postings\":[{\"transactionType\":\"Payment\",\"transactionNo\":\"\"}]}")) {
+      replies.put(OPERA_PAYMENTS, new Reply(201, reply));
+      assertThatThrownBy(() -> opera().postPayment(payment())).as(reply).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("transaction number");
+    }
+    replies.put(OPERA_PAYMENTS, new Reply(201, "{\"postings\":[{\"transactionType\":\"Revenue\",\"transactionNo\":1001},{\"transactionType\":\"Payment\",\"transactionNo\":1002}]}"));
+    assertThat(opera().postPayment(payment())).as("the payment among generated postings").isEqualTo("1002");
   }
 
   @Test
   void aBusinessDateWeCannotReadIsAnOutageNotACrash() {
-    replies.put("/v1/hotels/H1/business-date", new Reply(200, "{\"businessDate\":\"17/11/2026\"}"));
-    assertThatThrownBy(() -> opera().businessDate("H1")).isInstanceOf(OperaUnavailableException.class);
+    for (String bad : List.of("{\"hotels\":[{\"hotelId\":\"H1\",\"businessDate\":\"17/11/2026\"}]}", "{\"hotels\":[{\"hotelId\":\"OTHER\",\"businessDate\":\"2026-11-17\"}]}", "{}", "not json")) {
+      replies.put(OPERA_DATE, new Reply(200, bad));
+      assertThatThrownBy(() -> opera().businessDate("H1")).as(bad).isInstanceOf(OperaUnavailableException.class);
+    }
   }
 
   @Test
   void aFoundPaymentWeCannotReadIsAnOutageNotACrash() {
     for (String bad : List.of(
-        "{\"payments\":[{\"transactionNo\":\"OP-1\",\"amount\":\"10.00\",\"businessDate\":\"2026-11-17\"}]}", // no currency
-        "{\"payments\":[{\"transactionNo\":\"OP-1\",\"amount\":\"10.00\",\"currency\":\"ZZ\",\"businessDate\":\"2026-11-17\"}]}", // odd currency
-        "{\"payments\":[{\"transactionNo\":\"OP-1\",\"amount\":\"10.00\",\"currency\":\"USD\",\"businessDate\":\"soon\"}]}")) {
-      replies.put("/v1/hotels/H1/payments", new Reply(200, bad));
-      assertThatThrownBy(() -> opera().find("H1", "post:c1")).as(bad).isInstanceOf(OperaUnavailableException.class);
+        folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00},\"transactionDate\":\"2026-11-17\""), // no currency
+        folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"ZZ\"},\"transactionDate\":\"2026-11-17\""), // odd currency
+        folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.001,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\""), // a fraction of a cent
+        folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"soon\""))) {
+      replies.put(OPERA_FOLIO, new Reply(200, bad));
+      assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).as(bad).isInstanceOf(OperaUnavailableException.class);
     }
   }
 
@@ -213,14 +230,14 @@ class HttpAdapterRepliesTest {
     server.removeContext("/");
     server.createContext("/", exchange -> {
       String bearer = exchange.getRequestHeaders().getFirst("Authorization");
-      if (exchange.getRequestURI().getPath().equals("/v1/hotels/H1/business-date") && "Bearer t1".equals(bearer)) {
+      if (exchange.getRequestURI().getPath().equals(OPERA_DATE) && "Bearer t1".equals(bearer)) {
         allRefused.countDown();
         try {
           allRefused.await(5, TimeUnit.SECONDS); // every caller holds the old token at the same moment
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
         }
-        replies.put("/v1/hotels/H1/business-date", new Reply(200, "{\"businessDate\":\"2026-11-17\"}"));
+        replies.put(OPERA_DATE, new Reply(200, "{\"hotels\":[{\"hotelId\":\"H1\",\"businessDate\":\"2026-11-17\"}]}"));
         exchange.sendResponseHeaders(401, -1);
         exchange.close();
         return;
@@ -240,11 +257,13 @@ class HttpAdapterRepliesTest {
   /** Review finding L2: HTTP mode used to default to localhost and empty credentials. */
   @Test
   void httpModeRefusesToStartWithoutItsAddressesAndCredentials() {
-    HttpGatewayProperties none = new HttpGatewayProperties(null, null, null, null, null, null, Duration.ofSeconds(2), Duration.ofSeconds(3));
+    HttpGatewayProperties none = new HttpGatewayProperties(null, null, null, null, null, null, null, null, Duration.ofSeconds(2), Duration.ofSeconds(3));
     assertThatThrownBy(() -> new HttpOperaClient(none, RestClient.builder(), Clock.systemUTC())).isInstanceOf(IllegalStateException.class).hasMessageContaining("opera-base-url");
     assertThatThrownBy(() -> new HttpPspClient(none, RestClient.builder())).isInstanceOf(IllegalStateException.class).hasMessageContaining("psp-base-url");
-    HttpGatewayProperties noSecret = new HttpGatewayProperties(url, "app", "client", " ", url, "k", Duration.ofSeconds(2), Duration.ofSeconds(3));
+    HttpGatewayProperties noSecret = new HttpGatewayProperties(url, "app", "client", " ", "ENT", "scope", url, "k", Duration.ofSeconds(2), Duration.ofSeconds(3));
     assertThatThrownBy(() -> new HttpOperaClient(noSecret, RestClient.builder(), Clock.systemUTC())).hasMessageContaining("opera-client-secret");
+    HttpGatewayProperties noScope = new HttpGatewayProperties(url, "app", "client", "secret", "ENT", "", url, "k", Duration.ofSeconds(2), Duration.ofSeconds(3));
+    assertThatThrownBy(() -> new HttpOperaClient(noScope, RestClient.builder(), Clock.systemUTC())).hasMessageContaining("opera-scope");
   }
 
   /** Fails if a refused credential declines the guest's charge for good: the charge must stay retryable until the key is fixed. */
@@ -255,5 +274,33 @@ class HttpAdapterRepliesTest {
       assertThatThrownBy(() -> psp().authorize("k:auth", new Pan("4111111111111111"), "12/29", TEN)).as("HTTP %d", status)
           .isInstanceOf(PspTransientException.class).isNotInstanceOf(PspDeclinedException.class).hasMessageNotContaining("4111");
     }
+  }
+
+  /** Fails if a folio OPERA returned only in part is read as "not there": the bridge would post again, and OPERA does not deduplicate. */
+  @Test
+  void aFolioReturnedOnlyInPartIsUnavailableNotAbsent() {
+    replies.put(OPERA_FOLIO, new Reply(200, "{\"reservationFolioInformation\":{\"folioWindows\":[{\"folioWindowNo\":1,\"hasMore\":true,\"folios\":[{\"postings\":[]}]}]}}"));
+    assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("part of the folio");
+    replies.put(OPERA_FOLIO, new Reply(200, "{\"reservationFolioInformation\":{\"folioWindows\":[{\"folioWindowNo\":1,\"hasMore\":false,\"folios\":[{\"postings\":[]}]}]}}"));
+    assertThat(opera().find("H1", "RES-1", "post:c1")).isEmpty();
+  }
+
+  /** OPERA may list a payment as a credit (a negative amount); a charge carrying our reference is not our payment. */
+  @Test
+  void aPaymentListedAsACreditIsFoundAndAChargeWithOurReferenceIsNot() {
+    replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":-10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\"")));
+    assertThat(opera().find("H1", "RES-1", "post:c1").orElseThrow().amount()).isEqualTo(TEN);
+    replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.000,\"currencyCode\":\"USD\"},\"postingDate\":\"2026-11-17\"")));
+    assertThat(opera().find("H1", "RES-1", "post:c1").orElseThrow()).as("extra zero decimals, and the posting date when there is no transaction date")
+        .satisfies(p -> assertThat(p.amount()).isEqualTo(TEN)).satisfies(p -> assertThat(p.businessDate()).isEqualTo(LocalDate.of(2026, 11, 17)));
+    replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\"").replace("Payment", "Revenue")));
+    assertThat(opera().find("H1", "RES-1", "post:c1")).isEmpty();
+  }
+
+  /** A reservation with no folio yet (the guest has not checked in) answers 204: nothing posted, so the payment may be posted. */
+  @Test
+  void aFolioWithNoContentIsNotFound() {
+    replies.put(OPERA_FOLIO, new Reply(204, ""));
+    assertThat(opera().find("H1", "RES-1", "post:c1")).isEmpty();
   }
 }

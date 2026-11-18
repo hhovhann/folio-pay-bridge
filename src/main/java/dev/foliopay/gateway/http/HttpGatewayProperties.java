@@ -9,7 +9,8 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 /**
  * Where the real (or simulated) PMS and processor live, and how patient to be with them. Credentials come from the environment, never from
  * the repo. There are no default addresses or credentials: in HTTP mode a missing one stops start-up (D-17) instead of quietly talking to
- * whatever listens on localhost.
+ * whatever listens on localhost. The OPERA values are the ones Oracle's developer portal gives an OHIP application: the gateway URL, the
+ * application key, the OAuth client id and secret, the enterprise id and the scope (OAuth client credentials, D-42).
  */
 @ConfigurationProperties("foliopay.http")
 public record HttpGatewayProperties(
@@ -17,6 +18,8 @@ public record HttpGatewayProperties(
     String operaAppKey,
     String operaClientId,
     String operaClientSecret,
+    String operaEnterpriseId,
+    String operaScope,
     String pspBaseUrl,
     String pspApiKey,
     @DefaultValue("2s") Duration connectTimeout,
@@ -30,6 +33,8 @@ public record HttpGatewayProperties(
     needed.put("foliopay.http.opera-app-key", operaAppKey);
     needed.put("foliopay.http.opera-client-id", operaClientId);
     needed.put("foliopay.http.opera-client-secret", operaClientSecret);
+    needed.put("foliopay.http.opera-enterprise-id", operaEnterpriseId);
+    needed.put("foliopay.http.opera-scope", operaScope);
     require(needed);
   }
 

@@ -1,7 +1,12 @@
 package dev.foliopay.gateway.http;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import com.fasterxml.jackson.databind.node.MissingNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.util.RawValue;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.gateway.OperaClient;
 import dev.foliopay.gateway.OperaRejectedException;
@@ -9,12 +14,12 @@ import dev.foliopay.gateway.OperaUnavailableException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -27,15 +32,21 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 /**
- * OPERA Cloud over OHIP-style REST. Each failure is mapped to what the posting service needs to decide: a 4xx that will not change on a
- * retry is a rejection (dead-letter, no replay); an outage, a timeout, a rate limit or a lock conflict is "unavailable" (retry, then look
- * before posting again). An expired access token is replaced once, transparently. Wired only when foliopay.gateway=http.
+ * OPERA Cloud over OHIP, on the operations and shapes of Oracle's published specification (D-42; checked by {@code OhipContractTest}):
+ * OAuth client credentials ({@code getToken}), the business date ({@code getBusinessDate}), a payment posted to a reservation's folio window
+ * ({@code postBillingPayment}) and the folio read back to find it ({@code getFolio}). Each failure is mapped to what the posting service needs
+ * to decide: a 4xx that will not change on a retry is a rejection (dead-letter, no replay); an outage, a timeout, a rate limit or a lock
+ * conflict is "unavailable" (retry, then look before posting again). An expired access token is replaced once, transparently. Wired only
+ * when foliopay.gateway=http.
  */
 @Component
 @ConditionalOnProperty(name = "foliopay.gateway", havingValue = "http")
 public class HttpOperaClient implements OperaClient {
   private static final Logger log = LoggerFactory.getLogger(HttpOperaClient.class);
   private static final long EXPIRY_MARGIN_SECONDS = 10;
+  /** Decimals are read as exact decimals, never as binary floating point, so an amount comes back to the same minor units it went out as. */
+  private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
+  private static final String PAYMENT = "Payment";
   private final RestClient http;
   private final HttpGatewayProperties settings;
   private final Clock clock;
@@ -49,42 +60,88 @@ public class HttpOperaClient implements OperaClient {
     this.http = builder.baseUrl(settings.operaBaseUrl()).requestFactory(HttpClients.factory(settings)).build();
   }
 
+  /**
+   * {@code postBillingPayment}: the payment goes to the folio window as a {@code Billing} payment, with the hotel's payment method code, the
+   * bridge's cashier, our idempotency key as the posting reference (how {@link #find} recognises it) and the processor's reference as the
+   * remark. No business date is sent: OPERA posts on its own.
+   */
   @Override
   public String postPayment(OperaPayment p) {
-    Map<String, Object> body = Map.of(
-        "folioWindow", p.folioWindow(), "paymentCode", p.paymentCode(), "cashierId", p.cashierId(), "amount", p.amount().toDecimalString(),
-        "currency", p.amount().currency(), "businessDate", p.businessDate().toString(), "reference", p.externalRef(), "pspRef", String.valueOf(p.pspRef()));
-    JsonNode reply = call(p.hotelId(), c -> c.post().uri("/v1/hotels/{h}/reservations/{r}/payments", p.hotelId(), p.reservationId()).contentType(MediaType.APPLICATION_JSON).body(body));
-    String transactionNo = reply.path("transactionNo").asText();
-    if (transactionNo.isBlank()) {
-      // It may have posted: "unavailable" makes the next attempt look for it before posting again, instead of recording a blank reference.
-      throw new OperaUnavailableException("OPERA answered without a transaction number");
+    ObjectNode criteria = JSON.createObjectNode();
+    criteria.put("hotelId", p.hotelId());
+    criteria.putObject("reservationId").put("id", p.reservationId()).put("type", "Reservation");
+    criteria.put("folioWindowNo", p.folioWindow());
+    criteria.put("cashierId", p.cashierId());
+    criteria.putObject("paymentMethod").put("paymentMethod", p.paymentMethod());
+    criteria.putObject("postingAmount").putRawValue("amount", new RawValue(p.amount().toDecimalString())).put("currencyCode", p.amount().currency());
+    criteria.put("postingReference", p.externalRef());
+    criteria.put("postingRemark", "Processor reference " + p.pspRef());
+    criteria.put("action", "Billing");
+    ObjectNode body = JSON.createObjectNode();
+    body.set("criteria", criteria);
+    JsonNode reply = call(p.hotelId(), c -> c.post().uri("/csh/v1/hotels/{h}/reservations/{r}/payments", p.hotelId(), p.reservationId())
+        .contentType(MediaType.APPLICATION_JSON).body(body.toString()));
+    for (JsonNode posting : reply.path("postings")) {
+      String transactionNo = posting.path("transactionNo").asText();
+      if (PAYMENT.equals(posting.path("transactionType").asText()) && !transactionNo.isBlank()) {
+        return transactionNo;
+      }
     }
-    return transactionNo;
+    // It may have posted: "unavailable" makes the next attempt look for it before posting again, instead of recording a blank reference.
+    throw new OperaUnavailableException("OPERA answered without a transaction number");
   }
 
+  /**
+   * {@code getFolio} with its postings: our payment is the {@code Payment} posting whose reference is our key, in any window. A window that
+   * says it has more postings than it returned, without ours among them, cannot prove the payment is absent: that is "unavailable", never
+   * "not found", because "not found" means post again and OPERA does not deduplicate.
+   */
   @Override
-  public Optional<Posted> find(String hotelId, String externalRef) {
-    JsonNode reply = call(hotelId, c -> c.get().uri("/v1/hotels/{h}/payments?reference={ref}", hotelId, externalRef));
-    for (JsonNode payment : reply.path("payments")) {
-      String transactionNo = payment.path("transactionNo").asText();
-      if (transactionNo.isBlank()) {
-        // Our payment is on the folio but cannot be traced: never post it again, and never record it as POSTED with a blank reference.
-        throw new OperaUnavailableException("OPERA listed our payment without a transaction number");
+  public Optional<Posted> find(String hotelId, String reservationId, String externalRef) {
+    JsonNode reply = call(hotelId, c -> c.get().uri("/csh/v1/hotels/{h}/reservations/{r}/folios?fetchInstructions={f}", hotelId, reservationId, "Postings"));
+    boolean incomplete = false;
+    for (JsonNode window : reply.path("reservationFolioInformation").path("folioWindows")) {
+      incomplete |= window.path("hasMore").asBoolean(false);
+      for (JsonNode folio : window.path("folios")) {
+        for (JsonNode posting : folio.path("postings")) {
+          if (PAYMENT.equals(posting.path("transactionType").asText()) && externalRef.equals(posting.path("reference").asText())) {
+            return Optional.of(found(posting, reservationId));
+          }
+        }
       }
-      return Optional.of(readable("payment", () -> {
-        String currency = payment.path("currency").asText();
-        Money amount = new Money(toMinor(payment.path("amount").asText(), currency), currency);
-        return new Posted(transactionNo, payment.path("reservationId").asText(), amount, LocalDate.parse(payment.path("businessDate").asText()));
-      }));
+    }
+    if (incomplete) {
+      throw new OperaUnavailableException("OPERA returned only part of the folio: cannot tell whether our payment is on it");
     }
     return Optional.empty();
   }
 
+  private static Posted found(JsonNode posting, String reservationId) {
+    String transactionNo = posting.path("transactionNo").asText();
+    if (transactionNo.isBlank()) {
+      // Our payment is on the folio but cannot be traced: never post it again, and never record it as POSTED with a blank reference.
+      throw new OperaUnavailableException("OPERA listed our payment without a transaction number");
+    }
+    return readable("payment", () -> {
+      JsonNode amount = posting.path("postedAmount");
+      String currency = amount.path("currencyCode").asText();
+      String date = posting.path("transactionDate").asText(posting.path("postingDate").asText());
+      return new Posted(transactionNo, reservationId, new Money(toMinor(amount.path("amount").asText(), currency), currency), LocalDate.parse(date));
+    });
+  }
+
+  /** {@code getBusinessDate} answers for a list of hotels: ours is the one with our hotel id. */
   @Override
   public LocalDate businessDate(String hotelId) {
-    JsonNode reply = call(hotelId, c -> c.get().uri("/v1/hotels/{h}/business-date", hotelId));
-    return readable("business date", () -> LocalDate.parse(reply.path("businessDate").asText()));
+    JsonNode reply = call(hotelId, c -> c.get().uri("/bof/v1/hotels/{h}/businessDate", hotelId));
+    return readable("business date", () -> {
+      for (JsonNode hotel : reply.path("hotels")) {
+        if (hotelId.equals(hotel.path("hotelId").asText())) {
+          return LocalDate.parse(hotel.path("businessDate").asText());
+        }
+      }
+      throw new IllegalStateException("no business date for the hotel");
+    });
   }
 
   /** A reply we cannot read is treated like no reply: the caller retries, looks first, and dead-letters as replayable, never crashes. */
@@ -108,10 +165,16 @@ public class HttpOperaClient implements OperaClient {
   private JsonNode send(String hotelId, Function<RestClient, RestClient.RequestHeadersSpec<?>> request, String rejectedToken) {
     boolean freshToken = rejectedToken != null;
     String bearer = token(rejectedToken);
+    String body;
     try {
-      JsonNode reply = request.apply(http).header("Authorization", "Bearer " + bearer).header("x-hotelid", hotelId).header("x-app-key", settings.operaAppKey())
-          .retrieve().body(JsonNode.class);
-      return reply == null ? MissingNode.getInstance() : reply;
+      body = request.apply(http).header("Authorization", "Bearer " + bearer).header("x-hotelid", hotelId).header("x-app-key", settings.operaAppKey())
+          .headers(h -> {
+            String requestId = MDC.get("requestId");
+            if (requestId != null) {
+              h.add("x-request-id", requestId); // lets Oracle support find our call in their logs
+            }
+          })
+          .retrieve().body(String.class);
     } catch (HttpClientErrorException e) {
       throw map(e.getStatusCode(), e.getResponseBodyAsString(), freshToken, bearer);
     } catch (HttpServerErrorException e) {
@@ -119,6 +182,16 @@ public class HttpOperaClient implements OperaClient {
     } catch (RestClientException e) {
       throw new OperaUnavailableException("OPERA did not answer in time"); // connection refused or read timeout: it may or may not have arrived
     }
+    if (body == null || body.isBlank()) {
+      return MissingNode.getInstance(); // 204: for a folio, no postings yet
+    }
+    return readable("reply", () -> {
+      try {
+        return JSON.readTree(body);
+      } catch (Exception e) {
+        throw new IllegalStateException("not JSON", e);
+      }
+    });
   }
 
   /**
@@ -147,7 +220,8 @@ public class HttpOperaClient implements OperaClient {
 
   /**
    * The current token, fetched when there is none or it is about to expire. {@code rejected} is a token OPERA refused: it is replaced only
-   * if it is still the current one, so twenty requests that all got a 401 cause one fetch, not twenty.
+   * if it is still the current one, so twenty requests that all got a 401 cause one fetch, not twenty. OHIP's client credentials flow: the
+   * client id and secret as HTTP Basic, the application key and the enterprise id as headers, the scope in the form.
    */
   private synchronized String token(String rejected) {
     boolean stillValid = accessToken != null && clock.instant().isBefore(tokenExpiresAt.minusSeconds(EXPIRY_MARGIN_SECONDS));
@@ -156,10 +230,11 @@ public class HttpOperaClient implements OperaClient {
     }
     MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
     form.add("grant_type", "client_credentials");
-    form.add("client_id", settings.operaClientId());
-    form.add("client_secret", settings.operaClientSecret());
+    form.add("scope", settings.operaScope());
     try {
-      JsonNode reply = http.post().uri("/oauth/v1/tokens").header("x-app-key", settings.operaAppKey()).contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(JsonNode.class);
+      JsonNode reply = http.post().uri("/oauth/v1/tokens").headers(h -> h.setBasicAuth(settings.operaClientId(), settings.operaClientSecret()))
+          .header("x-app-key", settings.operaAppKey()).header("enterpriseId", settings.operaEnterpriseId())
+          .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(JsonNode.class);
       String token = reply == null ? "" : reply.path("access_token").asText();
       if (token.isBlank()) {
         throw new OperaUnavailableException("OPERA token service answered without a token");
@@ -170,17 +245,21 @@ public class HttpOperaClient implements OperaClient {
       return accessToken;
     } catch (HttpClientErrorException e) {
       // Our credentials, not the posting: replayable once they are fixed, never a rejection of a guest's folio.
-      log.error("OPERA refused our credentials ({}): check the client id, secret and application key", e.getStatusCode().value());
+      log.error("OPERA refused our credentials ({}): check the client id, secret, application key, enterprise id and scope", e.getStatusCode().value());
       throw new OperaUnavailableException("OPERA refused our credentials (" + e.getStatusCode().value() + "): check the client id, secret and application key");
     } catch (RestClientException e) {
       throw new OperaUnavailableException("OPERA token service did not answer");
     }
   }
 
+  /** A posted amount as minor units. A payment may be listed as a credit (negative); its direction is already known, so the sign is dropped. */
   private static long toMinor(String decimal, String currency) {
     int digits = Money.fractionDigits(currency);
-    String[] parts = decimal.split("\\.");
+    String[] parts = (decimal.startsWith("-") ? decimal.substring(1) : decimal).split("\\.");
     String fraction = parts.length > 1 ? parts[1] : "";
+    if (fraction.length() > digits && !fraction.substring(digits).chars().allMatch(c -> c == '0')) {
+      throw new IllegalStateException("more decimals than the currency has");
+    }
     return Long.parseLong(parts[0] + (fraction + "0".repeat(digits)).substring(0, digits));
   }
 

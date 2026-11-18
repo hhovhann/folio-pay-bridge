@@ -24,10 +24,18 @@ For an engineer (or a reviewer) who wants to own this code, not just read it. Ea
 - Discuss: which parts of a real deployment are in PCI scope, and how hosted card entry (the PSP's fields) would shrink that scope.
 
 ## Session 4: OPERA, the processor, and the outside world
-**Goal:** know what a real OHIP and acquirer integration needs that the simulators only imitate (D-23, D-26, D-34).
-- Read: `HttpOperaClient` (OAuth token refresh, `x-app-key`, `x-hotelid`, status mapping, look before repost), `HttpPspClient` (idempotency header, 402 vs 409 vs 401 vs other 4xx), `BusinessDateServiceImpl` (night audit, D-33), `docs/aws-deployment.md` section 1 (OPERA Cloud is Oracle's SaaS).
-- Run: `./mvnw test -Dtest='FullFlowHttpIntegrationTest,HttpAdapterRepliesTest'`. In the OPERA page run night audit and expire tokens, then pay: the bridge fetches a new token and posts on the new date.
-- Discuss: what to verify first in Oracle's OHIP sandbox (paths, error codes, rate limits, how a payment is looked up by reference), and in an acquirer's test environment (3-D Secure fields, refunds, settlement file format).
+**Goal:** know OPERA the way its integrators do, and what a real OHIP and acquirer integration needs beyond the simulators (D-23, D-26, D-34, D-42).
+- Read: Oracle's own `postBillingPayment`, `getFolio` and `getBusinessDate` in `src/test/resources/ohip/` (trimmed from Oracle's published files), then `HttpOperaClient` beside them (OAuth client credentials, `x-app-key`, `x-hotelid`, the `criteria` body, reading the folio before a repost, `o:errorCode`), `OhipContractTest` and `OhipSpec` (how every exchange is checked against Oracle's files), `HttpPspClient` (idempotency header, 402 vs 409 vs 401 vs other 4xx), `BusinessDateServiceImpl` (night audit, D-33), `docs/aws-deployment.md` section 1 (OPERA Cloud is Oracle's SaaS).
+- Work the front desk (`:8090`) as a front-desk agent would: open the in-house guest, read the folio (a room night, the balance), check in the due-in guest, post a room night, try to check out (refused: a balance is owed), pay the balance through the bridge, check out. Run night audit: every guest in house gets a room night on the day it closes, and the business date moves.
+- Run: `./mvnw test -Dtest='OhipContractTest,FullFlowHttpIntegrationTest,HttpAdapterRepliesTest'`. In the OPERA page run night audit and expire tokens, then pay: the bridge fetches a new token, and OPERA posts the payment on the new date.
+- Discuss: why no one can run OPERA locally, and how real access comes (Oracle's partner sandbox, a hotel's test environment); the questions the first sandbox session answers (`specs/roadmap.md`, Next 4); and for the acquirer, 3-D Secure fields, refunds and the settlement file format.
+
+## Learning path: what to study, in order
+1. **OPERA Cloud and OHIP** (the job's daily system): folios and folio windows, transaction codes and payment methods, cashiers, night audit and the business date, deposits before arrival, check-out with a zero balance. Read the cashiering (`csh`), back office (`bof`), reservations (`rsv`) and front desk (`fof`) specifications in github.com/oracle/hospitality-api-docs, and its `WORKFLOWS.md` (check-in, check-out, posting charges and payments). OPERA 5 hotels are still common during the move to the cloud: know what OXI, OWS and IFC8 are.
+2. **The acquiring stack the company uses**: authorisation, capture, void, refund and tokens; hosted card entry (so a card number never reaches the service) and payment links; 3-D Secure and liability shift.
+3. **Hotel payment specifics**: virtual cards from online travel agencies (charged like a card, often after arrival), chargebacks and the evidence that wins them, settlement files and reconciliation.
+4. **PCI DSS 4.0.1**: what puts a system in scope, tokenisation, key management (KMS, envelope encryption, key rotation), logging rules.
+5. **OPI (OPERA Payment Interface)**: Oracle's own link between OPERA and terminals and payment providers, and where a payment company's product fits beside it.
 
 ## Session 5: running it in production, and working with agents
 **Goal:** deploy-readiness and the AI-first way of working.
