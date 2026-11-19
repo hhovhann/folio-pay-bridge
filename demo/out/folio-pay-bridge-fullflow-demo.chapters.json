@@ -2,86 +2,91 @@
  {
   "id": "intro",
   "start": 0.9,
-  "end": 22.7
+  "end": 23.5
+ },
+ {
+  "id": "problem",
+  "start": 24.1,
+  "end": 50.9
  },
  {
   "id": "how",
-  "start": 23.3,
-  "end": 56.5
+  "start": 53.2,
+  "end": 90.9
  },
  {
   "id": "pms",
-  "start": 58.0,
-  "end": 78.0
+  "start": 92.4,
+  "end": 117.6
  },
  {
   "id": "link",
-  "start": 79.6,
-  "end": 89.9
+  "start": 119.1,
+  "end": 129.4
  },
  {
   "id": "pay",
-  "start": 91.5,
-  "end": 103.4
+  "start": 131.0,
+  "end": 142.9
  },
  {
   "id": "folio",
-  "start": 104.9,
-  "end": 119.1
+  "start": 144.4,
+  "end": 162.7
  },
  {
   "id": "webhook",
-  "start": 119.7,
-  "end": 138.0
+  "start": 163.3,
+  "end": 181.5
  },
  {
   "id": "repeat",
-  "start": 138.6,
-  "end": 155.0
+  "start": 182.2,
+  "end": 198.6
  },
  {
   "id": "lost",
-  "start": 155.6,
-  "end": 174.5
+  "start": 199.3,
+  "end": 218.1
  },
  {
   "id": "outage",
-  "start": 175.1,
-  "end": 192.8
+  "start": 218.8,
+  "end": 236.4
  },
  {
   "id": "decline",
-  "start": 193.8,
-  "end": 210.8
+  "start": 237.6,
+  "end": 254.6
  },
  {
   "id": "audit",
-  "start": 211.4,
-  "end": 231.3
+  "start": 255.3,
+  "end": 275.2
  },
  {
   "id": "recon",
-  "start": 234.1,
-  "end": 253.7
+  "start": 279.3,
+  "end": 298.9
  },
  {
   "id": "logs",
-  "start": 254.3,
-  "end": 266.0
+  "start": 299.6,
+  "end": 311.3
  },
  {
   "id": "coverage",
-  "start": 266.7,
-  "end": 288.5
+  "start": 312.9,
+  "end": 335.5
  },
  {
   "id": "production",
-  "start": 289.2,
-  "end": 323.5
+  "start": 337.1,
+  "end": 394.8
  },
  {
   "id": "close",
-  "start": 324.2,
-  "end": 355.1
+  "start": 395.5,
+  "end": 426.5
  }
 ]

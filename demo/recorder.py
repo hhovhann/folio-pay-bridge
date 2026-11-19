@@ -1,7 +1,8 @@
-"""The recorder behind the narrated video (demo/make_fullflow_demo.py): local Kokoro or macOS voice, a visible cursor, captions drawn into the page
-(so they are burned into the video), assertions that each narrated claim is really on the screen, and the final mix to MP4 with .vtt and
-.srt captions and a chapter list. Needs ffmpeg and a Playwright Chromium; voice comes from Kokoro models or macOS `say`.
-DEMO_FAST=1 does a dry run: no voice, short waits, no output, every assertion still checked."""
+"""The recorder behind the narrated video (demo/make_fullflow_demo.py): local Kokoro or macOS voice, the overlay drawn into every page
+(demo/overlay.js: a top bar naming the system and the chapter, captions, a cursor with click ripples, title and proof cards), so all of it
+is burned into the video; assertions that each narrated claim is really on the screen; and the final mix to MP4 with .vtt and .srt captions
+and a chapter list. Needs ffmpeg and a Playwright Chromium; voice comes from Kokoro models or macOS `say`.
+DEMO_FAST=1 does a dry run: no voice, short waits, no output, every assertion still checked. DEMO_SHOTS=<dir> saves a still per scene."""
 import json
 import os
 import pathlib
@@ -23,21 +24,14 @@ VOICE, SPEED = os.environ.get("KOKORO_VOICE", "af_heart"), float(os.environ.get(
 MODELS = os.path.expanduser(os.environ.get("KOKORO_MODELS", ""))  # directory with kokoro-v1.0.onnx and voices-v1.0.bin
 W, H = 1280, 720
 FAST = bool(int(os.environ.get("DEMO_FAST", "0")))
+SHOTS = os.environ.get("DEMO_SHOTS", "")  # a folder: a screenshot at the end of every scene (works in a dry run)
 
 # The voice reads these spellings; captions keep the written form.
-SPOKEN = {"PMS": "P M S", "KMS": "K M S", "AWS": "A W S", "PCI": "P C I", "UTC": "U T C", "OPERA": "Opera", "API": "A P I", "3DS": "three D S"}
+SPOKEN = {"PMS": "P M S", "KMS": "K M S", "AWS": "A W S", "PCI": "P C I", "UTC": "U T C", "OPERA": "Opera", "API": "A P I", "3DS": "three D S",
+          "OHIP": "O H I P", "HTTP": "H T T P", "RDS": "R D S", "3-D Secure": "three D secure", "OAuth2": "O auth two"}
 
-INIT_JS = """
-(() => { const add = () => {
-  if (document.getElementById('demo-cursor')) return;
-  const d = document.createElement('div'); d.id = 'demo-cursor';
-  d.style.cssText = 'position:fixed;z-index:99999;width:30px;height:30px;border-radius:50%;border:3px solid #e11d48;background:rgba(225,29,72,.22);pointer-events:none;left:-60px;top:-60px;transition:left .4s,top .4s';
-  document.documentElement.appendChild(d);
-  const c = document.createElement('div'); c.id = 'demo-caption';
-  c.style.cssText = 'position:fixed;z-index:99998;left:0;right:0;margin:0 auto;width:max-content;bottom:22px;max-width:1060px;background:rgba(17,24,39,.88);color:#fff;font:600 21px/1.35 -apple-system,Segoe UI,Helvetica,Arial,sans-serif;padding:9px 18px;border-radius:10px;text-align:center;display:none;white-space:pre-line';
-  document.documentElement.appendChild(c); };
-  document.addEventListener('DOMContentLoaded', add); add(); })();
-"""
+INIT_JS = (pathlib.Path(__file__).resolve().parent / "overlay.js").read_text(encoding="utf-8")
+OVERLAY_BAR = 46  # the overlay's top bar pushes each page down by this many pixels
 
 
 def nap(x):
@@ -54,7 +48,8 @@ class Rec:
         self.chunks = []     # (start, end, text) caption chunks
         self.t0 = None
         self.page = None
-        self.shown = None
+        self.shown = None    # what the overlay last showed; None after a navigation, so the next pump redraws it
+        self.chapter = None  # (number, total, title) for the overlay's top bar
 
     def now(self):
         return time.monotonic() - self.t0
@@ -64,18 +59,42 @@ R = Rec()
 
 
 def pump():
-    """Show the caption chunk that belongs to the current time."""
+    """Show the caption chunk that belongs to the current time, and the chapter, on whatever page is open."""
     if R.page is None or R.t0 is None:
         return
     t = R.now()
     cur = next((c for c in R.chunks if c[0] <= t < c[1]), None)
-    text = cur[2] if cur else ""
-    if text != R.shown:
-        R.shown = text
+    state = {"caption": cur[2] if cur else "", "chapter": list(R.chapter) if R.chapter else None}
+    if state != R.shown:
+        R.shown = state
         try:
-            R.page.evaluate("(t) => { const c = document.getElementById('demo-caption'); if (c) { c.textContent = t; c.style.display = t ? 'block' : 'none'; } }", text)
+            R.page.evaluate("(s) => window.__demo && window.__demo.set(s)", state)
         except Exception:
             pass
+
+
+def chapter(number, total, title):
+    """Name the scene in the top bar (the bar also names the system on screen, from the page's address)."""
+    R.chapter = (number, total, title)
+    pump()
+
+
+def overlay(pg, method, *args):
+    """Call the overlay (demo/overlay.js) on the open page: cards, step highlights, click ripples."""
+    pg.evaluate("([m, a]) => window.__demo && window.__demo[m](...a)", [method, list(args)])
+
+
+def cue(clips, texts, cid, phrase):
+    """When the voice reaches a phrase of the scene being spoken: the proportional timing the captions use."""
+    start = next(s for c, s, _e, _t in reversed(R.timeline) if c == cid)
+    return start + clips[cid][1] * texts[cid].index(phrase) / len(texts[cid])
+
+
+def at(t):
+    """Wait until a cue."""
+    d = t - R.now()
+    if d > 0:
+        nap(d)
 
 
 def chunk_text(text, width=62):
@@ -106,6 +125,9 @@ def say(clips, texts, cid):
 
 
 def until(t_end, pad=0.6):
+    if SHOTS and R.page is not None:  # one still per scene, to review the look without recording a video
+        pathlib.Path(SHOTS).mkdir(parents=True, exist_ok=True)
+        R.page.screenshot(path=str(pathlib.Path(SHOTS) / f"{len(R.timeline):02d}-{R.timeline[-1][0]}.png"))
     d = t_end + pad - R.now()
     if d > 0 and not FAST:
         nap(d)
@@ -154,14 +176,21 @@ def synth(texts, folder):
 def glide(pg, loc):
     loc.scroll_into_view_if_needed()
     box = loc.bounding_box()
-    pg.evaluate("([x,y]) => { const c=document.getElementById('demo-cursor'); if(c){c.style.left=(x-15)+'px'; c.style.top=(y-15)+'px';} }", [box["x"] + box["width"] / 2, box["y"] + box["height"] / 2])
+    overlay(pg, "cursor", box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
     nap(0.5)
 
 
 def tap(pg, loc, pause=0.5):
     loc = pg.locator(loc).first if isinstance(loc, str) else loc
     glide(pg, loc)
+    overlay(pg, "ripple")
     loc.click()
+    nap(pause)
+
+
+def reveal(pg, selector, pause=1.0):
+    """Scroll a part of the page to just under the overlay's top bar."""
+    pg.evaluate("(s) => document.querySelector(s).scrollIntoView({behavior: 'smooth', block: 'start'})", selector)
     nap(pause)
 
 

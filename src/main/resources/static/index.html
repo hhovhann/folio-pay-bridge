@@ -8,7 +8,7 @@
 @media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#1a212a;--ink:#e6ebf2;--mut:#9aa7b8;--line:#2c3541;--acc:#6aa3ff;--ok:#5fd394;--okbg:#173326;--warn:#f0b955;--warnbg:#3a2f14;--err:#ff8a80;--errbg:#40201e}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 .banner{background:var(--warnbg);color:var(--warn);padding:6px 16px;font-size:12.5px}
-header{padding:10px 18px 0}h1{font-size:19px;margin:6px 0 0}.mut{color:var(--mut)}
+header{padding:10px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(100deg,#0b1430,#173a8a 60%,#2563eb);color:#fff}header .logo{width:40px;height:40px;border-radius:11px;background:rgba(255,255,255,.16);display:grid;place-items:center}h1{font-size:19px;margin:0;letter-spacing:-.01em}header .tech{display:flex;gap:6px;flex-wrap:wrap;margin-top:3px}header .tech span{font-size:11.5px;padding:1px 8px;border-radius:99px;background:rgba(255,255,255,.14)}#actors{margin-left:auto;font-size:12.5px;color:#dbe4ff}#actors a{color:#fff;font-weight:600}.mut{color:var(--mut)}.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}h2 .n{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;color:#fff;margin-right:6px;vertical-align:-6px}h2 .n .ic{width:15px;height:15px}
 .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:12px 18px 30px;align-items:start}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 h2{font-size:14.5px;margin:0 0 8px}h2 span{color:var(--mut);font-weight:400;font-size:12px}
@@ -23,12 +23,14 @@ table{width:100%;border-collapse:collapse;font-size:12.5px}th{text-align:left;co
 pre{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font:11.5px/1.45 ui-monospace,Menlo,monospace;white-space:pre-wrap;word-break:break-all;max-height:190px;overflow:auto}
 .note{background:var(--bg);border-radius:8px;padding:6px 8px;margin:6px 0 0;font-size:12.5px}.bad{color:var(--err);font-weight:600}.good{color:var(--ok);font-weight:600}
 @media(max-width:1100px){.grid{grid-template-columns:1fr}}
+.card{border-top:3px solid var(--k,var(--line))}
+.ctr.ext .big{font-size:14px;font-weight:600;color:var(--mut)}
 </style></head>
 <body>
 <div class="banner" data-testid="banner">Concept pilot with synthetic data: a simulated processor and a simulated PMS. Not any company's software, and not affiliated with any hotel, vendor or processor. No real cards.</div>
-<header><h1>Folio Pay Bridge <span class="mut" style="font-size:13px;font-weight:400">Java 17 · Spring Boot · Hibernate · AWS KMS · PCI-minded</span></h1><div id="actors" data-testid="actors"></div></header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="i-bridge" viewBox="0 0 24 24"><path d="M2 17h20M4 17v-5M20 17v-5M2 12h20"/><path d="M4 12c2.5-4 13.5-4 16 0"/><path d="M9 12v5M15 12v5"/></symbol><symbol id="i-hotel" viewBox="0 0 24 24"><path d="M4 21V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v17"/><path d="M16 9h3a1 1 0 0 1 1 1v11M2 21h20"/><path d="M8 7h1M11 7h1M8 11h1M11 11h1M8 15h1M11 15h1"/></symbol><symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol><symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol><symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M8 21h8"/><path d="m5 7-3 7a3 3 0 0 0 6 0zM19 7l-3 7a3 3 0 0 0 6 0z"/></symbol><symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol></defs></svg><header><div class="logo"><svg class="ic" style="width:24px;height:24px"><use href="#i-bridge"/></svg></div><div><h1>Folio Pay Bridge</h1><div class="tech"><span>Java 17</span><span>Spring Boot</span><span>Hibernate</span><span>AWS KMS</span><span>PCI-minded</span></div></div><div id="actors" data-testid="actors"></div></header>
 <div class="grid">
-<section class="card"><h2>1 · Booking events <span>from the PMS</span></h2>
+<section class="card" style="--k:#9f1239"><h2><i class="n" style="background:#9f1239"><svg class="ic"><use href="#i-hotel"/></svg></i>1 · Booking events <span>from the PMS</span></h2>
   <div class="row"><button data-testid="ev-flex" data-action="sendEvent" data-args='["NEW","B-FLEX","FLEXIBLE",30,100000]'>New: flexible, 30 days out</button>
   <button data-testid="ev-adv" data-action="sendEvent" data-args='["NEW","B-ADV","ADVANCE_PURCHASE",10,80000]'>New: advance purchase</button></div>
   <div class="row"><button data-testid="ev-mod" data-action="sendEvent" data-args='["MODIFIED","B-FLEX","FLEXIBLE",30,150000]'>Modify flexible booking to 1,500</button>
@@ -36,7 +38,7 @@ pre{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);border-radi
   <div class="note" data-testid="ev-note">Policy: advance purchase pays in full within 24h; flexible pays 20% seven days before arrival.</div>
   <table data-testid="links"><thead><tr><th>Request</th><th>Booking</th><th>Amount</th><th>Due</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>
 </section>
-<section class="card"><h2>2 · Card vault <span>tokens only</span></h2>
+<section class="card" style="--k:#7c3aed"><h2><i class="n" style="background:#7c3aed"><svg class="ic"><use href="#i-lock"/></svg></i>2 · Card vault <span>tokens only</span></h2>
   <div class="row"><input id="pan" value="4111 1111 1111 1111" aria-label="Card number" data-testid="pan"><input id="exp" value="12/29" style="max-width:70px" aria-label="Expiry"></div>
   <button class="p" data-testid="tokenise" data-action="tokenise" data-args='[]'>Tokenise card</button>
   <div class="note" data-testid="token-note">No token yet.</div>
@@ -48,18 +50,18 @@ pre{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);border-radi
   <button data-testid="apply-faults" data-action="applyFaults" data-args='[]'>Apply</button></div>
   <div class="ctr" data-testid="truth"><div><b class="big" id="c-psp">0</b><small>processor captures</small></div><div><b class="big" id="c-amt">0.00</b><small>captured total</small></div><div><b class="big" id="c-opera">0</b><small>PMS postings</small></div></div>
 </section>
-<section class="card"><h2>3 · Ledger <span>charges and folio postings</span></h2>
+<section class="card" style="--k:#0f766e"><h2><i class="n" style="background:#0f766e"><svg class="ic"><use href="#i-list"/></svg></i>3 · Ledger <span>charges and folio postings</span></h2>
   <table data-testid="ledger"><thead><tr><th>Booking</th><th>Amount</th><th>Charge</th><th>Posting</th><th></th></tr></thead><tbody></tbody></table>
   <div class="note" data-testid="pay-note">Pay a request to charge the card and post to the folio.</div>
   <h2 style="margin-top:10px">Operator log <span>card numbers masked</span></h2>
   <pre data-testid="logs">(empty)</pre>
 </section>
-<section class="card"><h2>4 · Reconciliation <span>PMS and captures vs acquirer statement</span></h2>
+<section class="card" style="--k:#d97706"><h2><i class="n" style="background:#d97706"><svg class="ic"><use href="#i-scale"/></svg></i>4 · Reconciliation <span>PMS and captures vs acquirer statement</span></h2>
   <button data-testid="recon-clean" data-action="recon" data-args='["clean"]'>Reconcile a clean statement</button><button data-testid="recon-messy" data-action="recon" data-args='["messy"]'>Reconcile a messy statement</button>
   <div class="note" data-testid="recon-note">Run a reconciliation.</div>
   <table data-testid="recon-items"><thead><tr><th>Exception</th><th>Processor ref</th><th>Expected</th><th>Settled</th></tr></thead><tbody></tbody></table>
 </section>
-<section class="card" style="grid-column:span 2"><h2>5 · Shadow mode <span>replay bookings through the new service and compare with the legacy rules</span></h2>
+<section class="card" style="grid-column:span 2;--k:#475569"><h2><i class="n" style="background:#475569"><svg class="ic"><use href="#i-eye"/></svg></i>5 · Shadow mode <span>replay bookings through the new service and compare with the legacy rules</span></h2>
   <button data-testid="shadow-strict" data-action="shadow" data-args='["strict"]'>Run 200 bookings: new rules</button><button data-testid="shadow-compat" data-action="shadow" data-args='["compat"]'>Run 200 bookings: legacy-compatible rules</button>
   <div class="note" data-testid="shadow-note">Compares the amount posted and the business date for each booking.</div>
   <table data-testid="shadow-items"><thead><tr><th>Booking</th><th>Field</th><th>Legacy</th><th>New</th></tr></thead><tbody></tbody></table>
