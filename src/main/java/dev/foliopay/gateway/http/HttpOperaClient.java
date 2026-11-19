@@ -11,6 +11,7 @@ import dev.foliopay.domain.model.Money;
 import dev.foliopay.gateway.OperaClient;
 import dev.foliopay.gateway.OperaRejectedException;
 import dev.foliopay.gateway.OperaUnavailableException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,7 +47,8 @@ public class HttpOperaClient implements OperaClient {
   private static final Logger log = LoggerFactory.getLogger(HttpOperaClient.class);
   private static final long EXPIRY_MARGIN_SECONDS = 10;
   /** Decimals are read as exact decimals, never as binary floating point, so an amount comes back to the same minor units it went out as. */
-  private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
+  private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+      .configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
   private static final String PAYMENT = "Payment";
   private static final String FOLIO = "/csh/v1/hotels/{h}/reservations/{r}/folios";
   private static final String POSTINGS = "Postings";
@@ -287,7 +289,8 @@ public class HttpOperaClient implements OperaClient {
   /**
    * The current token, fetched when there is none or it is about to expire. {@code rejected} is a token OPERA refused: it is replaced only
    * if it is still the current one, so twenty requests that all got a 401 cause one fetch, not twenty. OHIP's client credentials flow: the
-   * client id and secret as HTTP Basic, the application key and the enterprise id as headers, the scope in the form.
+   * client id and secret as HTTP Basic, the application key and the enterprise id as headers, the scope in the form. Basic credentials go
+   * as issued, in UTF-8 (RFC 7617, which Oracle's description of the header names), not Spring's default ISO-8859-1.
    */
   private synchronized String token(String rejected) {
     boolean stillValid = accessToken != null && clock.instant().isBefore(tokenExpiresAt.minusSeconds(EXPIRY_MARGIN_SECONDS));
@@ -298,7 +301,8 @@ public class HttpOperaClient implements OperaClient {
     form.add("grant_type", "client_credentials");
     form.add("scope", settings.operaScope());
     try {
-      JsonNode reply = http.post().uri("/oauth/v1/tokens").headers(h -> h.setBasicAuth(settings.operaClientId(), settings.operaClientSecret()))
+      JsonNode reply = http.post().uri("/oauth/v1/tokens")
+          .headers(h -> h.setBasicAuth(settings.operaClientId(), settings.operaClientSecret(), StandardCharsets.UTF_8))
           .header("x-app-key", settings.operaAppKey()).header("enterpriseId", settings.operaEnterpriseId())
           .contentType(MediaType.APPLICATION_FORM_URLENCODED).body(form).retrieve().body(JsonNode.class);
       String token = reply == null ? "" : reply.path("access_token").asText();
@@ -311,8 +315,10 @@ public class HttpOperaClient implements OperaClient {
       return accessToken;
     } catch (HttpClientErrorException e) {
       // Our credentials, not the posting: replayable once they are fixed, never a rejection of a guest's folio.
-      log.error("OPERA refused our credentials ({}): check the client id, secret, application key, enterprise id and scope", e.getStatusCode().value());
-      throw new OperaUnavailableException("OPERA refused our credentials (" + e.getStatusCode().value() + "): check the client id, secret and application key");
+      String refused = "OPERA refused our credentials (" + e.getStatusCode().value()
+          + "): check the client id, secret, application key, enterprise id and scope";
+      log.error(refused);
+      throw new OperaUnavailableException(refused);
     } catch (RestClientException e) {
       throw new OperaUnavailableException("OPERA token service did not answer");
     }

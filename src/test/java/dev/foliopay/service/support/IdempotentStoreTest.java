@@ -8,12 +8,14 @@ import static org.mockito.Mockito.when;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@DisplayName("Idempotent store: who creates the record and who wins a race")
 class IdempotentStoreTest {
   private final TransactionTemplate tx = mock(TransactionTemplate.class);
   private final IdempotentStore store = new IdempotentStore(tx);
@@ -32,6 +34,7 @@ class IdempotentStoreTest {
   private static ObjectOptimisticLockingFailureException lost() { return new ObjectOptimisticLockingFailureException("Item", "id"); }
 
   @Test
+  @DisplayName("Returns the existing record without inserting")
   void returnsTheExistingRecordWithoutInserting() {
     AtomicInteger inserts = new AtomicInteger();
     String found = store.findOrCreate(() -> Optional.of("existing"), () -> { inserts.incrementAndGet(); return "new"; });
@@ -40,12 +43,14 @@ class IdempotentStoreTest {
   }
 
   @Test
+  @DisplayName("Inserts when nothing exists")
   void insertsWhenNothingExists() {
     transactionRunsCallback();
     assertThat(store.findOrCreate(Optional::empty, () -> "new")).isEqualTo("new");
   }
 
   @Test
+  @DisplayName("A twin that loses the insert returns the winner's row")
   void aTwinThatLosesTheInsertReturnsTheWinnersRow() {
     transactionRunsCallback();
     AtomicInteger lookups = new AtomicInteger();
@@ -54,18 +59,21 @@ class IdempotentStoreTest {
   }
 
   @Test
+  @DisplayName("A constraint failure with no row to read is not hidden")
   void aConstraintFailureWithNoRowToReadIsNotHidden() {
     transactionRunsCallback();
     assertThatThrownBy(() -> store.findOrCreate(Optional::empty, () -> { throw new DataIntegrityViolationException("other violation"); })).isInstanceOf(DataIntegrityViolationException.class);
   }
 
   @Test
+  @DisplayName("A successful save is returned as is")
   void aSuccessfulSaveIsReturnedAsIs() {
     Item ours = new Item(1);
     assertThat(store.saveMerging(ours, i -> i, () -> new Item(0), (stored, mine) -> mine.rank > stored.rank, stored -> stored)).isSameAs(ours);
   }
 
   @Test
+  @DisplayName("A lost race where the stored state knows more returns the stored state")
   void aLostRaceWhereTheStoredStateKnowsMoreReturnsTheStoredState() {
     Item stored = new Item(2); // captured
     Item ours = new Item(0);   // still pending
@@ -74,6 +82,7 @@ class IdempotentStoreTest {
   }
 
   @Test
+  @DisplayName("A lost race where we know more carries our result onto the stored row and saves again")
   void aLostRaceWhereWeKnowMoreCarriesOurResultOntoTheStoredRowAndSavesAgain() {
     Item stored = new Item(0);
     Item ours = new Item(2);
@@ -85,6 +94,7 @@ class IdempotentStoreTest {
   }
 
   @Test
+  @DisplayName("A race that keeps losing ends with the stored state, not an error")
   void aRaceThatKeepsLosingEndsWithTheStoredStateNotAnError() {
     Item stored = new Item(0);
     Item result = store.saveMerging(new Item(2), i -> { throw lost(); }, () -> stored, (s, mine) -> mine.rank > s.rank, s -> s);

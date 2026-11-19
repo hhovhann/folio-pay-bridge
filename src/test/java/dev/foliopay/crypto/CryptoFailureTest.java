@@ -5,24 +5,29 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.foliopay.service.support.Fingerprint;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.services.kms.KmsClient;
 
+@DisplayName("Envelope encryption: keys of the wrong size are refused")
 class CryptoFailureTest {
   private static final byte[] PLAIN = "4111111111111111".getBytes(StandardCharsets.UTF_8);
 
   @Test
+  @DisplayName("A key of the wrong size is refused when sealing")
   void aKeyOfTheWrongSizeIsRefusedWhenSealing() {
     assertThatThrownBy(() -> Crypto.seal(new byte[5], PLAIN, "tok_1")).isInstanceOf(IllegalStateException.class).hasMessage("Encryption failed");
   }
 
   @Test
+  @DisplayName("A key of the wrong size is refused when opening")
   void aKeyOfTheWrongSizeIsRefusedWhenOpening() {
     byte[] sealed = Crypto.seal(Crypto.random(32), PLAIN, "tok_1");
     assertThatThrownBy(() -> Crypto.open(new byte[5], sealed, "tok_1")).isInstanceOf(IllegalStateException.class).hasMessage("Decryption failed");
   }
 
   @Test
+  @DisplayName("The local key service names itself as the demo key and wraps and unwraps with the context")
   void theLocalKeyServiceNamesItselfAsTheDemoKeyAndWrapsAndUnwrapsWithTheContext() {
     LocalKeyService service = new LocalKeyService();
     DataKey key = service.newDataKey("tok_1");
@@ -32,6 +37,7 @@ class CryptoFailureTest {
   }
 
   @Test
+  @DisplayName("The KMS client is built from the default AWS chain, with no keys in configuration")
   void theKmsClientIsBuiltFromTheDefaultAwsChainWithNoKeysInConfiguration() {
     String[] names = {"aws.region", "aws.accessKeyId", "aws.secretAccessKey"};
     String[] before = new String[names.length];
@@ -49,6 +55,7 @@ class CryptoFailureTest {
   }
 
   @Test
+  @DisplayName("A fingerprint is stable, short and not the value")
   void aFingerprintIsStableShortAndNotTheValue() {
     assertThat(Fingerprint.of("tok_abc")).isEqualTo(Fingerprint.of("tok_abc")).hasSize(16).doesNotContain("tok_abc");
     assertThat(Fingerprint.of("tok_abc")).isNotEqualTo(Fingerprint.of("tok_abd"));

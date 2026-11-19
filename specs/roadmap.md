@@ -74,6 +74,16 @@ Status: done 2026-11-19
   - the hotel's OPERA settings have no default.
 - The fourth finding (folio history) waits for a sandbox (Next 4).
 
+## Phase 18 - Readable test names, and the review's smaller findings
+Status: done 2026-11-19
+- Every test and test class says in a `@DisplayName` sentence what it proves, enforced by the build. The build also enforces that the count of lines over 150 characters only goes down, and that every version in the pom is a property.
+- The OHIP review's smaller findings are fixed:
+  - UTF-8 Basic credentials, as Oracle documents them;
+  - the full token reason;
+  - the simulator's rooms and repeated bookings;
+  - phase 16's long lines;
+  - agent log 52's test.
+
 ## Next
 1. Multi-tenancy: operators and properties on every row, credential and webhook; per-property settings; data residency (`docs/architecture.md` section 9).
 2. Hosted card entry and 3-D Secure, so the card number never reaches the service; chargeback evidence.

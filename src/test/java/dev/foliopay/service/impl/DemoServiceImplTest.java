@@ -16,9 +16,11 @@ import dev.foliopay.repository.CardTokenRepository;
 import dev.foliopay.service.DemoService.SimCommand;
 import java.time.Clock;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("Demo controls: the fakes' state, faults and the vault view")
 class DemoServiceImplTest {
   private final FakePsp psp = new FakePsp();
   private final FakeOpera opera = new FakeOpera(Clock.systemUTC());
@@ -37,6 +39,7 @@ class DemoServiceImplTest {
   private DemoServiceImpl withoutFakes() { return new DemoServiceImpl(provider(null), provider(null), logs, tokens); }
 
   @Test
+  @DisplayName("Reports the state of the in-memory fakes")
   void reportsTheStateOfTheInMemoryFakes() {
     psp.capture("k:cap", "auth", new Money(2_500, "USD"));
     var state = withFakes().state();
@@ -48,6 +51,7 @@ class DemoServiceImplTest {
   }
 
   @Test
+  @DisplayName("Arms faults and resets everything")
   void armsFaultsAndResetsEverything() {
     DemoServiceImpl service = withFakes();
     var armed = service.apply(new SimCommand("DOWN", "DECLINE_NEXT", false));
@@ -62,17 +66,20 @@ class DemoServiceImplTest {
   }
 
   @Test
+  @DisplayName("A command with nothing in it changes nothing")
   void aCommandWithNothingInItChangesNothing() {
     assertThat(withFakes().apply(new SimCommand(null, null, false)).opera()).isEqualTo("NONE");
   }
 
   @Test
+  @DisplayName("An unknown fault is refused, and its name is sanitised in the message")
   void anUnknownFaultIsRefusedAndTheNameIsSanitisedInTheMessage() {
     assertThatThrownBy(() -> withFakes().apply(new SimCommand("DO\nWN!", null, false)))
         .isInstanceOf(InvalidRequestException.class).hasMessageContaining("Unknown fault").message().doesNotContain("\n").doesNotContain("!");
   }
 
   @Test
+  @DisplayName("When the outside world is separate, the state says so and the faults cannot be armed here")
   void whenTheOutsideWorldIsSeparateTheStateSaysSoAndTheFaultsCannotBeArmedHere() {
     DemoServiceImpl service = withoutFakes();
     assertThat(service.state().opera()).isEqualTo("EXTERNAL");
@@ -80,6 +87,7 @@ class DemoServiceImplTest {
   }
 
   @Test
+  @DisplayName("Shows what the vault stores as short hex previews, never any digit of the number")
   void showsWhatTheVaultStoresAsShortHexPreviewsAndNeverAnyDigitsOfTheNumber() {
     byte[] sealed = new byte[60];
     java.util.Arrays.fill(sealed, (byte) 0xAB);
@@ -97,6 +105,7 @@ class DemoServiceImplTest {
   }
 
   @Test
+  @DisplayName("Returns the recent log lines")
   void returnsTheRecentLogLines() {
     logs.add("one");
     logs.add("two");

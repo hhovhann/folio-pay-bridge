@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import software.amazon.awssdk.core.SdkBytes;
@@ -18,6 +19,7 @@ import software.amazon.awssdk.services.kms.model.GenerateDataKeyRequest;
 import software.amazon.awssdk.services.kms.model.GenerateDataKeyResponse;
 
 /** Checks how the adapter talks to KMS against a stubbed client. It is NOT run against real AWS: see docs/aws-deployment.md section 5. */
+@DisplayName("KMS key service: how the adapter talks to KMS, against a stubbed client")
 class KmsKeyServiceTest {
   private static final byte[] PLAIN = new byte[32];
   private static final byte[] WRAPPED = {1, 2, 3};
@@ -26,6 +28,7 @@ class KmsKeyServiceTest {
   private final KmsKeyService service = new KmsKeyService(kms, "alias/cards");
 
   @Test
+  @DisplayName("Asks KMS for an AES-256 key bound to the token")
   void asksKmsForAnAes256KeyBoundToTheToken() {
     when(kms.generateDataKey(any(GenerateDataKeyRequest.class)))
         .thenReturn(GenerateDataKeyResponse.builder().plaintext(SdkBytes.fromByteArray(PLAIN)).ciphertextBlob(SdkBytes.fromByteArray(WRAPPED)).keyId(KEY_ARN).build());
@@ -42,6 +45,7 @@ class KmsKeyServiceTest {
   }
 
   @Test
+  @DisplayName("Unwraps with the same encryption context")
   void unwrapsWithTheSameEncryptionContext() {
     when(kms.decrypt(any(DecryptRequest.class))).thenReturn(DecryptResponse.builder().plaintext(SdkBytes.fromByteArray(PLAIN)).build());
 
@@ -54,6 +58,7 @@ class KmsKeyServiceTest {
 
   /** Fails if decryption names the configured alias: after the alias moves to a new key, every older card would be unreadable. */
   @Test
+  @DisplayName("A card wrapped before the key alias moved is decrypted with the key that wrapped it")
   void aCardWrappedBeforeTheAliasMovedIsDecryptedWithTheKeyThatWrappedIt() {
     when(kms.decrypt(any(DecryptRequest.class))).thenReturn(DecryptResponse.builder().plaintext(SdkBytes.fromByteArray(PLAIN)).build());
 

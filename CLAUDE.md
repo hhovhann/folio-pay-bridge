@@ -21,17 +21,18 @@ This is a payments codebase in miniature. Treat every change as one that touches
 
 ## How to work
 - One phase at a time; write the test first; tick a box in `validation.md` only after running the check it names.
+- Every test and test class has a `@DisplayName`: a sentence that says what it proves. The method name stays the id that specs cite.
 - Run `python3 tools/check_specs.py` before you finish.
 - Add to `docs/agent-log.md` anything an agent got wrong and how it was caught. Do not invent entries, and do not write "now fixed" unless the entry names the test or command that proves it.
 - Close the loop: every agent-log entry is cited, as `(log N)`, by the rule in `docs/engineering-standards.md` or the test that now prevents it; `tools/check_specs.py` fails otherwise. Prefer a test or a tool over a written rule: the mistakes that stopped repeating are the ones a build catches.
 
 ## Structure (see D-14)
-`api` (controllers, DTOs, error handler) -> `service` (interfaces) + `service.impl` -> `domain` (entities, `Money`, rules, exceptions), `repository`, `gateway` (ports; HTTP adapters in `gateway.http`, fakes in `gateway.fake`), `crypto`; `config` (filters, retries, the webhook relay) and `config.security` (who may call what). The operator dashboard lives in `dashboard/` (React + TypeScript) and calls only the public API. A schema change is a new Flyway migration in `src/main/resources/db/migration`, never an edit of an applied one. A controller never touches a repository; a service never touches HTTP (`ArchitectureTest` fails the build otherwise, and `CodeConventionsTest` checks imports, braces, injection and console output). The public API is versioned in the path (`ApiPaths.V1` = `/api/v1`, D-39): inside a version only additive changes; a breaking change is a new version, and the old endpoint gets `@ApiDeprecation`. Errors are RFC 9457 problem details with a stable `code` (D-29). New behaviour: interface first, impl package-private, a unit test with test doubles, and an integration test only for what needs the real database.
+`api` (controllers, DTOs, error handler) -> `service` (interfaces) + `service.impl` -> `domain` (entities, `Money`, rules, exceptions), `repository`, `gateway` (ports; HTTP adapters in `gateway.http`, fakes in `gateway.fake`), `crypto`; `config` (filters, retries, the webhook relay) and `config.security` (who may call what). The operator dashboard lives in `dashboard/` (React + TypeScript) and calls only the public API. A schema change is a new Flyway migration in `src/main/resources/db/migration`, never an edit of an applied one. A controller never touches a repository; a service never touches HTTP (`ArchitectureTest` fails the build otherwise, and `CodeConventionsTest` checks imports, braces, injection, console output, a display name on every test, the count of lines over 150 characters and inline versions in the pom). The public API is versioned in the path (`ApiPaths.V1` = `/api/v1`, D-39): inside a version only additive changes; a breaking change is a new version, and the old endpoint gets `@ApiDeprecation`. Errors are RFC 9457 problem details with a stable `code` (D-29). New behaviour: interface first, impl package-private, a unit test with test doubles, and an integration test only for what needs the real database.
 
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 452 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 458 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)

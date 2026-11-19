@@ -5,14 +5,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.foliopay.Fixtures;
 import dev.foliopay.domain.model.Posting.FailureCategory;
 import java.time.LocalDate;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** The state rules of the money records: what a request must match, which state wins a race, and what each transition clears. */
+@DisplayName("Money records: the state rules of charges, postings, links and stored cards")
 class EntityStateTest {
   private static final Money TEN = new Money(1_000, "USD");
   private static final LocalDate DAY = Fixtures.DAY;
 
   @Test
+  @DisplayName("A charge matches a repeat only when every field that decides where the money goes is the same")
   void aChargeMatchesARepeatOnlyWhenEveryFieldThatDecidesWhereTheMoneyGoesIsTheSame() {
     Charge charge = new Charge(Charge.BRIDGE_CLIENT, "k", "BK-1", "F-1", DAY, "tok_1", TEN);
     assertThat(charge.matches("BK-1", "F-1", DAY, "tok_1", TEN)).isTrue();
@@ -27,6 +30,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("A capture beats a decline, which beats pending")
   void aCaptureBeatsADeclineWhichBeatsPending() {
     Charge pending = Fixtures.charge("k", "BK", "tok", TEN);
     Charge declined = Fixtures.charge("k", "BK", "tok", TEN);
@@ -43,6 +47,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("Adopting a capture carries the result and never lowers the attempt count")
   void adoptingACaptureCarriesTheResultAndNeverLowersTheAttemptCount() {
     Charge stored = Fixtures.charge("k", "BK", "tok", TEN);
     stored.recordFailedAttempt("timeout");
@@ -59,6 +64,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("A charge exposes what it was created with")
   void aChargeExposesWhatItWasCreatedWith() {
     Charge charge = new Charge(Charge.BRIDGE_CLIENT, "k", "BK-1", "F-1", DAY, "tok_1", TEN);
     assertThat(charge.getId()).isNotBlank();
@@ -76,6 +82,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("Posted beats a dead letter, which beats pending")
   void aPostedBeatsADeadLetterWhichBeatsPending() {
     Posting pending = Fixtures.posting("p", "c", "F", TEN, DAY);
     Posting dead = Fixtures.posting("p", "c", "F", TEN, DAY);
@@ -91,6 +98,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("Adopting a post carries it and clears the failure")
   void adoptingAPostCarriesItAndClearsTheFailure() {
     Posting stored = Fixtures.posting("p", "c", "F", TEN, DAY);
     stored.recordAttempt();
@@ -108,6 +116,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("A posting exposes what it was created with and knows when it is rejected")
   void aPostingExposesWhatItWasCreatedWithAndKnowsWhenItIsRejected() {
     Posting posting = new Posting("post:c", "c", "RES-1", TEN, DAY, "cap_1");
     assertThat(posting.getChargeId()).isEqualTo("c");
@@ -125,6 +134,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("A payment link moves through its states and frees its booking slot when closed")
   void aPaymentLinkMovesThroughItsStatesAndFreesItsBookingSlotWhenClosed() {
     PaymentLink link = new PaymentLink("B1", "RES-B1", TEN, DAY, "reason");
     assertThat(link.isOpen()).isTrue();
@@ -153,6 +163,7 @@ class EntityStateTest {
   }
 
   @Test
+  @DisplayName("A stored card keeps only what PCI allows, and when it was stored")
   void aStoredCardKeepsOnlyWhatPciAllowsAndWhenItWasStored() {
     CardToken card = new CardToken("tok_1", new byte[] {1}, new byte[] {2}, "k", new Pan("4111111111111111"), "12/29");
     assertThat(card.getToken()).isEqualTo("tok_1");

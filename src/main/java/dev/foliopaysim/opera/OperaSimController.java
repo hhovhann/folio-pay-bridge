@@ -42,7 +42,8 @@ import org.springframework.web.client.RestClientException;
 @Profile("opera")
 class OperaSimController {
   private static final long TIMEOUT_AFTER_POST_MILLIS = 4_000;
-  private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
+  private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
+      .configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
   private final OperaSimulator pms;
   private final String bridgeUrl;
   private final Clock clock;
@@ -57,20 +58,24 @@ class OperaSimController {
   // ---- OHIP: authentication (getToken)
   /** Client credentials: the client id and secret as HTTP Basic, the application key and enterprise id as headers, a scope in the form. */
   @PostMapping(value = "/oauth/v1/tokens", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
-  ResponseEntity<Object> token(@RequestHeader(value = "x-app-key", required = false) String appKey, @RequestHeader(value = "enterpriseId", required = false) String enterpriseId,
+  ResponseEntity<Object> token(@RequestHeader(value = "x-app-key", required = false) String appKey,
+                               @RequestHeader(value = "enterpriseId", required = false) String enterpriseId,
                                @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
-                               @RequestParam(value = "grant_type", required = false) String grantType, @RequestParam(value = "scope", required = false) String scope) {
+                               @RequestParam(value = "grant_type", required = false) String grantType,
+                               @RequestParam(value = "scope", required = false) String scope) {
     if (pms.fault() == OperaSimulator.Fault.DOWN) {
       return problem(HttpStatus.SERVICE_UNAVAILABLE, "PMS_UNAVAILABLE", "OPERA is down");
     }
     if (!"client_credentials".equals(grantType) || scope == null || scope.isBlank()) {
-      return ResponseEntity.badRequest().body(Map.of("error", "invalid_request", "error_description", "grant_type client_credentials and a scope are required"));
+      return ResponseEntity.badRequest()
+          .body(Map.of("error", "invalid_request", "error_description", "grant_type client_credentials and a scope are required"));
     }
     String[] basic = basic(authorization);
     return pms.issueToken(appKey, enterpriseId, basic[0], basic[1])
-        .<ResponseEntity<Object>>map(t -> ResponseEntity.ok(Map.of("access_token", t.value(), "token_type", "Bearer", "expires_in", pms.tokenTtlSeconds(),
-            "oracle_tk_context", "user_assertion")))
-        .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "invalid_client", "error_description", "Bad application key, enterprise or client credentials")));
+        .<ResponseEntity<Object>>map(t -> ResponseEntity.ok(Map.of("access_token", t.value(), "token_type", "Bearer",
+            "expires_in", pms.tokenTtlSeconds(), "oracle_tk_context", "user_assertion")))
+        .orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .body(Map.of("error", "invalid_client", "error_description", "Bad application key, enterprise or client credentials")));
   }
 
   private static String[] basic(String authorization) {
@@ -85,7 +90,8 @@ class OperaSimController {
 
   // ---- OHIP: back office (getBusinessDate)
   @GetMapping("/bof/v1/hotels/{hotelId}/businessDate")
-  ResponseEntity<Object> businessDate(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization, @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
+  ResponseEntity<Object> businessDate(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                                      @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
                                       @RequestHeader(value = "x-app-key", required = false) String appKeyHeader, @PathVariable String hotelId) {
     ResponseEntity<Object> refused = guard(authorization, hotelHeader, appKeyHeader, hotelId);
     if (refused != null) {
@@ -98,15 +104,18 @@ class OperaSimController {
 
   // ---- OHIP: cashiering (postBillingPayment, getFolio)
   @PostMapping("/csh/v1/hotels/{hotelId}/reservations/{reservationId}/payments")
-  ResponseEntity<Object> postPayment(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization, @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
-                                     @RequestHeader(value = "x-app-key", required = false) String appKeyHeader, @PathVariable String hotelId, @PathVariable String reservationId,
+  ResponseEntity<Object> postPayment(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                                     @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
+                                     @RequestHeader(value = "x-app-key", required = false) String appKeyHeader,
+                                     @PathVariable String hotelId, @PathVariable String reservationId,
                                      @RequestBody String body) throws InterruptedException {
     ResponseEntity<Object> refused = guard(authorization, hotelHeader, appKeyHeader, hotelId);
     if (refused != null) {
       return refused;
     }
     if (pms.consume(OperaSimulator.Fault.THROTTLE_NEXT)) {
-      return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header(HttpHeaders.RETRY_AFTER, "1").body(Map.of("title", "Too Many Requests", "status", 429));
+      return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).header(HttpHeaders.RETRY_AFTER, "1")
+          .body(Map.of("title", "Too Many Requests", "status", 429));
     }
     if (pms.consume(OperaSimulator.Fault.LOCK_CONFLICT_NEXT)) {
       return problem(HttpStatus.CONFLICT, "RESERVATION_LOCKED", "Another workstation is editing this reservation");
@@ -145,7 +154,8 @@ class OperaSimController {
     }
     ObjectNode reply = JSON.createObjectNode();
     postingJson(reply.putArray("postings"), posting);
-    return ResponseEntity.status(HttpStatus.CREATED).header(HttpHeaders.LOCATION, "/csh/v1/hotels/" + hotelId + "/reservations/" + reservationId + "/folios").body(reply);
+    String folio = "/csh/v1/hotels/" + hotelId + "/reservations/" + reservationId + "/folios";
+    return ResponseEntity.status(HttpStatus.CREATED).header(HttpHeaders.LOCATION, folio).body(reply);
   }
 
   /**
@@ -171,7 +181,8 @@ class OperaSimController {
     }
     ObjectNode body = JSON.createObjectNode();
     ObjectNode info = body.putObject("reservationFolioInformation");
-    info.putObject("reservationInfo").put("hotelId", hotelId).putArray("reservationIdList").addObject().put("id", reservationId).put("type", "Reservation");
+    info.putObject("reservationInfo").put("hotelId", hotelId)
+        .putArray("reservationIdList").addObject().put("id", reservationId).put("type", "Reservation");
     ArrayNode windows = info.putArray("folioWindows");
     List<OperaSimulator.Posting> postings = pms.folio(reservationId);
     String currency = reservation.get().currency();
@@ -208,7 +219,8 @@ class OperaSimController {
     line.put("transactionCode", p.code());
     line.put("transactionDescription", p.description());
     line.putObject("postedAmount").putRawValue("amount", new RawValue(p.amount())).put("currencyCode", p.currency());
-    line.putObject(p.type().equals("Payment") ? "creditAmount" : "debitAmount").putRawValue("amount", new RawValue(p.amount())).put("currencyCode", p.currency());
+    String side = p.type().equals("Payment") ? "creditAmount" : "debitAmount";
+    line.putObject(side).putRawValue("amount", new RawValue(p.amount())).put("currencyCode", p.currency());
     line.put("reference", p.reference());
     line.put("remark", p.remark());
     line.put("folioWindowNo", p.folioWindowNo());
@@ -236,10 +248,11 @@ class OperaSimController {
     }
     LocalDate arrival = LocalDate.now(clock).plusDays(request.arrivalInDays());
     pms.book(request.bookingRef(), "Synthetic guest " + request.bookingRef(), arrival, 2, request.totalMinor(), "USD");
-    Map<String, Object> event = Map.of("type", "NEW", "bookingRef", request.bookingRef(), "folioId", request.bookingRef(), "ratePlan", request.ratePlan(),
-        "arrival", arrival.toString(), "totalMinor", request.totalMinor(), "currency", "USD");
+    Map<String, Object> event = Map.of("type", "NEW", "bookingRef", request.bookingRef(), "folioId", request.bookingRef(),
+        "ratePlan", request.ratePlan(), "arrival", arrival.toString(), "totalMinor", request.totalMinor(), "currency", "USD");
     try {
-      Map<?, ?> reply = bridge.post().uri(bridgeUrl + "/api/v1/booking-events").contentType(MediaType.APPLICATION_JSON).body(event).retrieve().body(Map.class);
+      Map<?, ?> reply = bridge.post().uri(bridgeUrl + "/api/v1/booking-events").contentType(MediaType.APPLICATION_JSON).body(event)
+          .retrieve().body(Map.class);
       return Map.of("note", "Bridge answered: " + reply.get("note"));
     } catch (RestClientException e) {
       return Map.of("error", "The bridge did not accept the event");
@@ -251,8 +264,10 @@ class OperaSimController {
 
   @GetMapping("/sim/reservations/{id}/folio")
   ResponseEntity<Object> frontDeskFolio(@PathVariable String id) {
-    return pms.reservation(id).<ResponseEntity<Object>>map(r -> ResponseEntity.ok(Map.of("reservation", r, "balance", OperaSimulator.decimal(pms.balanceMinor(id, 1), r.currency()),
-        "postings", pms.folio(id).stream().map(OperaSimulator::row).toList()))).orElseGet(() -> problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "No such reservation"));
+    return pms.reservation(id).<ResponseEntity<Object>>map(r -> ResponseEntity.ok(Map.of("reservation", r,
+            "balance", OperaSimulator.decimal(pms.balanceMinor(id, 1), r.currency()),
+            "postings", pms.folio(id).stream().map(OperaSimulator::row).toList())))
+        .orElseGet(() -> problem(HttpStatus.NOT_FOUND, "RESERVATION_NOT_FOUND", "No such reservation"));
   }
 
   @PostMapping("/sim/reservations/{id}/check-in")
@@ -263,11 +278,13 @@ class OperaSimController {
 
   @PostMapping("/sim/reservations/{id}/room-charge")
   ResponseEntity<Object> roomCharge(@PathVariable String id) {
-    return frontDesk(pms.postRoomCharge(id, 100L).isPresent() ? Optional.empty() : Optional.of("Room charges post only to an in-house guest with a rate"));
+    boolean posted = pms.postRoomCharge(id, 100L).isPresent();
+    return frontDesk(posted ? Optional.empty() : Optional.of("Room charges post only to an in-house guest with a rate"));
   }
 
   private ResponseEntity<Object> frontDesk(Optional<String> refusal) {
-    return refusal.<ResponseEntity<Object>>map(reason -> problem(HttpStatus.BAD_REQUEST, "FRONT_DESK_REFUSED", reason)).orElseGet(() -> ResponseEntity.ok(pms.state()));
+    return refusal.<ResponseEntity<Object>>map(reason -> problem(HttpStatus.BAD_REQUEST, "FRONT_DESK_REFUSED", reason))
+        .orElseGet(() -> ResponseEntity.ok(pms.state()));
   }
 
   @PostMapping("/sim/faults")

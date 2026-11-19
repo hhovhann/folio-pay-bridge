@@ -15,9 +15,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** The in-memory stand-ins behave the way the real systems do where the bridge depends on it. */
+@DisplayName("In-memory fakes: behave like the real processor and PMS where the bridge depends on it")
 class FakeGatewaysTest {
   private static final Money TEN = new Money(1_000, "USD");
   private static final LocalDate DAY = LocalDate.of(2026, 11, 17);
@@ -29,6 +31,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The fake processor deduplicates by key and counts each capture once")
   void theProcessorDeduplicatesByKeyAndCountsEachCaptureOnce() {
     var first = psp.capture("k:cap", "auth", TEN);
     var again = psp.capture("k:cap", "auth", TEN);
@@ -38,6 +41,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The fake processor can decline an authorisation or a capture, once")
   void theProcessorCanDeclineAnAuthorisationOrACaptureOnce() {
     psp.arm(FakePsp.Fault.DECLINE_NEXT);
     assertThat(psp.armed()).isEqualTo(FakePsp.Fault.DECLINE_NEXT);
@@ -50,6 +54,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The fake processor can capture and then lose the reply, once")
   void theProcessorCanCaptureAndThenLoseTheReplyOnce() {
     psp.arm(FakePsp.Fault.TIMEOUT_AFTER_CAPTURE);
     assertThatThrownBy(() -> psp.capture("c", "auth", TEN)).isInstanceOf(PspTransientException.class);
@@ -59,6 +64,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The settlement statement lists captures in reference order with their currency")
   void theSettlementStatementListsCapturesInReferenceOrderWithTheirCurrency() {
     psp.capture("b", "auth", new Money(200, "EUR"));
     psp.capture("a", "auth", TEN);
@@ -68,6 +74,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("Voiding is counted, and reset clears everything")
   void voidingIsCountedAndResetClearsEverything() {
     psp.voidAuthorization("v", "auth_1");
     psp.capture("c", "auth", TEN);
@@ -83,6 +90,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The fake OPERA posts payments, finds them by reference and reports the clock's date as its business date")
   void operaPostsPaymentsAndFindsThemByReferenceAndReportsTheClockDateAsItsBusinessDate() {
     String ref = opera.postPayment(payment("RES-1", "post:1", "CC", 9001));
     assertThat(ref).startsWith("OP-");
@@ -95,6 +103,7 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The fake OPERA's business date can be moved like a night audit and reset back")
   void operaBusinessDateCanBeSetLikeANightAuditAndResetBack() {
     opera.setBusinessDate(DAY.minusDays(1));
     assertThat(opera.businessDate("H1")).isEqualTo(DAY.minusDays(1));
@@ -103,14 +112,17 @@ class FakeGatewaysTest {
   }
 
   @Test
+  @DisplayName("The fake OPERA rejects a closed folio and a payment without a payment method or cashier")
   void operaRejectsAClosedFolioAndAPaymentWithoutACodeOrCashier() {
-    assertThatThrownBy(() -> opera.postPayment(payment("F-CLOSED", "r1", "CC", 9001))).isInstanceOf(OperaRejectedException.class).hasMessageContaining("closed");
+    assertThatThrownBy(() -> opera.postPayment(payment("F-CLOSED", "r1", "CC", 9001)))
+        .isInstanceOf(OperaRejectedException.class).hasMessageContaining("closed");
     assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r2", "", 9001))).isInstanceOf(OperaRejectedException.class);
     assertThatThrownBy(() -> opera.postPayment(payment("RES-1", "r3", "CC", 0))).isInstanceOf(OperaRejectedException.class);
     assertThat(opera.postCount()).isZero();
   }
 
   @Test
+  @DisplayName("The fake OPERA can be down, or post and then lose the reply")
   void operaCanBeDownOrPostAndThenLoseTheReply() {
     opera.arm(FakeOpera.Fault.DOWN);
     assertThat(opera.armed()).isEqualTo(FakeOpera.Fault.DOWN);

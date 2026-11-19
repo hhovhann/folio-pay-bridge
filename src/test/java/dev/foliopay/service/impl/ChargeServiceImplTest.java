@@ -37,11 +37,13 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Pure unit test: the repository, vault and processor are test doubles; the retry is the real Resilience4j one with a 1ms wait. */
+@DisplayName("Charges: authorise, capture, retry and decline, with test doubles")
 class ChargeServiceImplTest {
   private static final Money TEN = new Money(1_000, "USD");
   private static final Pan PAN = new Pan("4111111111111111");
@@ -90,6 +92,7 @@ class ChargeServiceImplTest {
   private void noExistingCharge() { when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.empty()); }
 
   @Test
+  @DisplayName("Authorises, then captures, and stores the processor reference")
   void authorisesThenCapturesAndStoresTheProcessorReference() {
     noExistingCharge();
     when(psp.authorize(endsWith(":auth"), any(), eq("12/29"), eq(TEN))).thenReturn(new PspResult("auth_1"));
@@ -105,6 +108,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A transient failure is retried with the same key until it succeeds")
   void aTransientFailureIsRetriedWithTheSameKeyUntilItSucceeds() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -118,6 +122,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("When retries run out, the charge stays pending so the same key can try again")
   void whenRetriesRunOutTheChargeStaysPendingSoTheSameKeyCanTryAgain() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -132,6 +137,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A capture declined after authorisation releases the hold")
   void aCaptureDeclinedAfterAuthorisationReleasesTheHold() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -144,6 +150,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("An unknown card token is refused before anything is stored or sent")
   void anUnknownCardTokenIsRefusedBeforeAnythingIsStoredOrSent() {
     vault.known = false;
     assertThatThrownBy(() -> service.charge(command())).isInstanceOf(InvalidRequestException.class).hasMessageContaining("Unknown card token");
@@ -152,6 +159,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A hold that cannot be released does not hide the decline")
   void aHoldThatCannotBeReleasedDoesNotHideTheDecline() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -162,6 +170,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A request that loses the race carries its capture onto whatever is stored pending")
   void aRequestThatLosesTheRaceCarriesItsCaptureOntoWhateverIsStoredPending() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -178,6 +187,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A request that loses the race to a finished charge returns the finished one")
   void aRequestThatLosesTheRaceToAFinishedChargeReturnsTheFinishedOne() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -191,6 +201,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A decline at authorisation has nothing to release")
   void aDeclineAtAuthorisationHasNothingToRelease() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenThrow(new PspDeclinedException("Do not honor"));
@@ -199,6 +210,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("The same key with a different folio or business date is a conflict, not a silent replay of the first")
   void theSameKeyWithADifferentFolioOrBusinessDateIsAConflictNotASilentReplayOfTheFirst() {
     when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
 
@@ -209,6 +221,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A new charge without a date takes the hotel's business date from the PMS")
   void aNewChargeWithoutADateTakesTheHotelsBusinessDateFromThePms() {
     noExistingCharge();
     when(businessDates.resolve(null)).thenReturn(Fixtures.DAY.plusDays(3));
@@ -221,6 +234,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A pending charge is resumed after night audit when the repeat names no date, and keeps its own date")
   void aPendingChargeIsResumedAfterNightAuditWhenTheRepeatNamesNoDateAndKeepsItsOwnDate() {
     Charge pending = Fixtures.charge("key-1", "BK-1", "tok_1", TEN); // taken on DAY, the capture reply was lost
     when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(pending));
@@ -237,6 +251,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A decline is final and not retried")
   void aDeclineIsFinalAndNotRetried() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenThrow(new PspDeclinedException("Do not honor"));
@@ -249,6 +264,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("The card number is not held while a retry waits or during capture")
   void theCardNumberIsNotHeldWhileARetryWaitsOrDuringCapture() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any()))
@@ -263,6 +279,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A captured charge is returned without touching the processor")
   void aCapturedChargeIsReturnedWithoutTouchingTheProcessor() {
     Charge done = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
     done.markCaptured("cap_1");
@@ -273,6 +290,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("The same key with a different amount is a conflict and never reaches the processor")
   void theSameKeyWithADifferentAmountIsAConflictAndNeverReachesTheProcessor() {
     Charge existing = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
     when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(existing));
@@ -283,12 +301,14 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("The same key with a different card is a conflict")
   void theSameKeyWithADifferentCardIsAConflict() {
     when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
     assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_other", TEN))).isInstanceOf(ConflictException.class);
   }
 
   @Test
+  @DisplayName("A zero amount is refused before anything is stored")
   void aZeroAmountIsRefusedBeforeAnythingIsStored() {
     assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_1", new Money(0, "USD")))).isInstanceOf(InvalidRequestException.class);
     verifyNoInteractions(repository, psp);
@@ -296,6 +316,7 @@ class ChargeServiceImplTest {
 
   /** Fails if a refusal of the request (not the card) escapes uncaught: nothing saved, the hold never released, a 500 on every retry. */
   @Test
+  @DisplayName("A capture the processor refuses is final and releases the hold")
   void aCaptureTheProcessorRefusesIsFinalAndReleasesTheHold() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -312,6 +333,7 @@ class ChargeServiceImplTest {
 
   /** Fails if an unexpected error is dropped (nothing saved) or treated as a decline (the hold released although the capture may have landed). */
   @Test
+  @DisplayName("An unexpected error is saved as pending and keeps the hold, because the capture may have happened")
   void anUnexpectedErrorIsSavedAsPendingAndKeepsTheHoldBecauseTheCaptureMayHaveHappened() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -327,6 +349,7 @@ class ChargeServiceImplTest {
 
   /** Fails if a success without a reference is recorded as captured (blank reference) or declined (the hold released): it may have happened. */
   @Test
+  @DisplayName("A capture answered without a reference stays pending and keeps the hold")
   void aCaptureAnsweredWithoutAReferenceStaysPendingAndKeepsTheHold() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -343,6 +366,7 @@ class ChargeServiceImplTest {
 
   /** Fails if the lookup ignores the client: another client's charge under the same key would be returned (and its result read). */
   @Test
+  @DisplayName("A key is looked up in the caller's own namespace")
   void aKeyIsLookedUpInTheCallersOwnNamespace() {
     when(repository.findByClientIdAndIdempotencyKey("client-b", "key-1")).thenReturn(Optional.empty());
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
@@ -356,6 +380,7 @@ class ChargeServiceImplTest {
 
   /** How a caller learns whether money moved after a failed request: by its own key, never by another client's. */
   @Test
+  @DisplayName("A stored charge is found under its client and key")
   void aStoredChargeIsFoundUnderItsClientAndKey() {
     Charge stored = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
     when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(stored));
@@ -365,6 +390,7 @@ class ChargeServiceImplTest {
   }
 
   @Test
+  @DisplayName("A new charge looks its key up once before inserting")
   void aNewChargeLooksItsKeyUpOnceBeforeInserting() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));

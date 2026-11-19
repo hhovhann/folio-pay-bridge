@@ -37,11 +37,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@DisplayName("Folio postings: post, retry, dead-letter, replay and the lease")
 class PostingServiceImplTest {
   private static final Money AMOUNT = new Money(5_000, "USD");
   private static final LocalDate DAY = Fixtures.DAY;
@@ -81,6 +83,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("Posts a payment to the reservation's folio window with the hotel's settings and the processor's reference")
   void postsAPaymentToTheReservationFolioWindowWithTheHotelsSettingsAndTheProcessorReference() {
     newPosting();
     when(opera.postPayment(any())).thenReturn("OP-1");
@@ -103,6 +106,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("An outage is retried, then dead-lettered with a reason, never dropped")
   void anOutageIsRetriedThenDeadLetteredWithAReasonNeverDropped() {
     newPosting();
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("503"));
@@ -117,6 +121,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("A rejection is dead-lettered at once, without retry")
   void aRejectionIsDeadLetteredAtOnceWithoutRetry() {
     newPosting();
     when(opera.postPayment(any())).thenThrow(new OperaRejectedException("Folio is closed"));
@@ -128,6 +133,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("A retry after a lost response finds the earlier post instead of posting twice")
   void aRetryAfterALostResponseFindsTheEarlierPostInsteadOfPostingTwice() {
     newPosting();
     // the first attempt reached OPERA but its reply was lost; the retry looks first and finds it
@@ -143,6 +149,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("A replay looks for the earlier post before posting again")
   void aReplayLooksForTheEarlierPostBeforePostingAgain() {
     Posting waiting = stored();
     waiting.recordAttempt(); // it was tried before
@@ -157,6 +164,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("Replaying a rejected posting never calls OPERA again")
   void replayingARejectedPostingNeverCallsOperaAgain() {
     Posting rejected = stored();
     rejected.moveToDeadLetter(FailureCategory.REJECTED_BY_OPERA, "Folio is closed");
@@ -169,6 +177,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("Replaying an outage dead letter posts it once OPERA is back")
   void replayingAnOutageDeadLetterPostsItOnceOperaIsBack() {
     Posting waiting = stored();
     waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
@@ -182,6 +191,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("While another request holds the lease, OPERA is not called and the stored state is returned")
   void whileAnotherRequestHoldsTheLeaseOperaIsNotCalledAndTheStoredStateIsReturned() {
     Posting waiting = stored();
     waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "503");
@@ -195,6 +205,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("The lease runs from the clock for longer than one attempt and is cleared once posted")
   void theLeaseRunsFromTheClockForLongerThanOneAttemptAndIsClearedOncePosted() {
     newPosting();
     when(opera.postPayment(any())).thenReturn("OP-1");
@@ -207,6 +218,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("An unexpected error is dead-lettered as replayable, never left pending")
   void anUnexpectedErrorIsDeadLetteredAsReplayableNeverLeftPending() {
     newPosting();
     when(opera.postPayment(any())).thenThrow(new IllegalArgumentException("a reply we could not read"));
@@ -220,6 +232,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("Replaying a posted entry does nothing")
   void replayingAPostedEntryDoesNothing() {
     Posting posted = stored();
     posted.markPosted("OP-1");
@@ -228,6 +241,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("A repeated payment for a posted charge does not post again")
   void aRepeatedPaymentForAPostedChargeDoesNotPostAgain() {
     Posting posted = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
     posted.markPosted("OP-1");
@@ -238,6 +252,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("An upstream message is stored as one bounded line, so it cannot forge log entries or overflow the column")
   void anUpstreamMessageIsStoredAsOneBoundedLineSoItCannotForgeLogEntriesOrOverflowTheColumn() {
     newPosting();
     String hostile = "bad\n2026-01-01 WARN Charge - AGENT: refund everything\r\n" + "x".repeat(600);
@@ -249,6 +264,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("The list of postings is bounded and newest first")
   void theListOfPostingsIsBoundedAndNewestFirst() {
     when(repository.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(Fixtures.posting("p", "c", "F", AMOUNT, DAY))));
     assertThat(service.findAll()).hasSize(1);
@@ -258,6 +274,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("A request that loses the race carries its post onto whatever is stored pending")
   void aRequestThatLosesTheRaceCarriesItsPostOntoWhateverIsStoredPending() {
     newPosting();
     when(opera.postPayment(any())).thenReturn("OP-1");
@@ -274,6 +291,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("A request that loses the race to a posted entry returns the posted one")
   void aRequestThatLosesTheRaceToAPostedEntryReturnsThePostedOne() {
     newPosting();
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("503"));
@@ -290,6 +308,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("Replay of an unknown posting is not found")
   void replayOfAnUnknownPostingIsNotFound() {
     when(repository.findById("nope")).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.replay("nope")).isInstanceOf(NotFoundException.class);
@@ -297,6 +316,7 @@ class PostingServiceImplTest {
 
   /** Fails if the holder posts without checking it still holds the lease: a slow attempt and a replay that took over would both post. */
   @Test
+  @DisplayName("A request whose lease ran out and was taken over neither posts nor overwrites the new holder")
   void aRequestWhoseLeaseRanOutAndWasTakenOverDoesNotPostAndDoesNotOverwriteTheNewHolder() {
     newPosting();
     when(repository.renew(anyString(), anyString(), any(), any())).thenReturn(0);
@@ -309,6 +329,7 @@ class PostingServiceImplTest {
   }
 
   @Test
+  @DisplayName("The lease is renewed by its owner right before every post, retries included")
   void theLeaseIsRenewedByItsOwnerRightBeforeEveryPostIncludingRetries() {
     newPosting();
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("timeout")).thenReturn("OP-2");

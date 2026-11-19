@@ -36,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
@@ -43,6 +44,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
+@DisplayName("Booking events and payment links: requests created, replaced, paid and cancelled")
 class BookingEventServiceImplTest {
   private static final LocalDate TODAY = Fixtures.DAY;
   private static final String CARD_A = "tok_" + "a".repeat(32);
@@ -104,6 +106,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A new booking creates one open payment request from the policy")
   void aNewBookingCreatesOneOpenRequestFromThePolicy() {
     var outcome = service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
     assertThat(outcome.links()).hasSize(1);
@@ -113,6 +116,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A parallel twin that creates the live link first is treated as the repeat it is")
   void aParallelTwinThatCreatesTheLiveLinkFirstIsTreatedAsTheRepeatItIs() {
     when(links.saveAndFlush(any(PaymentLink.class)))
         .thenThrow(new org.springframework.dao.DataIntegrityViolationException("one live link per booking"))
@@ -124,6 +128,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A repeat of the same booking event changes nothing")
   void aRepeatOfTheSameEventChangesNothing() {
     service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
     var again = service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
@@ -132,6 +137,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A modified booking supersedes the open request and opens another")
   void aModifiedBookingSupersedesTheOpenRequestAndOpensAnother() {
     service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
     var out = service.handle(event(Type.MODIFIED, RatePlan.FLEXIBLE, 30, 150_000), TODAY);
@@ -139,6 +145,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A change while a payment is in progress is not applied, so the guest is not asked to pay twice")
   void aChangeWhileAPaymentIsInProgressIsNotAppliedSoTheGuestIsNotAskedToPayTwice() {
     claimedBy(CARD_A, openLink(20_000));
     var out = service.handle(event(Type.MODIFIED, RatePlan.FLEXIBLE, 30, 150_000), TODAY);
@@ -148,6 +155,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A change after payment needs a person, not a new request")
   void aChangeAfterPaymentNeedsAHumanNotANewRequest() {
     PaymentLink paid = openLink(20_000);
     org.springframework.test.util.ReflectionTestUtils.setField(paid, "status", PaymentLink.Status.PAID);
@@ -158,6 +166,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("Cancelling before payment closes the request")
   void cancellingBeforePaymentClosesTheRequest() {
     PaymentLink open = openLink(20_000);
     var out = service.handle(event(Type.CANCELLED, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
@@ -166,12 +175,14 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("Cancelling after payment flags a refund review")
   void cancellingAfterPaymentFlagsARefundReview() {
     org.springframework.test.util.ReflectionTestUtils.setField(openLink(20_000), "status", PaymentLink.Status.PAID);
     assertThat(service.handle(event(Type.CANCELLED, RatePlan.FLEXIBLE, 30, 100_000), TODAY).refundReview()).isTrue();
   }
 
   @Test
+  @DisplayName("Paying claims the link, charges with a key that holds no token, and closes the link on capture")
   void payingClaimsTheLinkChargesWithAKeyThatHoldsNoTokenAndClosesItOnCapture() {
     PaymentLink link = openLink(80_000);
     when(links.claim(link.getId(), Fingerprint.of(CARD_A))).thenReturn(1);
@@ -187,6 +198,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A declined card gives the link back for another card")
   void aDeclinedCardGivesTheLinkBackForAnotherCard() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -199,6 +211,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A pending charge keeps the claim, so only the same card resumes it")
   void aPendingChargeKeepsTheClaimSoOnlyTheSameCardResumesIt() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -211,6 +224,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A second card while a payment is in progress is refused and never charged")
   void aSecondCardWhileAPaymentIsInProgressIsRefusedAndNeverCharged() {
     PaymentLink link = claimedBy(CARD_A, openLink(80_000));
 
@@ -219,6 +233,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A second card after the link is paid is refused and never charged")
   void aSecondCardAfterTheLinkIsPaidIsRefusedAndNeverCharged() {
     PaymentLink link = openLink(80_000);
     org.springframework.test.util.ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
@@ -229,6 +244,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("The same card paying a paid link again resumes the same idempotent charge")
   void theSameCardPayingAPaidLinkAgainResumesTheSameIdempotentCharge() {
     PaymentLink link = openLink(80_000);
     org.springframework.test.util.ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
@@ -243,6 +259,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("Losing the claim race means another payment got there first")
   void losingTheClaimRaceMeansAnotherPaymentGotThereFirst() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(0);
@@ -251,6 +268,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A request refused before any charge existed gives the claim back")
   void aRequestRefusedBeforeAnyChargeExistedGivesTheClaimBack() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -263,6 +281,7 @@ class BookingEventServiceImplTest {
 
   /** The bug this replaces: any refusal released the claim, even when a pending charge (money that may have moved) already existed. */
   @Test
+  @DisplayName("A refusal after a pending charge exists keeps the claim, so no second card can be charged")
   void aRefusalAfterAPendingChargeExistsKeepsTheClaimSoNoSecondCardCanBeCharged() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -275,6 +294,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A failure after the capture still closes the link")
   void aFailureAfterTheCaptureStillClosesTheLink() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -287,6 +307,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A failure after a decline gives the link back")
   void aFailureAfterADeclineGivesTheLinkBack() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -298,6 +319,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("When the charge cannot even be read, the claim is kept, because that can never charge twice")
   void whenTheChargeCannotEvenBeReadTheClaimIsKeptBecauseThatCanNeverChargeTwice() {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
@@ -310,6 +332,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A cancelled link cannot be paid")
   void aCancelledLinkCannotBePaid() {
     PaymentLink link = openLink(40_000);
     link.cancel();
@@ -318,12 +341,14 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("An unknown link is not found")
   void anUnknownLinkIsNotFound() {
     when(links.findById("lnk_x")).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.pay("lnk_x", CARD_A, TODAY)).isInstanceOf(NotFoundException.class);
   }
 
   @Test
+  @DisplayName("The link list is bounded")
   void theLinkListIsBounded() {
     Page<PaymentLink> page = new PageImpl<>(List.of());
     when(links.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(page);
@@ -336,6 +361,7 @@ class BookingEventServiceImplTest {
 
   /** Fails if the old link is superseded outside the transaction that stores the new one: a failed insert would leave no live link. */
   @Test
+  @DisplayName("Superseding the old link and storing the new one happen in one transaction")
   void supersedingTheOldLinkAndStoringTheNewOneHappenInOneTransaction() {
     service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
     List<Boolean> writesInTransaction = new ArrayList<>();
@@ -351,6 +377,7 @@ class BookingEventServiceImplTest {
 
   /** The money is taken; a link whose state cannot be closed must not turn the guest's successful payment into an error. */
   @Test
+  @DisplayName("A capture is returned even when the link can no longer be closed by this card")
   void aCaptureIsReturnedEvenWhenTheLinkCanNoLongerBeClosedByThisCard() {
     PaymentLink link = openLink(80_000);
     when(links.claim(link.getId(), Fingerprint.of(CARD_A))).thenReturn(1);
@@ -365,6 +392,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A remote request without a description gets a plain one")
   void aRemoteRequestWithoutADescriptionGetsAPlainOne() {
     var out = service.request(remote(5_000, " "), TODAY);
     assertThat(out.note()).isEqualTo("Payment request");
@@ -372,6 +400,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A remote request does not touch a link that is being paid or is paid")
   void aRemoteRequestDoesNotTouchALinkThatIsBeingPaidOrIsPaid() {
     PaymentLink link = claimedBy(CARD_A, openLink(80_000));
     when(links.findByBookingRef("req:B1")).thenReturn(List.of(link));
@@ -382,6 +411,7 @@ class BookingEventServiceImplTest {
   }
 
   @Test
+  @DisplayName("A remote request due in the past or for nothing is refused")
   void aRemoteRequestDueInThePastOrForNothingIsRefused() {
     assertThatThrownBy(() -> service.request(new BookingEventService.PaymentRequest("B1", "RES-B1", new Money(5_000, "USD"), TODAY.minusDays(1), null), TODAY))
         .isInstanceOf(InvalidRequestException.class);
@@ -390,6 +420,7 @@ class BookingEventServiceImplTest {
 
   /** Fails if a twin that superseded the open link first makes the same request a 409: it is the repeat, so "no change". */
   @Test
+  @DisplayName("A twin that superseded the open link first makes this request the repeat")
   void aTwinThatSupersededTheOpenLinkFirstMakesThisRequestTheRepeat() {
     PaymentLink old = openLink(1_000);
     PaymentLink twins = new PaymentLink("req:B1", "RES-B1", new Money(5_000, "USD"), TODAY.plusDays(2), "Payment request");

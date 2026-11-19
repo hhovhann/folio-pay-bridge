@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -22,6 +23,7 @@ import software.amazon.awssdk.services.kms.KmsClient;
  * stubs the client, so without this test a version of the HTTP library the AWS SDK cannot run on would first fail in production, at the
  * first card (agent log 50). It is not AWS: the replies are canned, the request is checked only for what the adapter decides.
  */
+@DisplayName("KMS over the wire: the real client against a local endpoint")
 class KmsWireTest {
   private static final String KEY_ARN = "arn:aws:kms:eu-west-1:111122223333:key/1111aaaa-2222-bbbb-3333-cccc4444dddd";
   private static final byte[] PLAIN = new byte[32];
@@ -57,6 +59,7 @@ class KmsWireTest {
 
   /** Fails if the SDK's HTTP client cannot run on the HTTP library versions this build resolves, or if the wire calls change. */
   @Test
+  @DisplayName("The real AWS client wraps and unwraps a data key over HTTP")
   void theRealClientWrapsAndUnwrapsADataKeyOverHttp() {
     try (KmsClient client = KmsClient.builder()
         .endpointOverride(URI.create("http://127.0.0.1:" + kms.getAddress().getPort()))

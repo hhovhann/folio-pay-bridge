@@ -10,6 +10,7 @@ import dev.foliopay.domain.model.PaymentLink;
 import dev.foliopay.repository.PaymentLinkRepository;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 /** The Remote Creation API: a third-party app (F&B, events, spa, guest messaging) creates a payment request without a booking event. */
 @AutoConfigureMockMvc
+@DisplayName("Remote creation API: payment requests created by other systems")
 class RemoteCreationIntegrationTest extends TestBase {
   @Autowired private MockMvc mvc;
   @Autowired private PaymentLinkRepository links;
@@ -32,6 +34,7 @@ class RemoteCreationIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A payment request creates one open link, and sending it again changes nothing")
   void aRequestCreatesOneOpenLinkAndSendingItAgainChangesNothing() throws Exception {
     create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value("Friday brunch, table for 4"));
     create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value(org.hamcrest.Matchers.startsWith("No change")));
@@ -44,6 +47,7 @@ class RemoteCreationIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("New terms replace the open request, so the guest is never asked twice")
   void newTermsReplaceTheOpenRequestSoTheGuestIsNeverAskedTwice() throws Exception {
     create("EVT-77", 100_000, due(5), null).andExpect(status().isOk());
     create("EVT-77", 120_000, due(5), null).andExpect(status().isOk());
@@ -53,6 +57,7 @@ class RemoteCreationIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A past due date, a zero amount or an unsafe reference is refused without storing anything")
   void aPastDueDateAZeroAmountOrAnUnsafeReferenceIsRefusedWithoutStoringAnything() throws Exception {
     create("SPA-1", 10_000, due(-1), null).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     create("SPA-1", 0, due(1), null).andExpect(status().isBadRequest());
@@ -66,6 +71,7 @@ class RemoteCreationIntegrationTest extends TestBase {
 
   /** Fails if a remote request shares the booking namespace: an app with payments:write could replace a booking's deposit link. */
   @Test
+  @DisplayName("A request named like a booking never touches that booking's link")
   void aRequestNamedLikeABookingNeverTouchesThatBookingsLink() throws Exception {
     bookings.handle(new dev.foliopay.domain.model.BookingEvent(dev.foliopay.domain.model.BookingEvent.Type.NEW, "BK-1001", "RES-1001",
         dev.foliopay.domain.model.BookingEvent.RatePlan.ADVANCE_PURCHASE, LocalDate.now(ZoneId.of("Asia/Dubai")).plusDays(30),

@@ -13,6 +13,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -39,14 +41,17 @@ public class OperaSimulator {
   private static final String ROOM_CODE = "1000";
 
   /** One line on a folio. {@code type} is OHIP's transaction type: Revenue (a charge) or Payment. */
-  public record Posting(long transactionNo, String hotelId, String reservationId, int folioWindowNo, String type, String code, String description,
-                        long amountMinor, String currency, LocalDate businessDate, String reference, String remark, long cashierId, Instant postedAt) {
+  public record Posting(long transactionNo, String hotelId, String reservationId, int folioWindowNo, String type, String code,
+                        String description, long amountMinor, String currency, LocalDate businessDate, String reference, String remark,
+                        long cashierId, Instant postedAt) {
     public String amount() { return decimal(amountMinor, currency); }
     public String cashierName() { return CASHIERS.getOrDefault(cashierId, "?"); }
   }
 
   public record Reservation(String id, String guest, Status status, String room, LocalDate arrival, int nights, long rateMinor, String currency) {
-    Reservation with(Status newStatus, String newRoom) { return new Reservation(id, guest, newStatus, newRoom, arrival, nights, rateMinor, currency); }
+    Reservation with(Status newStatus, String newRoom) {
+      return new Reservation(id, guest, newStatus, newRoom, arrival, nights, rateMinor, currency);
+    }
   }
 
   public record Token(String value, Instant expiresAt) {}
@@ -121,15 +126,17 @@ public class OperaSimulator {
         r.startsWith("CLOSED") || "F-CLOSED".equals(r) ? Status.CHECKED_OUT : Status.DUE_IN, "", businessDate.get(), 1, 0, "USD")));
   }
 
-  /** A reservation the PMS itself created (a booking at the front desk or from a channel). */
+  /**
+   * A reservation the PMS itself created (a booking at the front desk or from a channel). A reservation it already holds is kept as it is:
+   * booking the same id again must not put a guest in house back to due-in.
+   */
   public synchronized Reservation book(String id, String guest, LocalDate arrival, int nights, long totalMinor, String currency) {
-    Reservation reservation = new Reservation(id, guest, Status.DUE_IN, "", arrival, nights, totalMinor / Math.max(1, nights), currency);
-    reservations.put(id, reservation);
-    return reservation;
+    long rateMinor = totalMinor / Math.max(1, nights);
+    return reservations.computeIfAbsent(id, r -> new Reservation(r, guest, Status.DUE_IN, "", arrival, nights, rateMinor, currency));
   }
 
-  public synchronized Posting postPayment(String hotelId, String reservationId, int window, String method, long cashierId, long amountMinor, String currency,
-                                          String reference, String remark) {
+  public synchronized Posting postPayment(String hotelId, String reservationId, int window, String method, long cashierId, long amountMinor,
+                                          String currency, String reference, String remark) {
     return post(hotelId, reservationId, window, "Payment", method, "Payment " + method, amountMinor, currency, reference, remark, cashierId);
   }
 
@@ -139,10 +146,10 @@ public class OperaSimulator {
         .map(r -> post("DEMO1", r.id(), 1, "Revenue", ROOM_CODE, "Room charge", r.rateMinor(), r.currency(), "", "", cashierId));
   }
 
-  private Posting post(String hotelId, String reservationId, int window, String type, String code, String description, long amountMinor, String currency,
-                       String reference, String remark, long cashierId) {
-    Posting posting = new Posting(postings.size() + 1000L, hotelId, reservationId, window, type, code, description, amountMinor, currency, businessDate.get(),
-        reference, remark, cashierId, Instant.now(clock));
+  private Posting post(String hotelId, String reservationId, int window, String type, String code, String description, long amountMinor,
+                       String currency, String reference, String remark, long cashierId) {
+    Posting posting = new Posting(postings.size() + 1000L, hotelId, reservationId, window, type, code, description, amountMinor, currency,
+        businessDate.get(), reference, remark, cashierId, Instant.now(clock));
     postings.add(posting);
     return posting;
   }
@@ -167,8 +174,14 @@ public class OperaSimulator {
     if (r == null || r.status() != Status.DUE_IN) {
       return Optional.of("Only a due-in reservation can be checked in");
     }
-    reservations.put(r.id(), r.with(Status.IN_HOUSE, String.valueOf(301 + reservations.values().stream().filter(x -> x.status() == Status.IN_HOUSE).count())));
+    reservations.put(r.id(), r.with(Status.IN_HOUSE, freeRoom()));
     return Optional.empty();
+  }
+
+  /** The lowest room from 301 up that no guest in house holds, so a room a guest gave back at check-out is the next one given out. */
+  private String freeRoom() {
+    Set<String> taken = reservations.values().stream().filter(x -> x.status() == Status.IN_HOUSE).map(Reservation::room).collect(Collectors.toSet());
+    return IntStream.iterate(301, n -> n + 1).mapToObj(String::valueOf).filter(room -> !taken.contains(room)).findFirst().orElseThrow();
   }
 
   /** A guest can leave only with every window settled to zero, as at a real front desk. */

@@ -18,17 +18,20 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** After a full flow, looks for the card number in every column of every table and in everything logged. */
+@DisplayName("PCI: no card number in any table or log after a full flow")
 class PciIntegrationTest extends TestBase {
   @Autowired PaymentService payments;
   @Autowired DataSource dataSource;
 
   @Test
+  @DisplayName("The card number is nowhere in the database after a full flow")
   void theCardNumberIsNowhereInTheDatabaseAfterAFullFlow() {
     payments.pay(PaymentCommand.bridge("pci-1", "BK-1", "F-1", token, new Money(10_000, "USD"), LocalDate.of(2026, 11, 17)));
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
@@ -49,6 +52,7 @@ class PciIntegrationTest extends TestBase {
    * earlier version read the console's buffer, which is masked before it is stored, so it could not fail; review finding M6.)
    */
   @Test
+  @DisplayName("The card number and the card token are never logged, even at DEBUG level")
   void theCardNumberAndTheCardTokenAreNeverLoggedEvenAtDebugLevel() {
     Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     Logger ours = (Logger) LoggerFactory.getLogger("dev.foliopay");

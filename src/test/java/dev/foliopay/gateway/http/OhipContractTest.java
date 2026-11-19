@@ -24,6 +24,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
@@ -39,6 +40,7 @@ import org.springframework.web.client.RestClient;
  * adapter sends (paths, headers, query, form, body) and the reply the simulator gives (status and body). A drift on either side fails here:
  * the adapter inventing a field, or the simulator answering in a shape real OPERA would not.
  */
+@DisplayName("OHIP contract: the OPERA adapter and simulator held to Oracle's published specification (D-42)")
 class OhipContractTest {
   private static final RestClient CONTROL = RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory()).build();
   private static final OhipSpec OHIP = new OhipSpec();
@@ -74,8 +76,8 @@ class OhipContractTest {
     RestClient.Builder recording = RestClient.builder().requestInterceptor((request, body, execution) -> {
       ClientHttpResponse response = execution.execute(request, body);
       byte[] reply = response.getBody().readAllBytes();
-      exchanges.add(new Exchange(request.getMethod().name(), request.getURI(), HttpHeaders.readOnlyHttpHeaders(request.getHeaders()), new String(body, StandardCharsets.UTF_8),
-          response.getStatusCode().value(), new String(reply, StandardCharsets.UTF_8)));
+      exchanges.add(new Exchange(request.getMethod().name(), request.getURI(), HttpHeaders.readOnlyHttpHeaders(request.getHeaders()),
+          new String(body, StandardCharsets.UTF_8), response.getStatusCode().value(), new String(reply, StandardCharsets.UTF_8)));
       return new Replayed(response, reply);
     });
     return new HttpOperaClient(settings, recording, Clock.systemUTC());
@@ -90,6 +92,7 @@ class OhipContractTest {
   }
 
   @Test
+  @DisplayName("A payment is posted and found back through Oracle's operations in each currency")
   void aPaymentIsPostedAndFoundBackThroughOraclesOperationsInEachCurrency() {
     HttpOperaClient client = client();
     client.businessDate("DEMO1");
@@ -114,6 +117,7 @@ class OhipContractTest {
    * to our payment or the last page; every page, asked and answered, is held to the contract. The simulator's page size is its own choice.
    */
   @Test
+  @DisplayName("A payment on a long folio is found on a later page")
   void aPaymentOnALongFolioIsFoundOnALaterPage() {
     CONTROL.post().uri(opera.url() + "/sim/folio-page-size").contentType(MediaType.APPLICATION_JSON).body(Map.of("size", 2))
         .retrieve().toBodilessEntity();
@@ -130,6 +134,7 @@ class OhipContractTest {
 
   /** OPERA posts on its own business date: a payment after night audit lands on the new day, and the bridge reads that date back. */
   @Test
+  @DisplayName("A payment lands on OPERA's business date, which moves only at night audit")
   void aPaymentLandsOnOperasBusinessDateWhichMovesOnlyAtNightAudit() {
     HttpOperaClient client = client();
     var before = client.businessDate("DEMO1");
@@ -140,6 +145,7 @@ class OhipContractTest {
   }
 
   @Test
+  @DisplayName("OPERA's own refusals are rejections carrying its error code")
   void operasOwnRefusalsAreRejectionsCarryingItsErrorCode() {
     HttpOperaClient client = client();
     assertThatThrownBy(() -> client.postPayment(payment("GHOST-1", new Money(1_000, "USD"), "post:ghost")))
@@ -152,6 +158,7 @@ class OhipContractTest {
 
   /** The request id of the API call that caused a posting goes to OPERA, so Oracle support can find the call in their logs. */
   @Test
+  @DisplayName("The request id travels to OPERA when there is one")
   void theRequestIdTravelsToOperaWhenThereIsOne() {
     HttpOperaClient client = client();
     client.businessDate("DEMO1");
@@ -165,6 +172,7 @@ class OhipContractTest {
   }
 
   @Test
+  @DisplayName("An expired token is replaced once, and an outage is unavailable")
   void anExpiredTokenIsReplacedOnceAndAnOutageIsUnavailable() {
     HttpOperaClient client = client();
     client.businessDate("DEMO1");
@@ -173,29 +181,37 @@ class OhipContractTest {
     assertThat(exchanges.stream().filter(e -> e.status() == 401)).as("the expired token was refused once").hasSize(1);
     assertThat(exchanges.stream().filter(e -> e.uri().getPath().endsWith("/tokens"))).as("and replaced").hasSize(2);
 
-    CONTROL.post().uri(opera.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "DOWN")).retrieve().toBodilessEntity();
-    assertThatThrownBy(() -> client.postPayment(payment("RES-1", new Money(1_000, "USD"), "post:down"))).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("503");
+    CONTROL.post().uri(opera.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "DOWN"))
+        .retrieve().toBodilessEntity();
+    assertThatThrownBy(() -> client.postPayment(payment("RES-1", new Money(1_000, "USD"), "post:down")))
+        .isInstanceOf(OperaUnavailableException.class).hasMessageContaining("503");
   }
 
   /** Proves the check has teeth: the shapes this bridge sent before it followed Oracle's contract are refused. */
   @Test
+  @DisplayName("The contract check refuses the invented shapes the bridge used before D-42")
   void theCheckRefusesTheInventedShapesTheBridgeUsedBeforeD42() {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth("t");
     headers.add("x-app-key", "k");
     headers.add("x-hotelid", "DEMO1");
     headers.setContentType(MediaType.APPLICATION_JSON);
-    String oldBody = "{\"folioWindow\":1,\"paymentCode\":\"CC\",\"cashierId\":\"FPBRIDGE\",\"amount\":\"123.45\",\"currency\":\"USD\",\"businessDate\":\"2026-11-18\",\"reference\":\"post:c1\"}";
-    assertThat(OHIP.check(new Exchange("POST", URI.create("http://h/v1/hotels/DEMO1/reservations/RES-1/payments"), headers, oldBody, 201, "{\"transactionNo\":\"TX-1000\"}")))
+    String oldBody = "{\"folioWindow\":1,\"paymentCode\":\"CC\",\"cashierId\":\"FPBRIDGE\",\"amount\":\"123.45\",\"currency\":\"USD\","
+        + "\"businessDate\":\"2026-11-18\",\"reference\":\"post:c1\"}";
+    String oldReply = "{\"transactionNo\":\"TX-1000\"}";
+    assertThat(OHIP.check(new Exchange("POST", URI.create("http://h/v1/hotels/DEMO1/reservations/RES-1/payments"), headers, oldBody, 201, oldReply)))
         .as("the old path").singleElement().asString().contains("no such operation");
-    assertThat(OHIP.check(new Exchange("POST", URI.create("http://h/csh/v1/hotels/DEMO1/reservations/RES-1/payments"), headers, oldBody, 201, "{\"transactionNo\":\"TX-1000\"}")))
+    URI rightPath = URI.create("http://h/csh/v1/hotels/DEMO1/reservations/RES-1/payments");
+    assertThat(OHIP.check(new Exchange("POST", rightPath, headers, oldBody, 201, oldReply)))
         .as("the old body and reply on the right path").anyMatch(p -> p.contains("paymentCode")).anyMatch(p -> p.contains("transactionNo"));
     HttpHeaders noAppKey = new HttpHeaders();
     noAppKey.setBearerAuth("t");
     noAppKey.add("x-hotelid", "DEMO1");
-    assertThat(OHIP.check(new Exchange("GET", URI.create("http://h/bof/v1/hotels/DEMO1/businessDate?when=today"), noAppKey, "", 200, "{\"businessDate\":\"2026-11-18\"}")))
+    String oldDate = "{\"businessDate\":\"2026-11-18\"}";
+    assertThat(OHIP.check(new Exchange("GET", URI.create("http://h/bof/v1/hotels/DEMO1/businessDate?when=today"), noAppKey, "", 200, oldDate)))
         .anyMatch(p -> p.contains("x-app-key")).anyMatch(p -> p.contains("when")).anyMatch(p -> p.contains("businessDate"));
-    exchanges.add(new Exchange("GET", URI.create(opera.url() + "/bof/v1/hotels/DEMO1/businessDate"), conforming(), "", 503, "")); // keeps the after-each check meaningful
+    // keeps the after-each check meaningful
+    exchanges.add(new Exchange("GET", URI.create(opera.url() + "/bof/v1/hotels/DEMO1/businessDate"), conforming(), "", 503, ""));
   }
 
   private static HttpHeaders conforming() {

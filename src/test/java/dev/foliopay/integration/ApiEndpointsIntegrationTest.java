@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.foliopay.TestBase;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -19,6 +20,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 /** Every endpoint, over HTTP, against the whole application: success, refusal and the shapes of the answers. */
 @AutoConfigureMockMvc
+@DisplayName("API endpoints: every endpoint over HTTP against the whole application")
 class ApiEndpointsIntegrationTest extends TestBase {
   private static final ObjectMapper JSON = new ObjectMapper();
   @Autowired MockMvc mvc;
@@ -43,6 +45,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A booking event becomes a payment link that a guest pays, and the ledger shows it")
   void aBookingEventBecomesAPaymentLinkThatAGuestPaysAndTheLedgerShowsIt() throws Exception {
     String id = newLinkId("B-EP1", "ADVANCE_PURCHASE", 80_000);
 
@@ -55,6 +58,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Paying an unknown or dead link is refused with the right status")
   void payingAnUnknownOrDeadLinkIsRefusedWithTheRightStatus() throws Exception {
     send("POST", "/api/v1/links/lnk_nope/pay", "{\"token\":\"" + token + "\"}").andExpect(status().isNotFound());
     String id = newLinkId("B-EP2", "FLEXIBLE", 100_000);
@@ -64,6 +68,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A bad booking event is refused before it changes anything")
   void aBadBookingEventIsRefusedBeforeItChangesAnything() throws Exception {
     send("POST", "/api/v1/booking-events", event("NEW", "bad ref", "FLEXIBLE", 1_000)).andExpect(status().isBadRequest());
     send("POST", "/api/v1/booking-events", event("EXPLODE", "B-X", "FLEXIBLE", 1_000)).andExpect(status().isBadRequest());
@@ -71,6 +76,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Reconciliation accepts a pasted statement and reports each problem")
   void reconciliationAcceptsAPastedStatementAndReportsEachProblem() throws Exception {
     send("POST", "/api/v1/reconcile", "{\"csv\":\"psp_ref,amount_minor,currency\\ncap_ghost,700,USD\"}").andExpect(status().isOk())
         .andExpect(jsonPath("$.exceptions.UNKNOWN_IN_SETTLEMENT").value(1));
@@ -79,6 +85,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Reconciliation against the acquirer statement, clean and messy")
   void reconciliationAgainstTheAcquirerStatementCleanAndMessy() throws Exception {
     for (int i = 0; i < 3; i++) {
       String id = newLinkId("B-R" + i, "ADVANCE_PURCHASE", 10_000L * (i + 1));
@@ -90,6 +97,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Shadow mode runs only with valid input and reports the comparison")
   void shadowModeRunsOnlyWithValidInputAndReportsTheComparison() throws Exception {
     send("POST", "/api/v1/shadow", "{\"bookings\":4,\"seed\":1,\"mode\":\"compat\"}").andExpect(status().isOk()).andExpect(jsonPath("$.bookings").value(4)).andExpect(jsonPath("$.mismatched").value(0));
     send("POST", "/api/v1/shadow", "{\"bookings\":3,\"mode\":\"strict\"}").andExpect(status().isOk());
@@ -98,6 +106,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("The demo controls show state, arm faults and reset; an unknown fault is refused")
   void theDemoControlsShowStateArmFaultsAndResetAndAnUnknownFaultIsRefused() throws Exception {
     send("GET", "/api/v1/sim", null).andExpect(status().isOk()).andExpect(jsonPath("$.opera").value("NONE"));
     send("POST", "/api/v1/sim", "{\"psp\":\"DECLINE_NEXT\",\"opera\":\"DOWN\"}").andExpect(status().isOk()).andExpect(jsonPath("$.psp").value("DECLINE_NEXT")).andExpect(jsonPath("$.opera").value("DOWN"));
@@ -108,6 +117,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("The framework's own errors are turned into one safe shape")
   void theFrameworksOwnErrorsAreTurnedIntoOneSafeShape() throws Exception {
     send("GET", "/api/v1/cards", null).andExpect(status().isMethodNotAllowed()).andExpect(jsonPath("$.detail").exists());
     send("GET", "/api/v1/nothing-here", null).andExpect(status().isNotFound()).andExpect(jsonPath("$.detail").exists());
@@ -117,6 +127,7 @@ class ApiEndpointsIntegrationTest extends TestBase {
 
   /** Fails if an error leaves the standard shape: a client parses RFC 9457 problem details and acts on the stable code, not the text. */
   @Test
+  @DisplayName("Errors are problem details with a stable code")
   void errorsAreProblemDetailsWithAStableCode() throws Exception {
     send("GET", "/api/v1/nothing-here", null)
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))

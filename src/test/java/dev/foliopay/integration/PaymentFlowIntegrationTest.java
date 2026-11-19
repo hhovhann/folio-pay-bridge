@@ -23,6 +23,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -30,6 +31,7 @@ import org.springframework.beans.factory.annotation.Autowired;
  * The whole stack (services, Hibernate, H2 with the real unique constraints and version columns) against the fake processor and PMS. These
  * are the tests that need a real database: what the constraints and the optimistic lock do under repeats, races and lost responses.
  */
+@DisplayName("Payment flow: the whole stack against the fake processor and PMS")
 class PaymentFlowIntegrationTest extends TestBase {
   private static final LocalDate DAY = LocalDate.of(2026, 11, 17);
   @Autowired PaymentService payments;
@@ -46,6 +48,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A payment is charged once and posted once")
   void aPaymentIsChargedOnceAndPostedOnce() {
     var result = pay(newKey(), "F-100", 25_000);
 
@@ -57,6 +60,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Repeating the request leaves one charge row and one posting row")
   void repeatingTheRequestLeavesOneChargeRowAndOnePostingRow() {
     String key = newKey();
     var first = pay(key, "F-100", 25_000);
@@ -68,6 +72,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Parallel duplicates end with one charge row, one captured state and one posting row")
   void parallelDuplicatesEndWithOneChargeRowOneCapturedStateAndOnePostingRow() throws Exception {
     String key = newKey();
     ExecutorService pool = Executors.newFixedThreadPool(8);
@@ -86,6 +91,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A lost response after capture is retried without charging twice")
   void aLostResponseAfterCaptureIsRetriedWithoutChargingTwice() {
     psp.arm(FakePsp.Fault.TIMEOUT_AFTER_CAPTURE);
 
@@ -97,6 +103,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A lost response after the PMS post leaves one post on the folio")
   void aLostResponseAfterThePmsPostLeavesOnePostOnTheFolio() {
     opera.arm(FakeOpera.Fault.TIMEOUT_AFTER_POST);
     assertThat(pay(newKey(), "F-400", 22_000).outcome()).isEqualTo(Outcome.OK);
@@ -104,6 +111,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A decline is stored as final and nothing reaches the PMS")
   void aDeclineIsStoredAsFinalAndNothingReachesThePms() {
     psp.arm(FakePsp.Fault.DECLINE_NEXT);
 
@@ -115,6 +123,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("An OPERA outage keeps the captured payment as a replayable posting that posts exactly once")
   void anOperaOutageKeepsTheCapturedPaymentAsAReplayablePostingThatPostsExactlyOnce() {
     opera.arm(FakeOpera.Fault.DOWN);
     var result = pay(newKey(), "F-300", 40_000);
@@ -134,6 +143,7 @@ class PaymentFlowIntegrationTest extends TestBase {
    * both post. The lease lets one through; the others return the stored state. The fake counts every post, so a second one fails this test.
    */
   @Test
+  @DisplayName("Parallel replays of one dead-lettered posting post it once")
   void parallelReplaysOfOneDeadLetteredPostingPostItOnce() throws Exception {
     opera.arm(FakeOpera.Fault.DOWN);
     String postingId = pay(newKey(), "F-400", 12_000).posting().getId();
@@ -158,6 +168,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A closed folio is rejected, and replay leaves it alone even after the folio would accept")
   void aClosedFolioIsRejectedAndReplayLeavesItAloneEvenAfterTheFolioWouldAccept() {
     var result = pay(newKey(), "F-CLOSED", 9_900);
     assertThat(result.posting().getFailureCategory()).isEqualTo(Posting.FailureCategory.REJECTED_BY_OPERA);
@@ -170,6 +181,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Money is conserved across processor charges and postings")
   void moneyIsConservedAcrossProcessorChargesAndPostings() {
     long expected = 0;
     for (int i = 0; i < 20; i++) {
@@ -183,6 +195,7 @@ class PaymentFlowIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A second card after a decline is a new attempt, not a cached decline")
   void aSecondCardAfterADeclineIsANewAttemptNotACachedDecline() {
     String other = vault.tokenise(new Pan("4242424242424242"), "11/28").getToken();
     psp.arm(FakePsp.Fault.DECLINE_NEXT);
