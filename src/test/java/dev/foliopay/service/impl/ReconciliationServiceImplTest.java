@@ -90,7 +90,7 @@ class ReconciliationServiceImplTest {
 
     assertThat(report.matched()).isEqualTo(2);
     assertThat(report.exceptions()).isEmpty();
-    assertThat(usd(report).differenceMinor()).isZero();
+    assertThat(difference(usd(report))).isZero();
   }
 
   @Test
@@ -99,7 +99,7 @@ class ReconciliationServiceImplTest {
     capture("cap_1", 1_000, true);
     ReconReport report = reconcile();
     assertThat(report.items()).singleElement().satisfies(i -> assertThat(i.category()).isEqualTo(Category.MISSING_IN_SETTLEMENT));
-    assertThat(usd(report).differenceMinor()).isEqualTo(-1_000);
+    assertThat(difference(usd(report))).isEqualTo(-1_000);
   }
 
   @Test
@@ -136,7 +136,7 @@ class ReconciliationServiceImplTest {
     capture("cap_1", 1_000, true);
     ReconReport report = reconcile(new SettlementLine("cap_1", 1_000, "USD"), new SettlementLine("cap_1", 1_000, "USD"));
     assertThat(report.exceptions()).containsEntry("DUPLICATE_IN_SETTLEMENT", 1);
-    assertThat(usd(report).differenceMinor()).as("the extra 1000 the guest was charged").isEqualTo(1_000);
+    assertThat(difference(usd(report))).as("the extra 1000 the guest was charged").isEqualTo(1_000);
   }
 
   @Test
@@ -160,8 +160,8 @@ class ReconciliationServiceImplTest {
     ReconReport report = reconcile(new SettlementLine("cap_1", 1_000, "USD"), new SettlementLine("cap_yen", 90, "JPY"));
 
     assertThat(report.totals()).containsOnlyKeys("JPY", "USD");
-    assertThat(usd(report).differenceMinor()).isZero();
-    assertThat(report.totals().get("JPY").differenceMinor()).isEqualTo(-10);
+    assertThat(difference(usd(report))).isZero();
+    assertThat(difference(report.totals().get("JPY"))).isEqualTo(-10);
     assertThat(report.items()).singleElement().satisfies(i -> {
       assertThat(i.category()).isEqualTo(Category.AMOUNT_DIFFERENCE);
       assertThat(i.expectedCurrency()).isEqualTo("JPY");
@@ -285,5 +285,10 @@ class ReconciliationServiceImplTest {
     verify(postings, times(3)).findByChargeIdInAndStatus(ids.capture(), eq(Posting.Status.POSTED));
     assertThat(ids.getAllValues()).allSatisfy(slice -> assertThat(slice).hasSizeLessThanOrEqualTo(ReconciliationServiceImpl.IN_LIST_CHUNK));
     assertThat(ids.getAllValues().stream().mapToInt(Collection::size).sum()).isEqualTo(2_500);
+  }
+
+  /** What the acquirer settled minus what we captured, in one currency. */
+  private static long difference(ReconReport.Total total) {
+    return total.settledMinor() - total.expectedMinor();
   }
 }

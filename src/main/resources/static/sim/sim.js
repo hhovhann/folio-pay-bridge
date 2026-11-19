@@ -71,7 +71,7 @@ async function refresh() {
     $('#n-void').textContent = count('VOID');
     const newRows = fresh('ledger', s.ledger.map(e => e.ref));
     $('[data-testid=ledger] tbody').innerHTML = s.ledger.map((e, i) => `<tr class="${newRows[i] ? 'fresh' : ''}"><td class="ref">${esc(e.ref)}</td><td><span class="kind ${esc(e.kind)}">${esc(e.kind)}</span></td>`
-      + `<td>${e.last4 ? `<span class="pan"><svg class="ic"><use href="#i-card"/></svg>**** ${esc(e.last4)}</span>` : ''}</td><td>${e.amountMinor ? esc(e.currency) + ' ' + money(e.amountMinor, e.currency) : ''}</td>`
+      + `<td>${e.last4 ? `<span class="pan"><svg class="ic"><use href="/icons.svg#i-card"/></svg>**** ${esc(e.last4)}</span>` : ''}</td><td>${e.amountMinor ? esc(e.currency) + ' ' + money(e.amountMinor, e.currency) : ''}</td>`
       + `<td>${esc(e.state)}</td><td class="ref">${esc(e.authRef)}</td><td class="mut">${esc(hhmmss(e.at))}</td></tr>`).join('');
   }
 }

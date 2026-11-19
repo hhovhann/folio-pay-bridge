@@ -374,7 +374,8 @@ class ChargeServiceImplTest {
 
     Charge charge = service.charge(new ChargeCommand("client-b", "key-1", "BK-1", "F-1", Fixtures.DAY, "tok_1", TEN));
 
-    assertThat(charge.getClientId()).isEqualTo("client-b");
+    assertThat(charge.getStatus()).isEqualTo(Charge.Status.CAPTURED);
+    verify(repository).findByClientIdAndIdempotencyKey("client-b", "key-1");
     verify(repository, never()).findByClientIdAndIdempotencyKey(eq(Charge.BRIDGE_CLIENT), anyString());
   }
 

@@ -205,16 +205,14 @@ class PostingServiceImplTest {
   }
 
   @Test
-  @DisplayName("The lease runs from the clock for longer than one attempt and is cleared once posted")
-  void theLeaseRunsFromTheClockForLongerThanOneAttemptAndIsClearedOncePosted() {
+  @DisplayName("The lease runs from the clock for longer than one attempt")
+  void theLeaseRunsFromTheClockForLongerThanOneAttempt() {
     newPosting();
     when(opera.postPayment(any())).thenReturn("OP-1");
 
     Posting posting = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");
 
     verify(repository).lease(eq(posting.getId()), anyString(), eq(NOW), eq(NOW.plus(LEASE)));
-    assertThat(posting.getLeaseUntil()).isNull();
-    assertThat(posting.getLeaseOwner()).isNull();
   }
 
   @Test

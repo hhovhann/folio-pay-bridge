@@ -152,7 +152,6 @@ public class Charge {
 
   public Money amount() { return new Money(amountMinor, currency); }
   public String getId() { return id; }
-  public String getClientId() { return clientId; }
   public String getIdempotencyKey() { return idempotencyKey; }
   public String getBookingRef() { return bookingRef; }
   public String getFolioId() { return folioId; }

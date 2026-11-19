@@ -134,9 +134,9 @@ class ArchitectureTest {
     assertThat(found).as("files declaring floating-point or BigDecimal values").containsOnly(ALLOWED_FLOATING_POINT.toArray(String[]::new));
   }
 
-  /** Not money: the retry backoff multiplier and jitter, and the shadow report's match rate. Each was checked by reading the file. */
+  /** Not money: the retry backoff multiplier and jitter. Each was checked by reading the file. */
   private static final List<String> ALLOWED_FLOATING_POINT = List.of(
-      "dev/foliopay/config/RetryProperties.java", "dev/foliopay/config/ResilienceConfig.java", "dev/foliopay/domain/model/ShadowReport.java");
+      "dev/foliopay/config/RetryProperties.java", "dev/foliopay/config/ResilienceConfig.java");
 
   /** The source without comments and string literals, so a word in a description ("a double-click") is not mistaken for a type. */
   private static String codeOnly(String text) {

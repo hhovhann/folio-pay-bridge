@@ -168,7 +168,7 @@ Task definition essentials:
 - [x] Authentication and authorisation on every endpoint (OAuth2 client credentials or hashed API keys, scopes), failing closed. *(Built in phase 14; Cognito wiring not yet run in an account.)*
 - [ ] Tenant-scoped credentials and data for many properties (`docs/architecture.md` section 9); rate limits on card endpoints (WAF rate-based rules); TLS everywhere.
 - [ ] The crash-recovery sweeper, with alarms.
-- [ ] KMS exercised in a real account (the steps in `docs/aws.md`), key policy reviewed.
+- [ ] KMS exercised in a real account (the steps in section 2.2), key policy reviewed.
 - [x] Flyway migrations with `ddl-auto=validate` *(phase 14, run on PostgreSQL 16 locally)*.
 - [ ] Backups and a tested restore.
 - [ ] PCI scoping done by a qualified assessor. This repository makes no compliance claim.

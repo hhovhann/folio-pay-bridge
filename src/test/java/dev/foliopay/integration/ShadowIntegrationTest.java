@@ -29,7 +29,7 @@ class ShadowIntegrationTest extends TestBase {
   void compatibleRulesMatchTheLegacyStandInOnEveryBooking() {
     var report = shadow.run(42, 200, ShadowConfig.legacyCompatible());
     assertThat(report.mismatched()).isZero();
-    assertThat(report.matchRate()).isEqualTo(1.0);
+    assertThat(report.matched()).isEqualTo(200);
   }
 
   @Test

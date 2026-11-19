@@ -16,8 +16,6 @@ public record ReconReport(int matched, Map<String, Integer> exceptions, List<Ite
 
   /** Captured and settled amounts in one currency. */
   public record Total(long expectedMinor, long settledMinor) {
-    public long differenceMinor() { return settledMinor - expectedMinor; }
-
     public Total plus(Total other) { return new Total(Math.addExact(expectedMinor, other.expectedMinor), Math.addExact(settledMinor, other.settledMinor)); }
   }
 }

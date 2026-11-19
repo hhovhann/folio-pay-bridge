@@ -164,7 +164,5 @@ public class Posting {
   public FailureCategory getFailureCategory() { return failureCategory; }
   public String getLastError() { return lastError; }
   public int getAttempts() { return attempts; }
-  public Instant getLeaseUntil() { return leaseUntil; }
-  public String getLeaseOwner() { return leaseOwner; }
   public Instant getCreatedAt() { return createdAt; }
 }
