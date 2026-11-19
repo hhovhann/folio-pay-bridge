@@ -275,6 +275,7 @@ def story(pg, clips, texts):
     when("production", "Booking events would come")
     md.reveal(pg, tid("streaming"))
     md.expect(pg, tid("streaming"), "at least once"); md.expect(pg, tid("streaming"), "No ACK, no dead-letter queue")
+    md.expect(pg, tid("streaming"), "THE SIMULATOR POSTS EVENTS OVER HTTP")  # the pms scene says so; agent log 57
     when("production", "The processor becomes")
     md.reveal(pg, "table")
     md.until(e)

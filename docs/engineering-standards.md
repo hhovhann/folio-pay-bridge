@@ -8,7 +8,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - Test first: write the test that names the failure, see it fail, then fix. A test you wrote to pass is not proof (log 6, 8, 25).
 - After a fix, put the bug back on purpose and require the named test to fail; restore the source in a `finally` and rebuild clean (log 12, 30, 31, 35). Confirm the test actually ran: a mutation "caught" by a run that executed nothing proves nothing (log 31).
 - `./mvnw clean ...` before saying anything passes: an incremental build has reported success over stale classes (log 21). The compiler is the first reviewer: compile and re-read what you wrote before running it (log 3, 37).
-- What the user sees is proven where the user sees it: the dashboard in a real browser (`demo/check_dashboard.py`), the narrated demo by its dry run that asserts every claim against the screen (log 4, 5, 27, 39). A green unit suite has missed a regression the dry run caught (log 39).
+- What the user sees is proven where the user sees it: the dashboard in a real browser (`demo/check_dashboard.py`), the narrated demo by its dry run that asserts every claim against the screen (log 4, 5, 27, 39). A green unit suite has missed a regression the dry run caught (log 39). A number the voice says is read from the build's own reports and asserted, never a floor that a growing count stays above (log 57).
 - Build and run every artifact the docs present: the Docker image, Compose, the runbook's container (log 9, 32). Check a published file before it is uploaded (`demo/recorder.py --check`) (log 42).
 - Verify a claim against the primary source before repeating it, a reviewer's included; a review finding is confirmed by a failing test or by reading the code before it is fixed, and its suggested fix is checked against the system's own documentation as well (log 47, 55).
 - "Fixed" is a claim: name the test or command that proves it, in the commit, the validation box and the agent log (log 43, 44).
@@ -77,7 +77,7 @@ Config in the environment, with no default that moves money (III); backing servi
 - A downstream outage fails only what needs it: the payment proceeds on the last known business date and the posting waits in the dead-letter queue; a client gets 503 with `Retry-After`, not 500 (log 27).
 - Lease lengths and retry budgets are derived from the timeouts, not fixed (log 32).
 - Test clients use the same protocol settings as production adapters; reproduce a surprise with `curl` before blaming the code (log 26).
-- An adapter and the simulator that stands in for its system follow the system's published contract, and a test checks every exchange against it (`OhipContractTest`, D-42). A simulator that is easier than the real system proves nothing about it, and a story told from it is checked against the contract before it is told (log 51).
+- An adapter and the simulator that stands in for its system follow the system's published contract, and a test checks every exchange against it (`OhipContractTest`, D-42). A simulator that is easier than the real system proves nothing about it, and a story told from it is checked against the contract before it is told (log 51): how the system delivers its events as well as how it takes requests (log 57).
 - Amounts on the wire are read as exact decimals with their trailing zeros kept, never as binary floating point; a test round-trips a whole amount (800.00) and a currency with three decimals (log 52).
 
 ## 9. Logging and observability
