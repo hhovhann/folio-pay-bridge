@@ -20,6 +20,8 @@ def ran_tests():
     """Map 'SimpleClassName.method' to True (passed) or False (failed/errored/skipped) from the surefire XML reports.
 
     The class comes from the test suite's name, the class's full name: a test case's classname is the class's @DisplayName when it has one.
+    One name can run more than once (a parameterized test, two classes with one simple name): it passed only if every run passed (final
+    code review: the last run used to overwrite the others, so a failing first case could read as passed).
     """
     results = {}
     for xml in (root / "target" / "surefire-reports").glob("TEST-*.xml"):
@@ -27,7 +29,8 @@ def ran_tests():
         simple = suite.get("name", "").rsplit(".", 1)[-1]
         for case in suite.iter("testcase"):
             bad = any(child.tag in ("failure", "error", "skipped") for child in case)
-            results[f"{simple}.{case.get('name').split('(')[0]}"] = not bad
+            key = f"{simple}.{case.get('name').split('(')[0]}"
+            results[key] = results.get(key, True) and not bad
     return results
 
 
@@ -76,8 +79,11 @@ if "--no-reports" not in sys.argv:
         names = set()
         for ref in re.findall(r"`([A-Z][A-Za-z0-9]*\.[A-Za-z0-9*]+)`", edge.read_text(encoding="utf-8")):
             if ref.endswith(".*"):
-                if not any(k.startswith(ref[:-1]) for k in reports):
+                runs = [passed for k, passed in reports.items() if k.startswith(ref[:-1])]
+                if not runs:
                     errors.append(f"docs/edge-cases.md: no tests found for {ref}")
+                elif not all(runs):
+                    errors.append(f"docs/edge-cases.md: a test of {ref} did not pass")
                 continue
             names.add(ref)
         for ref in sorted(names):

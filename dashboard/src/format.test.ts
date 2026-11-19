@@ -1,4 +1,4 @@
-import { money, needsAttention, paymentRows, toMinor } from './format';
+import { localDate, money, needsAttention, paymentRows, toMinor } from './format';
 import { charge, posting } from './testing';
 import type { Charge, Posting } from './types';
 
@@ -33,5 +33,13 @@ describe('payment rows', () => {
     expect(rows[1].posting?.status).toBe('DEAD_LETTER');
     expect(rows.every(needsAttention)).toBe(true);
     expect(needsAttention({ charge: charge() as Charge, posting: posting() as Posting })).toBe(false);
+  });
+});
+
+describe('local date', () => {
+  it('is the day on the operator’s clock, not UTC’s: at 01:30 in Dubai it is already the 20th', () => {
+    // 01:30 on 20 November in Dubai is 21:30 on the 19th in UTC: the two calendars disagree, as they do every night after midnight there.
+    const lateNightInDubai = { getFullYear: () => 2026, getMonth: () => 10, getDate: () => 20, toISOString: () => '2026-11-19T21:30:00.000Z' };
+    expect(localDate(lateNightInDubai as unknown as Date)).toBe('2026-11-20');
   });
 });

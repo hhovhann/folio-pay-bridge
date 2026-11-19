@@ -7,6 +7,7 @@ import dev.foliopay.domain.exception.InvalidRequestException;
 import dev.foliopay.domain.exception.NotFoundException;
 import dev.foliopay.gateway.OperaUnavailableException;
 import dev.foliopay.gateway.PspTransientException;
+import dev.foliopay.gateway.PspUnreadableReplyException;
 import dev.foliopay.logging.Redacted;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.stream.Collectors;
@@ -61,8 +62,11 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return reply(HttpStatus.GONE, ErrorCode.GONE, e.getMessage());
   }
 
-  /** A downstream system is down or not answering: the client should retry later with the same idempotency key. */
-  @ExceptionHandler({OperaUnavailableException.class, PspTransientException.class})
+  /**
+   * A downstream system is down, not answering, or answering something that cannot be read (a settlement statement without its lines):
+   * the client should retry later with the same idempotency key. Never a 500: the fault is outside this service (agent log 27).
+   */
+  @ExceptionHandler({OperaUnavailableException.class, PspTransientException.class, PspUnreadableReplyException.class})
   ResponseEntity<ProblemDetail> downstreamUnavailable(RuntimeException e) {
     log.warn("Downstream unavailable: {}", e.getClass().getSimpleName());
     return reply(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.DOWNSTREAM_UNAVAILABLE, "A downstream system is unavailable: try again with the same idempotency key");

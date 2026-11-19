@@ -34,6 +34,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 
 /** The relay's decisions with test doubles; WebhookIntegrationTest proves the queries and the HTTP side against the real things. */
 @DisplayName("Webhook relay decisions, with test doubles")
@@ -53,7 +54,8 @@ class NotificationServiceImplTest {
   }
 
   private NotificationServiceImpl service(int maxAttempts) {
-    WebhookProperties settings = new WebhookProperties("https://hooks.example.test/x", "s".repeat(32), maxAttempts, Duration.ofSeconds(5), false, Duration.ofDays(30));
+    WebhookProperties settings = new WebhookProperties("https://hooks.example.test/x", "s".repeat(32), maxAttempts,
+        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5));
     return new NotificationServiceImpl(repository, sender, settings, new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
@@ -116,6 +118,26 @@ class NotificationServiceImplTest {
 
     service(2).deliverDue();
     assertThat(n.getStatus()).isEqualTo(Notification.Status.FAILED);
+  }
+
+  /**
+   * Fails if one lost race ends the batch: another instance changed an event while we sent it, our save fails, and every event after it
+   * waited for the next poll (final code review). The event the other instance changed keeps its state; the rest of the batch is sent.
+   */
+  @Test
+  @DisplayName("A lost race on one event does not hold up the rest of the batch")
+  void aLostRaceOnOneEventDoesNotHoldUpTheRestOfTheBatch() {
+    Notification first = new Notification(Notification.Type.PAYMENT_CAPTURED, "ch-1", "{\"id\":\"payment.captured:ch-1\"}", NOW);
+    Notification second = new Notification(Notification.Type.PAYMENT_CAPTURED, "ch-2", "{\"id\":\"payment.captured:ch-2\"}", NOW);
+    when(repository.due(any(), any(Pageable.class))).thenReturn(List.of(first, second));
+    when(repository.findById(first.getId())).thenReturn(Optional.of(first));
+    when(repository.findById(second.getId())).thenReturn(Optional.of(second));
+    when(sender.send(anyString(), anyLong(), anyString(), anyString())).thenReturn(204);
+    when(repository.save(first)).thenThrow(new ObjectOptimisticLockingFailureException(Notification.class, first.getId()));
+
+    assertThat(service.deliverDue()).isEqualTo(1);
+    verify(sender).send(eq(second.getEventId()), anyLong(), anyString(), anyString());
+    verify(repository).claim(first.getId(), NOW, NOW.plus(Duration.ofMinutes(1)));
   }
 
   @Test

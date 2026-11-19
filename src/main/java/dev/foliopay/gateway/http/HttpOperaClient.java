@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import com.fasterxml.jackson.databind.node.MissingNode;
+import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.util.RawValue;
 import dev.foliopay.domain.model.Money;
@@ -25,6 +26,7 @@ import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -107,7 +109,15 @@ public class HttpOperaClient implements OperaClient {
   @Override
   public Optional<Posted> find(String hotelId, String reservationId, String externalRef) {
     JsonNode reply = call(hotelId, c -> c.get().uri(FOLIO + "?fetchInstructions={f}", hotelId, reservationId, POSTINGS));
-    for (JsonNode window : reply.path("reservationFolioInformation").path("folioWindows")) {
+    if (reply.isMissingNode()) {
+      return Optional.empty(); // 204, Oracle's "Folio not found": no folio yet, so nothing is posted
+    }
+    JsonNode folio = reply.get("reservationFolioInformation");
+    if (folio == null || !folio.isObject()) {
+      // Not a folio (a changed or wrapped reply, an empty 200). A folio with no windows yet does prove the payment absent.
+      throw new OperaUnavailableException("OPERA's reply was not a folio: cannot tell whether our payment is on it");
+    }
+    for (JsonNode window : folio.path("folioWindows")) {
       Optional<Posted> ours = searchWindow(hotelId, reservationId, externalRef, window);
       if (ours.isPresent()) {
         return ours;
@@ -119,8 +129,11 @@ public class HttpOperaClient implements OperaClient {
   /**
    * One window, page by page; the next page starts after the postings already read (the offset counts postings). A window proves our
    * payment absent only by a last page that keeps every promise: a page with nothing on it after a promise of more, a window with no number
-   * to ask for, a total larger than what was read, or more than {@value #MAX_FOLIO_PAGES} pages are "unavailable". Those are also what a
-   * misreading of Oracle's paging would look like (an offset counted in pages lands past the end and returns nothing, or skips pages).
+   * to ask for, more than {@value #MAX_FOLIO_PAGES} pages, or, once a window took more than one page, a total that differs from what was
+   * read, are "unavailable". Those are also what a misreading of Oracle's paging would look like (an offset counted in pages lands past the
+   * end and returns nothing, or skips pages). A single page is taken at its word: Oracle says a reply without {@code hasMore} holds every
+   * row, and does not say whether {@code totalResults} counts postings or folios, so checking it there could refuse the first payment of a
+   * stay whose folio is still empty (agent log 54). Which it counts is a question for Oracle's sandbox.
    */
   private Optional<Posted> searchWindow(String hotelId, String reservationId, String externalRef, JsonNode firstPage) {
     JsonNode page = firstPage;
@@ -233,16 +246,16 @@ public class HttpOperaClient implements OperaClient {
   private JsonNode send(String hotelId, Function<RestClient, RestClient.RequestHeadersSpec<?>> request, String rejectedToken) {
     boolean freshToken = rejectedToken != null;
     String bearer = token(rejectedToken);
-    String body;
+    ResponseEntity<String> reply;
     try {
-      body = request.apply(http).header("Authorization", "Bearer " + bearer).header("x-hotelid", hotelId).header("x-app-key", settings.operaAppKey())
+      reply = request.apply(http).header("Authorization", "Bearer " + bearer).header("x-hotelid", hotelId).header("x-app-key", settings.operaAppKey())
           .headers(h -> {
             String requestId = MDC.get("requestId");
             if (requestId != null) {
               h.add("x-request-id", requestId); // lets Oracle support find our call in their logs
             }
           })
-          .retrieve().body(String.class);
+          .retrieve().toEntity(String.class);
     } catch (HttpClientErrorException e) {
       throw map(e.getStatusCode(), e.getResponseBodyAsString(), freshToken, bearer);
     } catch (HttpServerErrorException e) {
@@ -250,8 +263,10 @@ public class HttpOperaClient implements OperaClient {
     } catch (RestClientException e) {
       throw new OperaUnavailableException("OPERA did not answer in time"); // connection refused or read timeout: it may or may not have arrived
     }
+    String body = reply.getBody();
     if (body == null || body.isBlank()) {
-      return MissingNode.getInstance(); // 204: for a folio, no postings yet
+      // 204 is Oracle's "Folio not found": nothing is posted yet. Any other empty answer proves nothing (final code review).
+      return reply.getStatusCode().value() == 204 ? MissingNode.getInstance() : NullNode.getInstance();
     }
     return readable("reply", () -> {
       try {

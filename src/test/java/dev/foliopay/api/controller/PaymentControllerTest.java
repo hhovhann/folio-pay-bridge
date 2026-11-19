@@ -16,6 +16,7 @@ import dev.foliopay.domain.exception.GoneException;
 import dev.foliopay.domain.exception.NotFoundException;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
+import dev.foliopay.gateway.PspUnreadableReplyException;
 import dev.foliopay.service.ChargeService;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.Outcome;
@@ -192,6 +193,19 @@ class PaymentControllerTest {
 
     doThrow(new IllegalStateException("boom")).when(payments).pay(any());
     pay(VALID).andExpect(jsonPath("$.code").value("INTERNAL_ERROR")).andExpect(header().doesNotExist("Retry-After"));
+  }
+
+  /**
+   * Fails if a reply from outside that cannot be read (a settlement statement without its lines) becomes a 500: the fault is the other
+   * system's, and the client should try again later, as for an outage (agent log 27; final code review). The handler is global, so this
+   * holds for reconciliation as for payments.
+   */
+  @Test
+  @DisplayName("An answer from outside that cannot be read is a 503 to retry, not a server error")
+  void anAnswerFromOutsideThatCannotBeReadIsA503ToRetryNotAServerError() throws Exception {
+    doThrow(new PspUnreadableReplyException("no lines")).when(payments).pay(any());
+    pay(VALID).andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.code").value("DOWNSTREAM_UNAVAILABLE"))
+        .andExpect(header().string("Retry-After", "2"));
   }
 }
 

@@ -13,15 +13,13 @@ import org.springframework.web.client.RestClient;
  */
 @Component
 class HttpWebhookSender implements WebhookSender {
-  private static final int CONNECT_MILLIS = 2_000;
-  private static final int READ_MILLIS = 5_000;
   private final RestClient http;
   private final String url;
 
   HttpWebhookSender(WebhookProperties settings, RestClient.Builder builder) {
     SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-    factory.setConnectTimeout(CONNECT_MILLIS);
-    factory.setReadTimeout(READ_MILLIS);
+    factory.setConnectTimeout(settings.connectTimeout());
+    factory.setReadTimeout(settings.readTimeout());
     this.http = builder.requestFactory(factory).build();
     this.url = settings.url();
   }

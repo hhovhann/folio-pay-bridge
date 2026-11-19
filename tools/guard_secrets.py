@@ -5,12 +5,15 @@ Three ways to run it:
   python3 tools/guard_secrets.py --repo        scan every tracked file (CI fails the build on a finding)
   python3 tools/guard_secrets.py --hook        Claude Code PreToolUse hook: reads the tool call as JSON on stdin and
                                                blocks a Write/Edit/Bash that would put a card number or secret on disk
+  python3 tools/guard_secrets.py --self-test   what it must find and what it must let through (CI runs it)
   python3 tools/guard_secrets.py FILE...       scan the named files
 
 A card number is a Luhn-valid run of 13 to 19 digits (spaces or dashes allowed between groups) that starts like a card
 (2-6) and is not one of the public test numbers below. Findings are printed masked: the guard must not leak what it found.
 Standard library only, so it runs before any build.
 """
+import contextlib
+import io
 import json
 import re
 import subprocess
@@ -37,8 +40,9 @@ SECRETS = [
 ]
 
 CANDIDATE = re.compile(r"(?<![\dA-Za-z])[2-6]\d(?:[ -]?\d){11,17}(?![\dA-Za-z])")
-SKIP_SUFFIXES = (".png", ".jpg", ".mp4", ".jar", ".class", ".lock", ".ico", ".woff", ".woff2")
-SKIP_FILES = {"tools/guard_secrets.py"}  # holds the allowlist itself
+SKIP_SUFFIXES = (".png", ".jpg", ".gif", ".mp4", ".jar", ".class", ".lock", ".ico", ".woff", ".woff2")
+# This file is scanned like any other (final code review). Its allowlist passes because it is the allowlist; an edit that adds a number
+# to it is checked against the allowlist as it was before the edit, so an agent cannot allowlist a real card number on its own.
 
 
 def luhn(digits):
@@ -66,7 +70,7 @@ def findings(text):
 def scan_files(paths):
     problems = 0
     for path in paths:
-        if path.endswith(SKIP_SUFFIXES) or path in SKIP_FILES:
+        if path.endswith(SKIP_SUFFIXES):
             continue
         try:
             text = open(path, encoding="utf-8", errors="ignore").read()
@@ -82,9 +86,6 @@ def hook():
     call = json.load(sys.stdin)
     tool = call.get("tool_name", "")
     data = call.get("tool_input", {}) or {}
-    path = data.get("file_path", "")
-    if path.endswith("tools/guard_secrets.py"):
-        return 0
     texts = [data.get(k, "") for k in ("content", "new_string", "command", "new_source")]
     texts += [e.get("new_string", "") for e in data.get("edits", []) or []]
     found = findings("\n".join(t for t in texts if isinstance(t, str)))
@@ -96,11 +97,49 @@ def hook():
     return 2
 
 
+def repo_files(listing):
+    """Paths from `git ls-files -z`: NUL-separated, so a name with a space or a non-ASCII character is one path, read as it is."""
+    return [p for p in listing.decode("utf-8", "surrogateescape").split("\0") if p]
+
+
+def with_check_digit(body):
+    """A Luhn-valid number from its digits without the last: lets the self-test make a card number without writing one here."""
+    return next(body + d for d in "0123456789" if luhn(body + d))
+
+
+def self_test():
+    """What the guard must find and what it must let through, the way guard_commands.py has its table (standards section 12)."""
+    made_up = with_check_digit("49" + "7" * 13)
+    hook_input = {"tool_name": "Edit", "tool_input": {"file_path": "tools/guard_secrets.py", "new_string": f'    "{made_up}",'}}
+    sys.stdin, saved = io.StringIO(json.dumps(hook_input)), sys.stdin
+    try:
+        with contextlib.redirect_stderr(io.StringIO()):
+            allowlist_edit_blocked = hook() == 2
+    finally:
+        sys.stdin = saved
+    checks = {
+        "a card number that is not a public test number is found": bool(findings(f"pan={made_up}")),
+        "a public test number and ordinary text pass": not findings("4111111111111111 and a total of 1000 for room 2001"),
+        "this file, allowlist included, scans clean": not findings(open(__file__, encoding="utf-8").read()),
+        "adding a number to the allowlist through an agent's edit is refused": allowlist_edit_blocked,
+        "a path with a space is one path": repo_files(b"docs/a b.csv\0README.md\0") == ["docs/a b.csv", "README.md"],
+    }
+    for name, ok in checks.items():
+        if not ok:
+            print("WRONG:", name)
+    wrong = sum(1 for ok in checks.values() if not ok)
+    print(f"guard_secrets: {len(checks)} checks, {wrong} wrong")
+    return 1 if wrong else 0
+
+
 def main(argv):
     if argv == ["--hook"]:
         return hook()
+    if argv == ["--self-test"]:
+        return self_test()
     if argv == ["--repo"]:
-        files = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], capture_output=True, text=True, check=True).stdout.split()
+        listing = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"], capture_output=True, check=True).stdout
+        files = repo_files(listing)
         problems = scan_files(files)
         print(f"guard_secrets: {len(files)} files scanned (tracked and new), {problems} finding(s)")
         return 1 if problems else 0

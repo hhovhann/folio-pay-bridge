@@ -84,10 +84,16 @@ Status: done 2026-11-19
   - phase 16's long lines;
   - agent log 52's test.
 
+## Phase 19 - Cleanup, and the final code and security review
+Status: in progress
+- Code only tests used is removed; one check that could not fail is gone; the icons are one sprite; dead references in the docs are fixed.
+- The final code review's findings are fixed, each with a test that failed first: a reply that is not a folio, an unreadable settlement statement, the guards, the spec checker, the dashboard's date, the webhook lease.
+- Dependencies with published advisories are pinned to patched releases; the two left are written down.
+
 ## Next
 1. Multi-tenancy: operators and properties on every row, credential and webhook; per-property settings; data residency (`docs/architecture.md` section 9).
 2. Hosted card entry and 3-D Secure, so the card number never reaches the service; chargeback evidence.
 3. A sweeper for payments stranded by a crash between two steps; alarms on dead letters and failed webhooks.
-4. Real adapters: OHIP sandbox, an acquirer's test environment, KMS and Cognito in an AWS account. For OHIP, the first sandbox session settles what Oracle's specification leaves open (D-42): does `postBillingPayment`'s 201 carry the postings or only a `Location`; the sign of a payment on a folio; whether payments before arrival must be deposits (`action: Deposit`, `getDepositFolio`) at each hotel; the status OHIP gives a locked reservation; the rate limits; how `getFolio` pages (does `offset` count postings, the default page size, the order of postings while the front desk is posting); whether postings billed to a generated folio are listed without `includeFolioHistory=true` (the OHIP review's third finding: if not, a replay after the folio is billed could post again). Then run Oracle's Postman collections against the sandbox, and point the bridge at it by configuration (`FOLIOPAY_HTTP_OPERA_*`).
+4. Real adapters: OHIP sandbox, an acquirer's test environment, KMS and Cognito in an AWS account. For OHIP, the first sandbox session settles what Oracle's specification leaves open (D-42): whether a folio window's `totalResults` counts postings or folios (phase 19); does `postBillingPayment`'s 201 carry the postings or only a `Location`; the sign of a payment on a folio; whether payments before arrival must be deposits (`action: Deposit`, `getDepositFolio`) at each hotel; the status OHIP gives a locked reservation; the rate limits; how `getFolio` pages (does `offset` count postings, the default page size, the order of postings while the front desk is posting); whether postings billed to a generated folio are listed without `includeFolioHistory=true` (the OHIP review's third finding: if not, a replay after the folio is billed could post again). Then run Oracle's Postman collections against the sandbox, and point the bridge at it by configuration (`FOLIOPAY_HTTP_OPERA_*`).
 5. Store the business date OPERA posted on (read back by `find`) beside the bridge's own, so reconciliation can explain a charge booked before night audit and posted after it.
 

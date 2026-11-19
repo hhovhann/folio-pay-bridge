@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import type { Link } from '../types';
 import { api, ApiError } from '../api';
 import { useLive } from '../hooks';
-import { money, toMinor } from '../format';
+import { localDate, money, toMinor } from '../format';
 import { Card, Empty, ErrorBanner, Pill } from '../components/ui';
 import { useToast } from '../components/Toasts';
 
@@ -12,7 +12,7 @@ const REFERENCE = /^[A-Za-z0-9._-]{1,64}$/;
 export function LinksPage({ live }: { live: boolean }) {
   const links = useLive<Link[]>(['/api/v1/links'], live);
   const toast = useToast();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDate(new Date());
   const [form, setForm] = useState({ reference: '', folioId: '', amount: '', currency: 'USD', dueDate: today, description: '' });
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });

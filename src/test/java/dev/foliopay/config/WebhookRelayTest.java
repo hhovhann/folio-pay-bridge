@@ -14,7 +14,8 @@ import org.mockito.InOrder;
 
 @DisplayName("Webhook relay: the schedule, its failures and a weak secret")
 class WebhookRelayTest {
-  private static final WebhookProperties SETTINGS = new WebhookProperties("https://hooks.example.test/x", "s".repeat(32), 12, Duration.ofSeconds(5), false, Duration.ofDays(30));
+  private static final WebhookProperties SETTINGS = new WebhookProperties("https://hooks.example.test/x", "s".repeat(32), 12,
+      Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5));
   private final NotificationService notifications = mock(NotificationService.class);
 
   @Test
@@ -37,7 +38,8 @@ class WebhookRelayTest {
   @Test
   @DisplayName("The relay refuses to start with a weak secret")
   void theRelayRefusesToStartWithAWeakSecret() {
-    WebhookProperties weak = new WebhookProperties("https://hooks.example.test/x", "short", 12, Duration.ofSeconds(5), false, Duration.ofDays(30));
+    WebhookProperties weak = new WebhookProperties("https://hooks.example.test/x", "short", 12,
+        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5));
     assertThatThrownBy(() -> new WebhookRelay(notifications, weak)).isInstanceOf(IllegalStateException.class);
   }
 }

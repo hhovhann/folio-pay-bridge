@@ -75,9 +75,22 @@ public class HttpPspClient implements PspClient {
   @Override
   public List<SettlementLine> settlementStatement() {
     JsonNode reply = guarded(() -> http.get().uri("/v1/settlements").header("Authorization", "Bearer " + apiKey).retrieve().body(JsonNode.class));
-    List<SettlementLine> lines = new ArrayList<>();
-    reply.path("lines").forEach(l -> lines.add(new SettlementLine(l.path("pspRef").asText(), l.path("amountMinor").asLong(), l.path("currency").asText())));
-    return lines;
+    JsonNode lines = reply == null ? null : reply.get("lines");
+    if (lines == null || !lines.isArray()) {
+      throw new PspUnreadableReplyException("The processor's settlement statement has no lines to read");
+    }
+    List<SettlementLine> statement = new ArrayList<>();
+    for (JsonNode line : lines) {
+      String pspRef = line.path("pspRef").asText();
+      JsonNode amountMinor = line.path("amountMinor");
+      String currency = line.path("currency").asText();
+      if (pspRef.isBlank() || !amountMinor.isIntegralNumber() || currency.isBlank()) {
+        // A blank reference or a zero would turn every capture into an exception; the run must say the statement could not be read.
+        throw new PspUnreadableReplyException("A settlement line without a reference, a whole amount in minor units, or a currency");
+      }
+      statement.add(new SettlementLine(pspRef, amountMinor.asLong(), currency));
+    }
+    return statement;
   }
 
   private JsonNode post(String path, String idempotencyKey, Map<String, Object> body) {

@@ -199,9 +199,11 @@ class WebhookIntegrationTest extends TestBase {
   @Test
   @DisplayName("A weak secret or a plain HTTP address stops start-up")
   void aWeakSecretOrAPlainHttpAddressStopsStartUp() {
-    assertThatThrownBy(() -> new WebhookProperties("https://hooks.example.test/x", "short", 12, Duration.ofSeconds(5), false, Duration.ofDays(30)).requireUsable())
+    assertThatThrownBy(() -> new WebhookProperties("https://hooks.example.test/x", "short", 12,
+        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5)).requireUsable())
         .hasMessageContaining("at least 32");
-    assertThatThrownBy(() -> new WebhookProperties("http://hooks.example.test/x", SECRET, 12, Duration.ofSeconds(5), false, Duration.ofDays(30)).requireUsable())
+    assertThatThrownBy(() -> new WebhookProperties("http://hooks.example.test/x", SECRET, 12,
+        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5)).requireUsable())
         .hasMessageContaining("must be https");
   }
 

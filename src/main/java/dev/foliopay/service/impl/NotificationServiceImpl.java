@@ -13,7 +13,6 @@ import dev.foliopay.repository.NotificationRepository;
 import dev.foliopay.service.NotificationService;
 import dev.foliopay.service.support.WebhookSignature;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +20,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -34,7 +34,6 @@ import org.springframework.stereotype.Service;
 class NotificationServiceImpl implements NotificationService {
   private static final Logger log = LoggerFactory.getLogger(NotificationServiceImpl.class);
   private static final int BATCH = 100;
-  private static final Duration SEND_LEASE = Duration.ofMinutes(1);
   private final NotificationRepository repository;
   private final WebhookSender sender;
   private final WebhookProperties settings;
@@ -125,8 +124,13 @@ class NotificationServiceImpl implements NotificationService {
     int delivered = 0;
     Instant now = clock.instant();
     for (Notification due : repository.due(now, PageRequest.of(0, BATCH))) {
-      if (repository.claim(due.getId(), now, now.plus(SEND_LEASE)) == 1) {
-        delivered += send(repository.findById(due.getId()).orElseThrow()) ? 1 : 0;
+      if (repository.claim(due.getId(), now, now.plus(settings.sendLease())) == 1) {
+        try {
+          delivered += send(repository.findById(due.getId()).orElseThrow()) ? 1 : 0;
+        } catch (OptimisticLockingFailureException lostRace) {
+          // Another instance changed this event while we sent it (our lease ran out): its state stands, and the batch carries on.
+          log.warn("Webhook {} changed by another instance while it was sent; its state is kept", due.getEventId());
+        }
       }
     }
     return delivered;

@@ -30,6 +30,14 @@ export function when(iso: string | null): string {
   return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
+/**
+ * The calendar day on this computer's clock, as YYYY-MM-DD. A form's default date must be the operator's today: the UTC day is
+ * yesterday for the first hours after midnight east of Greenwich, and the bridge refuses a due date before the hotel's day (D-18).
+ */
+export function localDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export function short(id: string, keep = 8): string {
   return id.length > keep + 1 ? `${id.slice(0, keep)}…` : id;
 }

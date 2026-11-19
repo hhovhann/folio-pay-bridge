@@ -30,6 +30,15 @@
     <httpcore5.version>5.4.3</httpcore5.version>
     <snakeyaml.version>2.6</snakeyaml.version>
     <commons-lang3.version>3.21.0</commons-lang3.version>
+    <!-- Security patches over Spring Boot 3.5.16, the last release of the 3.5 line, whose managed versions carry published
+         advisories (checked against OSV on 2026-11-19; SECURITY.md lists them): Tomcat (6 critical, 1 high), Jackson (4 high,
+         6 moderate), the PostgreSQL driver (1 high) and log4j-api (1 moderate). Each is the newest patch of the same line except
+         log4j, which has no fixed 2.24 and moves to 2.25. Remove these lines with the move to Spring Boot 4, which manages fixed
+         versions. -->
+    <tomcat.version>10.1.62</tomcat.version>
+    <jackson-bom.version>2.21.8</jackson-bom.version>
+    <postgresql.version>42.7.14</postgresql.version>
+    <log4j2.version>2.25.5</log4j2.version>
     <skipDashboard>false</skipDashboard>
     <skipDashboardTests>${skipDashboard}</skipDashboardTests>
   </properties>

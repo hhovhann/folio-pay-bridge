@@ -8,6 +8,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
+import dev.foliopay.domain.model.SettlementLine;
 import dev.foliopay.gateway.OperaClient.OperaPayment;
 import dev.foliopay.gateway.OperaClient.Posted;
 import dev.foliopay.gateway.OperaRejectedException;
@@ -183,6 +184,29 @@ class HttpAdapterRepliesTest {
     assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspUnreadableReplyException.class);
   }
 
+  /**
+   * Fails if a statement line without its reference, a whole amount or a currency becomes a line with a blank reference or zero:
+   * reconciliation would report every capture as an exception instead of saying the statement could not be read (standards section 5,
+   * API10; final code review). A statement with no lines is valid: nothing was settled.
+   */
+  @Test
+  @DisplayName("A settlement statement that cannot be read is unreadable, never lines with blank references or zero amounts")
+  void aSettlementStatementThatCannotBeReadIsUnreadableNeverLinesWithBlankReferencesOrZeroAmounts() {
+    for (String unreadable : List.of(
+        "{\"lines\":[{\"ref\":\"cap_1\",\"amount\":1000,\"currency\":\"USD\"}]}",
+        "{\"lines\":[{\"pspRef\":\"cap_1\",\"amountMinor\":10.5,\"currency\":\"USD\"}]}",
+        "{\"lines\":[{\"pspRef\":\"cap_1\",\"amountMinor\":1000}]}",
+        "{\"statement\":[]}",
+        "")) {
+      replies.put("/v1/settlements", new Reply(200, unreadable));
+      assertThatThrownBy(() -> psp().settlementStatement()).as(unreadable).isInstanceOf(PspUnreadableReplyException.class);
+    }
+    replies.put("/v1/settlements", new Reply(200, "{\"lines\":[]}"));
+    assertThat(psp().settlementStatement()).as("nothing settled").isEmpty();
+    replies.put("/v1/settlements", new Reply(200, "{\"lines\":[{\"pspRef\":\"cap_1\",\"amountMinor\":1000,\"currency\":\"USD\"}]}"));
+    assertThat(psp().settlementStatement()).containsExactly(new SettlementLine("cap_1", 1_000, "USD"));
+  }
+
   @Test
   @DisplayName("A processor rate limit, or a parallel request with the same key, is waited out, not treated as our bug")
   void aProcessorRateLimitOrAParallelRequestWithTheSameKeyIsWaitedOutNotTreatedAsOurBug() {
@@ -355,6 +379,23 @@ class HttpAdapterRepliesTest {
   }
 
   /** Fails if a folio OPERA returned only in part is read as "not there": the bridge would post again, and OPERA does not deduplicate. */
+  /**
+   * Fails if a reply that is not a folio reads as "our payment is not there": the bridge would post again, and OPERA does not deduplicate.
+   * A renamed or wrapped reply, or an empty 200, proves nothing (final code review). A real folio that has no windows yet, and Oracle's 204
+   * "Folio not found", still prove the payment absent, or the first payment of a stay could never post (agent log 54: a fail-safe can be
+   * too strict as well as too lax).
+   */
+  @Test
+  @DisplayName("A reply that is not a folio is unavailable, but a folio with no windows proves the payment absent")
+  void aReplyThatIsNotAFolioIsUnavailableButAFolioWithNoWindowsProvesThePaymentAbsent() {
+    for (String notAFolio : List.of("{\"folioInformation\":{\"folioWindows\":[]}}", "{}", "")) {
+      replies.put(OPERA_FOLIO, new Reply(200, notAFolio));
+      assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).as(notAFolio).isInstanceOf(OperaUnavailableException.class);
+    }
+    replies.put(OPERA_FOLIO, new Reply(200, "{\"reservationFolioInformation\":{}}"));
+    assertThat(opera().find("H1", "RES-1", "post:c1")).as("a folio with no windows yet").isEmpty();
+  }
+
   @Test
   @DisplayName("A folio returned only in part is unavailable, not absent")
   void aFolioReturnedOnlyInPartIsUnavailableNotAbsent() {
