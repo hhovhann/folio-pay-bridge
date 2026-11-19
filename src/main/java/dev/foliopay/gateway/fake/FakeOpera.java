@@ -63,7 +63,8 @@ public class FakeOpera implements OperaClient {
     if (p.paymentMethod() == null || p.paymentMethod().isBlank() || p.cashierId() <= 0) {
       throw new OperaRejectedException("Payment method and cashier are required");
     }
-    Posted posted = new Posted("OP-" + UUID.randomUUID().toString().substring(0, 8), p.reservationId(), p.amount(), businessDate(p.hotelId()));
+    Posted posted = new Posted("OP-" + UUID.randomUUID().toString().substring(0, 8), p.reservationId(), Optional.of(p.amount()),
+        Optional.of(businessDate(p.hotelId())));
     posts.putIfAbsent(p.externalRef(), posted);
     postCount.incrementAndGet();
     log.info("OPERA post {} reservation {} {} {} window {} (ref {})", posted.operaRef(), p.reservationId(), p.amount().toDecimalString(), p.amount().currency(), p.folioWindow(), p.externalRef());

@@ -14,6 +14,7 @@ import dev.foliopay.gateway.OperaUnavailableException;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -47,6 +48,10 @@ public class HttpOperaClient implements OperaClient {
   /** Decimals are read as exact decimals, never as binary floating point, so an amount comes back to the same minor units it went out as. */
   private static final ObjectMapper JSON = new ObjectMapper().enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS).configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
   private static final String PAYMENT = "Payment";
+  private static final String FOLIO = "/csh/v1/hotels/{h}/reservations/{r}/folios";
+  private static final String POSTINGS = "Postings";
+  /** Pages read per window before giving up as "unavailable": with OPERA's page size, far more postings than any one stay has. */
+  private static final int MAX_FOLIO_PAGES = 50;
   private final RestClient http;
   private final HttpGatewayProperties settings;
   private final Clock clock;
@@ -92,42 +97,103 @@ public class HttpOperaClient implements OperaClient {
   }
 
   /**
-   * {@code getFolio} with its postings: our payment is the {@code Payment} posting whose reference is our key, in any window. A window that
-   * says it has more postings than it returned, without ours among them, cannot prove the payment is absent: that is "unavailable", never
-   * "not found", because "not found" means post again and OPERA does not deduplicate.
+   * {@code getFolio} with its postings: our payment is the {@code Payment} posting whose reference is our key, in any window. A window longer
+   * than one page says {@code hasMore}, and its next page is asked for by window number and offset (Oracle's paging) until the last: the look
+   * comes before every post, the first one too, so a long folio must not stop a guest being paid. Anything that cannot prove the payment
+   * absent is "unavailable", never "not found", because "not found" means post again and OPERA does not deduplicate (see searchWindow).
    */
   @Override
   public Optional<Posted> find(String hotelId, String reservationId, String externalRef) {
-    JsonNode reply = call(hotelId, c -> c.get().uri("/csh/v1/hotels/{h}/reservations/{r}/folios?fetchInstructions={f}", hotelId, reservationId, "Postings"));
-    boolean incomplete = false;
+    JsonNode reply = call(hotelId, c -> c.get().uri(FOLIO + "?fetchInstructions={f}", hotelId, reservationId, POSTINGS));
     for (JsonNode window : reply.path("reservationFolioInformation").path("folioWindows")) {
-      incomplete |= window.path("hasMore").asBoolean(false);
-      for (JsonNode folio : window.path("folios")) {
+      Optional<Posted> ours = searchWindow(hotelId, reservationId, externalRef, window);
+      if (ours.isPresent()) {
+        return ours;
+      }
+    }
+    return Optional.empty();
+  }
+
+  /**
+   * One window, page by page; the next page starts after the postings already read (the offset counts postings). A window proves our
+   * payment absent only by a last page that keeps every promise: a page with nothing on it after a promise of more, a window with no number
+   * to ask for, a total larger than what was read, or more than {@value #MAX_FOLIO_PAGES} pages are "unavailable". Those are also what a
+   * misreading of Oracle's paging would look like (an offset counted in pages lands past the end and returns nothing, or skips pages).
+   */
+  private Optional<Posted> searchWindow(String hotelId, String reservationId, String externalRef, JsonNode firstPage) {
+    JsonNode page = firstPage;
+    int read = 0;
+    for (int pages = 1; ; pages++) {
+      int count = 0;
+      for (JsonNode folio : page.path("folios")) {
         for (JsonNode posting : folio.path("postings")) {
+          count++;
           if (PAYMENT.equals(posting.path("transactionType").asText()) && externalRef.equals(posting.path("reference").asText())) {
             return Optional.of(found(posting, reservationId));
           }
         }
       }
+      read += count;
+      boolean hasMore = page.path("hasMore").asBoolean(false);
+      if (count == 0 && (hasMore || pages > 1)) {
+        throw partialFolio();
+      }
+      if (!hasMore) {
+        if (pages > 1 && page.path("totalResults").isIntegralNumber() && page.path("totalResults").asInt() != read) {
+          throw partialFolio();
+        }
+        return Optional.empty();
+      }
+      if (pages == MAX_FOLIO_PAGES || !page.path("folioWindowNo").isIntegralNumber()) {
+        throw partialFolio();
+      }
+      page = nextPage(hotelId, reservationId, page.path("folioWindowNo").asInt(), read);
     }
-    if (incomplete) {
-      throw new OperaUnavailableException("OPERA returned only part of the folio: cannot tell whether our payment is on it");
-    }
-    return Optional.empty();
   }
 
+  private JsonNode nextPage(String hotelId, String reservationId, int windowNo, int offset) {
+    JsonNode reply = call(hotelId,
+        c -> c.get().uri(FOLIO + "?fetchInstructions={f}&folioWindowNo={w}&offset={o}", hotelId, reservationId, POSTINGS, windowNo, offset));
+    for (JsonNode window : reply.path("reservationFolioInformation").path("folioWindows")) {
+      if (window.path("folioWindowNo").asInt(-1) == windowNo) {
+        return window;
+      }
+    }
+    throw partialFolio();
+  }
+
+  private static OperaUnavailableException partialFolio() {
+    return new OperaUnavailableException("OPERA returned only part of the folio: cannot tell whether our payment is on it");
+  }
+
+  /**
+   * Our reference and OPERA's transaction number identify the payment; its amount and date are read if they can be and are empty if not, so
+   * a field the bridge does not need never turns "found" into "unavailable" (Oracle makes the currency optional, for one).
+   */
   private static Posted found(JsonNode posting, String reservationId) {
     String transactionNo = posting.path("transactionNo").asText();
     if (transactionNo.isBlank()) {
       // Our payment is on the folio but cannot be traced: never post it again, and never record it as POSTED with a blank reference.
       throw new OperaUnavailableException("OPERA listed our payment without a transaction number");
     }
-    return readable("payment", () -> {
-      JsonNode amount = posting.path("postedAmount");
-      String currency = amount.path("currencyCode").asText();
-      String date = posting.path("transactionDate").asText(posting.path("postingDate").asText());
-      return new Posted(transactionNo, reservationId, new Money(toMinor(amount.path("amount").asText(), currency), currency), LocalDate.parse(date));
-    });
+    return new Posted(transactionNo, reservationId, amount(posting.path("postedAmount")), date(posting));
+  }
+
+  private static Optional<Money> amount(JsonNode amount) {
+    String currency = amount.path("currencyCode").asText();
+    try {
+      return Optional.of(new Money(toMinor(amount.path("amount").asText(), currency), currency));
+    } catch (RuntimeException unreadable) {
+      return Optional.empty(); // no or an unknown currency, more decimals than it has, not a number
+    }
+  }
+
+  private static Optional<LocalDate> date(JsonNode posting) {
+    try {
+      return Optional.of(LocalDate.parse(posting.path("transactionDate").asText(posting.path("postingDate").asText())));
+    } catch (DateTimeParseException unreadable) {
+      return Optional.empty();
+    }
   }
 
   /** {@code getBusinessDate} answers for a list of hotels: ours is the one with our hotel id. */

@@ -2,12 +2,14 @@ package dev.foliopay.gateway.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
 import dev.foliopay.gateway.OperaClient.OperaPayment;
+import dev.foliopay.gateway.OperaClient.Posted;
 import dev.foliopay.gateway.OperaRejectedException;
 import dev.foliopay.gateway.OperaUnavailableException;
 import dev.foliopay.gateway.PspDeclinedException;
@@ -23,7 +25,9 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,8 +48,10 @@ class HttpAdapterRepliesTest {
   private HttpServer server;
   private String url;
   private final Map<String, Reply> replies = new ConcurrentHashMap<>();
+  private final List<String> requested = new CopyOnWriteArrayList<>();
   private final AtomicInteger tokensIssued = new AtomicInteger();
 
+  /** A reply for a path, or for a path with its exact query (which wins), so each page of a folio can have its own. */
   record Reply(int status, String body) {}
 
   @BeforeEach
@@ -62,7 +68,11 @@ class HttpAdapterRepliesTest {
 
   private void answer(HttpExchange exchange) throws IOException {
     String path = exchange.getRequestURI().getPath();
-    Reply reply = replies.containsKey(path) ? replies.get(path)
+    String query = exchange.getRequestURI().getRawQuery();
+    String asked = query == null ? path : path + "?" + query;
+    requested.add(asked);
+    Reply reply = replies.containsKey(asked) ? replies.get(asked)
+        : replies.containsKey(path) ? replies.get(path)
         : path.equals("/oauth/v1/tokens") ? new Reply(200, "{\"access_token\":\"t" + tokensIssued.incrementAndGet() + "\",\"expires_in\":3600}")
         : new Reply(404, "{}");
     byte[] body = reply.body().getBytes(StandardCharsets.UTF_8);
@@ -210,16 +220,28 @@ class HttpAdapterRepliesTest {
     }
   }
 
+  /**
+   * Fails if a field the bridge does not need decides whether our payment is there. Oracle's {@code currencyAmountType} makes the currency
+   * optional; a payment OPERA lists without one used to be "unavailable", so a post whose reply was lost was dead-lettered on every replay
+   * and never recorded as posted (OHIP review). Our reference and OPERA's transaction number identify it; amount and date are read if they
+   * can be.
+   */
   @Test
-  void aFoundPaymentWeCannotReadIsAnOutageNotACrash() {
-    for (String bad : List.of(
+  void aFoundPaymentIsFoundByItsTransactionNumberEvenWhenItsAmountOrDateCannotBeRead() {
+    LocalDate day = LocalDate.of(2026, 11, 17);
+    Map<String, Posted> expected = Map.of(
         folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00},\"transactionDate\":\"2026-11-17\""), // no currency
+        new Posted("1001", "RES-1", Optional.empty(), Optional.of(day)),
         folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"ZZ\"},\"transactionDate\":\"2026-11-17\""), // odd currency
+        new Posted("1001", "RES-1", Optional.empty(), Optional.of(day)),
         folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.001,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\""), // a fraction of a cent
-        folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"soon\""))) {
-      replies.put(OPERA_FOLIO, new Reply(200, bad));
-      assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).as(bad).isInstanceOf(OperaUnavailableException.class);
-    }
+        new Posted("1001", "RES-1", Optional.empty(), Optional.of(day)),
+        folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"soon\""),
+        new Posted("1001", "RES-1", Optional.of(TEN), Optional.empty()));
+    expected.forEach((listed, posted) -> {
+      replies.put(OPERA_FOLIO, new Reply(200, listed));
+      assertThat(opera().find("H1", "RES-1", "post:c1")).as(listed).contains(posted);
+    });
   }
 
   /** Review finding L4: every request that got a 401 used to fetch its own new token, one after another under the lock. */
@@ -285,14 +307,89 @@ class HttpAdapterRepliesTest {
     assertThat(opera().find("H1", "RES-1", "post:c1")).isEmpty();
   }
 
+  private static final String FIRST_PAGE = OPERA_FOLIO + "?fetchInstructions=Postings";
+
+  /** The request for one window's next page: Oracle's {@code folioWindowNo} and {@code offset}, the offset counted in postings. */
+  private static String nextPage(int window, int offset) {
+    return OPERA_FOLIO + "?fetchInstructions=Postings&folioWindowNo=" + window + "&offset=" + offset;
+  }
+
+  private static String windows(String... windows) {
+    return "{\"reservationFolioInformation\":{\"folioWindows\":[" + String.join(",", windows) + "]}}";
+  }
+
+  /** A folio window: {@code fields} are its number and paging fields, then its postings in one folio. */
+  private static String window(String fields, String... postings) {
+    return "{" + fields + ",\"folios\":[{\"postings\":[" + String.join(",", postings) + "]}]}";
+  }
+
+  private static String charge(int transactionNo) {
+    return "{\"transactionType\":\"Revenue\",\"transactionNo\":" + transactionNo + ",\"reference\":\"room night\"}";
+  }
+
+  private static String ourPayment(int transactionNo) {
+    return "{\"transactionType\":\"Payment\",\"reference\":\"post:c1\",\"transactionNo\":" + transactionNo
+        + ",\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\"}";
+  }
+
+  /**
+   * Fails if a window longer than one page stops its guest being paid. The bridge looks before every post, the first one too, and a window
+   * that said {@code hasMore} used to end every look as "unavailable": the payment was dead-lettered and every replay hit the same page
+   * (OHIP review). Its next page is asked for by window number and offset, Oracle's paging parameters, until the last.
+   */
+  @Test
+  void aLongFolioIsReadPageByPageSoItsGuestCanBePaid() {
+    replies.put(FIRST_PAGE, new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":true", charge(1001), charge(1002)),
+        window("\"folioWindowNo\":2,\"hasMore\":false", charge(1003)))));
+    replies.put(nextPage(1, 2), new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":true,\"offset\":2", charge(1004), charge(1005)))));
+    replies.put(nextPage(1, 4),
+        new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":false,\"offset\":4,\"totalResults\":5", charge(1006)))));
+    assertThat(opera().find("H1", "RES-1", "post:c1")).as("read to the end and not there: the payment may be posted").isEmpty();
+    assertThat(requested).contains(nextPage(1, 2), nextPage(1, 4)).noneMatch(r -> r.contains("folioWindowNo=2"));
+
+    replies.put(nextPage(1, 4), new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":false", charge(1006), ourPayment(1007)))));
+    assertThat(opera().find("H1", "RES-1", "post:c1")).as("on the last page").get().extracting(Posted::operaRef).isEqualTo("1007");
+  }
+
+  /**
+   * Fails if a page that cannot prove our payment absent is read as "not there": the bridge would post again, and OPERA does not
+   * deduplicate. Each is what a misreading of Oracle's paging would look like (an offset counted in pages, not postings, lands past the end
+   * and returns nothing, or skips pages), or a reply that breaks its own promise of more.
+   */
+  @Test
+  void aFolioPageThatCannotProveOurPaymentAbsentIsUnavailableNeverNotFound() {
+    Map<String, Reply> secondPages = Map.of(
+        "an empty page after a promise of more", new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":false"))),
+        "no folio at all", new Reply(204, ""),
+        "another window than the one asked for", new Reply(200, windows(window("\"folioWindowNo\":2,\"hasMore\":false", charge(1003)))),
+        "fewer postings read than the window's total",
+        new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":false,\"totalResults\":40", charge(1003)))));
+    secondPages.forEach((what, secondPage) -> {
+      replies.put(FIRST_PAGE, new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":true", charge(1001), charge(1002)))));
+      replies.put(nextPage(1, 2), secondPage);
+      assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).as(what)
+          .isInstanceOf(OperaUnavailableException.class).hasMessageContaining("part of the folio");
+    });
+    replies.put(FIRST_PAGE, new Reply(200, windows(window("\"hasMore\":true", charge(1001)))));
+    assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1")).as("a window without a number cannot be asked for its next page")
+        .isInstanceOf(OperaUnavailableException.class).hasMessageContaining("part of the folio");
+
+    replies.clear();
+    replies.put(OPERA_FOLIO, new Reply(200, windows(window("\"folioWindowNo\":1,\"hasMore\":true", charge(1001))))); // every page says there is more
+    requested.clear();
+    assertTimeoutPreemptively(Duration.ofSeconds(30), () -> assertThatThrownBy(() -> opera().find("H1", "RES-1", "post:c1"))
+        .as("a window that never ends").isInstanceOf(OperaUnavailableException.class).hasMessageContaining("part of the folio"));
+    assertThat(requested.stream().filter(r -> r.startsWith(OPERA_FOLIO))).as("pages asked for, bounded").hasSize(50);
+  }
+
   /** OPERA may list a payment as a credit (a negative amount); a charge carrying our reference is not our payment. */
   @Test
   void aPaymentListedAsACreditIsFoundAndAChargeWithOurReferenceIsNot() {
     replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":-10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\"")));
-    assertThat(opera().find("H1", "RES-1", "post:c1").orElseThrow().amount()).isEqualTo(TEN);
+    assertThat(opera().find("H1", "RES-1", "post:c1").orElseThrow().amount()).contains(TEN);
     replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.000,\"currencyCode\":\"USD\"},\"postingDate\":\"2026-11-17\"")));
     assertThat(opera().find("H1", "RES-1", "post:c1").orElseThrow()).as("extra zero decimals, and the posting date when there is no transaction date")
-        .satisfies(p -> assertThat(p.amount()).isEqualTo(TEN)).satisfies(p -> assertThat(p.businessDate()).isEqualTo(LocalDate.of(2026, 11, 17)));
+        .satisfies(p -> assertThat(p.amount()).contains(TEN)).satisfies(p -> assertThat(p.businessDate()).contains(LocalDate.of(2026, 11, 17)));
     replies.put(OPERA_FOLIO, new Reply(200, folio("\"transactionNo\":1001,\"postedAmount\":{\"amount\":10.00,\"currencyCode\":\"USD\"},\"transactionDate\":\"2026-11-17\"").replace("Payment", "Revenue")));
     assertThat(opera().find("H1", "RES-1", "post:c1")).isEmpty();
   }

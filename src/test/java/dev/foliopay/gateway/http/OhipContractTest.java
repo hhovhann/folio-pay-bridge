@@ -99,14 +99,33 @@ class OhipContractTest {
     client.postPayment(payment("RES-1", new Money(80_000, "USD"), "post:round"));
 
     assertThat(client.find("DEMO1", "RES-1", "post:usd").orElseThrow().operaRef()).isEqualTo(usd);
-    assertThat(client.find("DEMO1", "RES-1", "post:usd").orElseThrow().amount()).isEqualTo(new Money(12_345, "USD"));
-    assertThat(client.find("DEMO1", "RES-1", "post:kwd").orElseThrow().amount()).as("three decimals").isEqualTo(new Money(1_234, "KWD"));
-    assertThat(client.find("DEMO1", "RES-1", "post:jpy").orElseThrow().amount()).as("no decimals").isEqualTo(new Money(500, "JPY"));
+    assertThat(client.find("DEMO1", "RES-1", "post:usd").orElseThrow().amount()).contains(new Money(12_345, "USD"));
+    assertThat(client.find("DEMO1", "RES-1", "post:kwd").orElseThrow().amount()).as("three decimals").contains(new Money(1_234, "KWD"));
+    assertThat(client.find("DEMO1", "RES-1", "post:jpy").orElseThrow().amount()).as("no decimals").contains(new Money(500, "JPY"));
     // Fails if JSON decimals lose their trailing zeros (Jackson's default turns 800.00 into 8E+2): found during this phase, both sides.
-    assertThat(client.find("DEMO1", "RES-1", "post:round").orElseThrow().amount()).as("800.00").isEqualTo(new Money(80_000, "USD"));
+    assertThat(client.find("DEMO1", "RES-1", "post:round").orElseThrow().amount()).as("800.00").contains(new Money(80_000, "USD"));
     assertThat(client.find("DEMO1", "RES-1", "never-posted")).isEmpty();
     assertThat(client.find("DEMO1", "RES-2", "post:usd")).as("another reservation's folio").isEmpty();
     assertThat(operationsUsed()).containsExactlyInAnyOrder("getToken", "getBusinessDate", "postBillingPayment", "getFolio");
+  }
+
+  /**
+   * A long folio comes in pages: the adapter asks for a window's next page by Oracle's {@code folioWindowNo} and {@code offset}, and reads on
+   * to our payment or the last page; every page, asked and answered, is held to the contract. The simulator's page size is its own choice.
+   */
+  @Test
+  void aPaymentOnALongFolioIsFoundOnALaterPage() {
+    CONTROL.post().uri(opera.url() + "/sim/folio-page-size").contentType(MediaType.APPLICATION_JSON).body(Map.of("size", 2))
+        .retrieve().toBodilessEntity();
+    HttpOperaClient client = client();
+    for (int i = 1; i <= 5; i++) {
+      client.postPayment(payment("RES-1", new Money(1_000 + i, "USD"), "post:page-" + i));
+    }
+    assertThat(client.find("DEMO1", "RES-1", "post:page-5").orElseThrow().amount()).as("the fifth of five, on the third page")
+        .contains(new Money(1_005, "USD"));
+    assertThat(client.find("DEMO1", "RES-1", "never-posted")).as("read to the last page").isEmpty();
+    assertThat(exchanges).extracting(e -> String.valueOf(e.uri().getQuery())).contains("fetchInstructions=Postings&folioWindowNo=1&offset=2",
+        "fetchInstructions=Postings&folioWindowNo=1&offset=4");
   }
 
   /** OPERA posts on its own business date: a payment after night audit lands on the new day, and the bridge reads that date back. */
@@ -117,7 +136,7 @@ class OhipContractTest {
     CONTROL.post().uri(opera.url() + "/sim/night-audit").retrieve().toBodilessEntity();
     client.postPayment(payment("RES-1", new Money(1_000, "USD"), "post:after-audit"));
     assertThat(client.businessDate("DEMO1")).isEqualTo(before.plusDays(1));
-    assertThat(client.find("DEMO1", "RES-1", "post:after-audit").orElseThrow().businessDate()).isEqualTo(before.plusDays(1));
+    assertThat(client.find("DEMO1", "RES-1", "post:after-audit").orElseThrow().businessDate()).contains(before.plusDays(1));
   }
 
   @Test

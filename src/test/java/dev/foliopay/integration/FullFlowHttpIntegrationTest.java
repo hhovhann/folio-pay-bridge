@@ -38,6 +38,7 @@ import org.springframework.web.client.RestClient;
  * against in-memory fakes, this exercises the adapters: OAuth, timeouts, 429, status mapping, the idempotency header, look-before-repost.
  */
 @SpringBootTest(properties = {
+    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
     "foliopay.keys=local", "foliopay.gateway=http", "foliopay.demo-controls=false",
     "foliopay.retry.initial-backoff=10ms", "foliopay.http.read-timeout=1s", "foliopay.http.connect-timeout=1s",
     "foliopay.http.opera-app-key=demo-app-key", "foliopay.http.opera-client-id=fpbridge", "foliopay.http.opera-client-secret=fpbridge-secret", "foliopay.http.opera-enterprise-id=DEMOENT", "foliopay.http.opera-scope=demo-scope",

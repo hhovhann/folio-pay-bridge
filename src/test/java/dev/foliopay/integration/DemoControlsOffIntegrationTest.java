@@ -12,7 +12,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** The production default: the vault view, log tail, fault switches and shadow runs do not exist as endpoints. */
-@SpringBootTest(properties = {"foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
+@SpringBootTest(properties = {
+    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
+    "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
 @AutoConfigureMockMvc
 class DemoControlsOffIntegrationTest {
   @Autowired MockMvc mvc;

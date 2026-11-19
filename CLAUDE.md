@@ -31,7 +31,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 448 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 452 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)

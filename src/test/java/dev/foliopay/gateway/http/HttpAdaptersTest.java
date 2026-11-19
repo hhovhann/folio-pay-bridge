@@ -93,9 +93,9 @@ class HttpAdaptersTest {
     client.postPayment(payment("RES-1", new Money(1_234, "KWD")));
     client.postPayment(payment("RES-1", new Money(500, "JPY")));
 
-    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1USD").orElseThrow().amount()).isEqualTo(new Money(12_345, "USD"));
-    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1KWD").orElseThrow().amount()).as("three decimals").isEqualTo(new Money(1_234, "KWD"));
-    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1JPY").orElseThrow().amount()).as("no decimals").isEqualTo(new Money(500, "JPY"));
+    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1USD").orElseThrow().amount()).contains(new Money(12_345, "USD"));
+    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1KWD").orElseThrow().amount()).as("three decimals").contains(new Money(1_234, "KWD"));
+    assertThat(client.find("DEMO1", "RES-1", "ref-RES-1JPY").orElseThrow().amount()).as("no decimals").contains(new Money(500, "JPY"));
     assertThat(client.find("DEMO1", "RES-1", "never-posted")).isEmpty();
     assertThat(client.businessDate("DEMO1")).isEqualTo(day);
   }

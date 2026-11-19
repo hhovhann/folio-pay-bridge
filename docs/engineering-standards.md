@@ -22,7 +22,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - The domain owns its rules: entities change state through verbs that enforce them (`markCaptured`, `moveToDeadLetter`), never setters; entities refer to each other by id, not JPA associations, so no lazy loading hides in a payment path (D-12).
 - Correctness lives in the database, not in process memory: unique keys decide who creates, conditional updates decide who claims, `@Version` decides who overwrites, and the further-along state wins a race (D-2, D-16, D-19, D-22, D-28) (log 15, 19).
 - Decide from stored facts, not from the type of an exception: whether money may have moved is a row in the database (log 28).
-- Fail closed: no default that moves money, no fallback to a demo behaviour; refusing to start is a feature, with a test per setting (D-17) (log 17).
+- Fail closed: no default that moves money, no fallback to a demo behaviour; refusing to start is a feature, with a test per setting (D-17) (log 17). A value that is right only for the simulator (its hotel, its cashier, its payment method) is a demo default too: it belongs in the demo profile (log 54).
 - Small classes with one reason to change, small methods, no dead code (unused accessors are removed, not covered) (log 48). Comments say why, never restate the code, and are claims a test should hold (log 16).
 - State a rule exactly: "an answer is stale if a later request's answer already arrived", not "the date never goes back" (log 41).
 
@@ -72,6 +72,8 @@ Config in the environment, with no default that moves money (III); backing servi
 ## 8. Integrations
 - Every call has a timeout; only transient failures are retried, with the same key; the retry wraps one call, not a block that holds a card number (D-15) (log 7).
 - A timeout is "unknown": retry with the same key (processor) or look before posting again (OPERA) (D-27).
+- A look that decides whether to post again reads all of what it searches, page by page; only a page that cannot prove absence is "unknown". A fail-safe can be too strict as well as too lax, so test both: one that stops at the first page never double-posts, and never pays a long stay either (log 54).
+- A reply is recognised by the fields that identify it (our reference, OPERA's transaction number). A field the decision does not need is read if it can be, and never turns "found" into "unknown" (log 54).
 - A downstream outage fails only what needs it: the payment proceeds on the last known business date and the posting waits in the dead-letter queue; a client gets 503 with `Retry-After`, not 500 (log 27).
 - Lease lengths and retry budgets are derived from the timeouts, not fixed (log 32).
 - Test clients use the same protocol settings as production adapters; reproduce a surprise with `curl` before blaming the code (log 26).

@@ -131,7 +131,8 @@ class PostingServiceImplTest {
   void aRetryAfterALostResponseFindsTheEarlierPostInsteadOfPostingTwice() {
     newPosting();
     // the first attempt reached OPERA but its reply was lost; the retry looks first and finds it
-    when(opera.find("HOTEL9", "RES-1", "post:ch-1")).thenReturn(Optional.empty()).thenReturn(Optional.of(new Posted("OP-9", "RES-1", AMOUNT, DAY)));
+    when(opera.find("HOTEL9", "RES-1", "post:ch-1")).thenReturn(Optional.empty())
+        .thenReturn(Optional.of(new Posted("OP-9", "RES-1", Optional.of(AMOUNT), Optional.of(DAY))));
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("Read timed out"));
 
     Posting posting = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");
@@ -146,7 +147,7 @@ class PostingServiceImplTest {
     Posting waiting = stored();
     waiting.recordAttempt(); // it was tried before
     waiting.moveToDeadLetter(FailureCategory.OPERA_UNAVAILABLE, "timeout");
-    when(opera.find("HOTEL9", "RES-1", "post:ch-1")).thenReturn(Optional.of(new Posted("OP-5", "RES-1", AMOUNT, DAY)));
+    when(opera.find("HOTEL9", "RES-1", "post:ch-1")).thenReturn(Optional.of(new Posted("OP-5", "RES-1", Optional.of(AMOUNT), Optional.of(DAY))));
 
     Posting result = service.replay(waiting.getId());
 

@@ -63,6 +63,9 @@ public class OperaSimulator {
   private final AtomicReference<Fault> fault = new AtomicReference<>(Fault.NONE);
   private final AtomicReference<LocalDate> businessDate;
   private int tokensIssued;
+  /** Postings per window on one page of getFolio. The simulator's own choice: OPERA's default page size is a sandbox question. */
+  private int folioPageSize = DEFAULT_FOLIO_PAGE_SIZE;
+  private static final int DEFAULT_FOLIO_PAGE_SIZE = 20;
 
   OperaSimulator(Clock clock, @Value("${sim.opera.token-ttl-seconds:3600}") long tokenTtlSeconds, @Value("${sim.opera.app-key:demo-app-key}") String appKey,
                  @Value("${sim.opera.client-id:fpbridge}") String clientId, @Value("${sim.opera.client-secret:fpbridge-secret}") String clientSecret,
@@ -148,6 +151,11 @@ public class OperaSimulator {
     return postings.stream().filter(p -> p.reservationId().equals(reservationId)).toList();
   }
 
+  public synchronized int folioPageSize() { return folioPageSize; }
+
+  /** A small page lets a test or the front desk see a long folio without posting hundreds of lines. */
+  public synchronized void folioPageSize(int size) { folioPageSize = Math.max(1, size); }
+
   /** Charges minus payments, per currency of the reservation: what the guest still owes (negative when paid in advance). */
   public synchronized long balanceMinor(String reservationId, int window) {
     return postings.stream().filter(p -> p.reservationId().equals(reservationId) && p.folioWindowNo() == window)
@@ -228,6 +236,7 @@ public class OperaSimulator {
     reservations.clear();
     tokens.clear();
     tokensIssued = 0;
+    folioPageSize = DEFAULT_FOLIO_PAGE_SIZE;
     fault.set(Fault.NONE);
     businessDate.set(LocalDate.now(clock));
     seed();

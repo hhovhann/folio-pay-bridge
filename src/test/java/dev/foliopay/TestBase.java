@@ -12,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /** Integration tests run the whole application on H2 with the fake processor and PMS. Each test starts from an empty world. */
-@SpringBootTest(properties = {"foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=true", "foliopay.retry.initial-backoff=10ms"})
+@SpringBootTest(properties = {
+    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
+    "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=true", "foliopay.retry.initial-backoff=10ms"})
 public abstract class TestBase {
   protected static final String PAN = "4111111111111111";
   @Autowired protected CardVault vault;

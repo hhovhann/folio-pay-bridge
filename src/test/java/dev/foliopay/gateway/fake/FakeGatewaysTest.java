@@ -86,7 +86,8 @@ class FakeGatewaysTest {
   void operaPostsPaymentsAndFindsThemByReferenceAndReportsTheClockDateAsItsBusinessDate() {
     String ref = opera.postPayment(payment("RES-1", "post:1", "CC", 9001));
     assertThat(ref).startsWith("OP-");
-    assertThat(opera.find("H1", "RES-1", "post:1")).isPresent().get().satisfies(p -> assertThat(p.businessDate()).as("posted on OPERA's own date").isEqualTo(DAY));
+    assertThat(opera.find("H1", "RES-1", "post:1")).isPresent().get()
+        .satisfies(p -> assertThat(p.businessDate()).as("posted on OPERA's own date").contains(DAY));
     assertThat(opera.find("H1", "RES-1", "other")).isEmpty();
     assertThat(opera.find("H1", "RES-2", "post:1")).as("on another reservation's folio").isEmpty();
     assertThat(opera.postCount()).isEqualTo(1);

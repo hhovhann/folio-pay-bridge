@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -107,8 +108,10 @@ class ShadowServiceImpl implements ShadowService {
   private static List<Mismatch> compare(ShadowBooking booking, OperaClient.Posted posted, LocalDate recordedDate) {
     LegacyRules.Expected expected = LegacyRules.expected(booking);
     List<Mismatch> differences = new ArrayList<>();
-    if (posted == null || posted.amount().minor() != expected.amountMinor()) {
-      differences.add(new Mismatch(booking.ref(), "amount", String.valueOf(expected.amountMinor()), posted == null ? "none" : String.valueOf(posted.amount().minor())));
+    Optional<Long> postedMinor = posted == null ? Optional.empty() : posted.amount().map(Money::minor);
+    if (postedMinor.filter(minor -> minor == expected.amountMinor()).isEmpty()) {
+      String actual = posted == null ? "none" : postedMinor.map(String::valueOf).orElse("unreadable");
+      differences.add(new Mismatch(booking.ref(), "amount", String.valueOf(expected.amountMinor()), actual));
     }
     if (posted == null || !recordedDate.equals(expected.businessDate())) {
       differences.add(new Mismatch(booking.ref(), "businessDate", String.valueOf(expected.businessDate()), posted == null ? "none" : String.valueOf(recordedDate)));

@@ -148,10 +148,19 @@ class OperaSimController {
     return ResponseEntity.status(HttpStatus.CREATED).header(HttpHeaders.LOCATION, "/csh/v1/hotels/" + hotelId + "/reservations/" + reservationId + "/folios").body(reply);
   }
 
-  /** The reservation's folio windows with their postings and balances; the bridge reads it to find a payment it may already have posted. */
+  /**
+   * The reservation's folio windows with their postings and balances; the bridge reads it to find a payment it may already have posted. A
+   * window longer than a page comes in pages, as Oracle defines them: {@code folioWindowNo} picks windows, {@code offset} skips that many
+   * postings of each, and the window says {@code hasMore} until its last page. Whether OPERA counts the offset in postings, and its page
+   * size, are sandbox questions.
+   */
   @GetMapping("/csh/v1/hotels/{hotelId}/reservations/{reservationId}/folios")
-  ResponseEntity<Object> folio(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization, @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
-                               @RequestHeader(value = "x-app-key", required = false) String appKeyHeader, @PathVariable String hotelId, @PathVariable String reservationId) {
+  ResponseEntity<Object> folio(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                               @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
+                               @RequestHeader(value = "x-app-key", required = false) String appKeyHeader,
+                               @PathVariable String hotelId, @PathVariable String reservationId,
+                               @RequestParam(value = "folioWindowNo", required = false) List<Integer> windowsAsked,
+                               @RequestParam(value = "offset", required = false) List<Integer> offsets) {
     ResponseEntity<Object> refused = guard(authorization, hotelHeader, appKeyHeader, hotelId);
     if (refused != null) {
       return refused;
@@ -166,16 +175,30 @@ class OperaSimController {
     ArrayNode windows = info.putArray("folioWindows");
     List<OperaSimulator.Posting> postings = pms.folio(reservationId);
     String currency = reservation.get().currency();
-    postings.stream().map(OperaSimulator.Posting::folioWindowNo).collect(Collectors.toCollection(TreeSet::new)).forEach(w -> {
-      ObjectNode window = windows.addObject();
-      window.put("folioWindowNo", w);
-      window.putObject("balance").putRawValue("amount", new RawValue(OperaSimulator.decimal(pms.balanceMinor(reservationId, w), currency))).put("currencyCode", currency);
-      window.put("emptyWindow", false);
-      window.put("hasMore", false);
-      ArrayNode lines = window.putArray("folios").addObject().put("folioStatus", "Ok").putArray("postings");
-      postings.stream().filter(p -> p.folioWindowNo() == w).forEach(p -> postingJson(lines, p));
-    });
+    int offset = offsets == null ? 0 : Math.max(0, offsets.get(0));
+    int pageSize = pms.folioPageSize();
+    postings.stream().map(OperaSimulator.Posting::folioWindowNo).filter(w -> windowsAsked == null || windowsAsked.contains(w))
+        .collect(Collectors.toCollection(TreeSet::new)).forEach(w -> {
+          List<OperaSimulator.Posting> inWindow = postings.stream().filter(p -> p.folioWindowNo() == w).toList();
+          List<OperaSimulator.Posting> page = inWindow.subList(Math.min(offset, inWindow.size()), Math.min(offset + pageSize, inWindow.size()));
+          ObjectNode window = windows.addObject();
+          window.put("folioWindowNo", w);
+          String balance = OperaSimulator.decimal(pms.balanceMinor(reservationId, w), currency);
+          window.putObject("balance").putRawValue("amount", new RawValue(balance)).put("currencyCode", currency);
+          window.put("emptyWindow", false);
+          window.put("offset", offset).put("limit", pageSize).put("count", page.size()).put("totalResults", inWindow.size());
+          window.put("hasMore", offset + page.size() < inWindow.size());
+          ArrayNode lines = window.putArray("folios").addObject().put("folioStatus", "Ok").putArray("postings");
+          page.forEach(p -> postingJson(lines, p));
+        });
     return ResponseEntity.ok(body);
+  }
+
+  /** How many postings per window one page of getFolio holds (the simulator's switch, not part of OHIP); reset restores 20. */
+  @PostMapping("/sim/folio-page-size")
+  Map<String, Object> folioPageSize(@RequestBody Map<String, Integer> body) {
+    pms.folioPageSize(body.getOrDefault("size", 20));
+    return pms.state();
   }
 
   private static void postingJson(ArrayNode into, OperaSimulator.Posting p) {

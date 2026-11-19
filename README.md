@@ -15,7 +15,7 @@ You need a JDK 17 and Docker.
 git clone https://github.com/hhovhann/folio-pay-bridge && cd folio-pay-bridge
 export JAVA_HOME=<path to a JDK 17>
 
-# 1. Prove it: 448 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
+# 1. Prove it: 452 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
 ./mvnw clean verify && python3 tools/check_specs.py
 
 # 2. See the whole flow over real HTTP: bridge + PostgreSQL (Flyway) + OPERA simulator + processor simulator
@@ -84,7 +84,7 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | The layers stay layers: no controller reaches a repository, no service reaches HTTP, the domain knows no Spring, money is never floating point | `ArchitectureTest` |
 | Logs at DEBUG carry no card number and no card token; production JSON logs are masked | `PciIntegrationTest`, `JsonLogConfigTest` |
 
-**448 backend tests** and 15 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.5% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
+**452 backend tests** and 15 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.6% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
 
 ## Honest limits (read before you trust it)
 - **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer. OPERA cannot be run locally by anyone (OPERA Cloud is Oracle's hosted service; OPERA 5 is licensed to hotels), so the OPERA side follows Oracle's published contract and a test holds the adapter and the simulator to it; what the contract leaves open is a list of questions for the first sandbox session (`specs/roadmap.md`). Running for real needs OHIP partner access, which comes with the employer, and an acquirer's test environment.

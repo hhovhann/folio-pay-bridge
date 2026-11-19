@@ -24,6 +24,10 @@ public interface OperaClient {
   record OperaPayment(
       String hotelId, String reservationId, int folioWindow, String paymentMethod, long cashierId, Money amount, String externalRef, String pspRef) {}
 
-  /** {@code businessDate} is the date OPERA posted it on, which can be later than the charge's if night audit ran in between. */
-  record Posted(String operaRef, String reservationId, Money amount, LocalDate businessDate) {}
+  /**
+   * A payment OPERA has on the folio, identified by its transaction number. {@code amount} and {@code businessDate} are what OPERA lists,
+   * empty when they could not be read: they never decide that the payment is there. {@code businessDate} is the date OPERA posted it on,
+   * which can be later than the charge's if night audit ran in between.
+   */
+  record Posted(String operaRef, String reservationId, Optional<Money> amount, Optional<LocalDate> businessDate) {}
 }

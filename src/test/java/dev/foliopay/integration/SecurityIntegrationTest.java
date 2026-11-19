@@ -38,7 +38,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Authentication and authorisation end to end (D-30), with nothing mocked in between: a real RSA key signs the tokens, a local HTTP server
  * publishes its JWKS the way Cognito or Okta would, and Spring Security fetches it and checks signature, issuer, audience, expiry and scope.
  */
-@SpringBootTest(properties = {"foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
+@SpringBootTest(properties = {
+    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
+    "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
 @AutoConfigureMockMvc
 class SecurityIntegrationTest {
   private static final String ISSUER = "https://auth.example.test/tenant-1";
