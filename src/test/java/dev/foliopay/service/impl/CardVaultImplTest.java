@@ -16,9 +16,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Real crypto and the real local key service; only the table is a map. */
+@DisplayName("Card vault: real crypto and the real local key service")
 class CardVaultImplTest {
   private static final String PAN = "4111111111111111";
   private final CardTokenRepository repository = mock(CardTokenRepository.class);
@@ -38,6 +40,7 @@ class CardVaultImplTest {
   }
 
   @Test
+  @DisplayName("Stores only ciphertext and the display digits")
   void storesOnlyCiphertextAndTheDisplayDigits() {
     CardToken stored = vault.tokenise(new Pan(PAN), "12/29");
 
@@ -48,6 +51,7 @@ class CardVaultImplTest {
   }
 
   @Test
+  @DisplayName("Lends the card number to the caller and nothing more")
   void lendsTheCardNumberToTheCallerAndNothingMore() {
     String token = vault.tokenise(new Pan(PAN), "12/29").getToken();
 
@@ -57,6 +61,7 @@ class CardVaultImplTest {
   }
 
   @Test
+  @DisplayName("A ciphertext moved to another token cannot be opened")
   void aCiphertextMovedToAnotherTokenCannotBeOpened() {
     CardToken a = vault.tokenise(new Pan(PAN), "12/29");
     CardToken b = vault.tokenise(new Pan("4242424242424242"), "11/28");
@@ -67,6 +72,7 @@ class CardVaultImplTest {
   }
 
   @Test
+  @DisplayName("An unknown token is not found")
   void anUnknownTokenIsNotFound() {
     assertThatThrownBy(() -> vault.withCard("tok_nope", (pan, expiry) -> pan)).isInstanceOf(NotFoundException.class);
     assertThat(vault.exists("tok_nope")).isFalse();

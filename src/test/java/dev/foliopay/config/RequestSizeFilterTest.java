@@ -6,11 +6,13 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 /** Review finding M4: a chunked body declares no length, so the header check alone let any size through to the JSON parser. */
+@DisplayName("Request size limit: every body shape is capped")
 class RequestSizeFilterTest {
   private final RequestSizeFilter filter = new RequestSizeFilter();
 
@@ -34,6 +36,7 @@ class RequestSizeFilterTest {
   }
 
   @Test
+  @DisplayName("A chunked body over the limit is refused without reaching the controller")
   void aChunkedBodyOverTheLimitIsRefusedWithoutReachingTheController() throws Exception {
     AtomicReference<HttpServletRequest> reached = new AtomicReference<>();
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -45,6 +48,7 @@ class RequestSizeFilterTest {
   }
 
   @Test
+  @DisplayName("A chunked body within the limit reaches the controller whole")
   void aChunkedBodyWithinTheLimitReachesTheControllerWhole() throws Exception {
     byte[] body = "{\"mode\":\"clean\"}".getBytes(StandardCharsets.UTF_8);
     AtomicReference<String> seen = new AtomicReference<>();
@@ -66,6 +70,7 @@ class RequestSizeFilterTest {
   }
 
   @Test
+  @DisplayName("A chunked body can also be read as text")
   void aChunkedBodyCanAlsoBeReadAsText() throws Exception {
     AtomicReference<String> seen = new AtomicReference<>();
     filter.doFilter(chunked("{\"a\":1}".getBytes(StandardCharsets.UTF_8)), new MockHttpServletResponse(), (req, res) -> {
@@ -79,6 +84,7 @@ class RequestSizeFilterTest {
   }
 
   @Test
+  @DisplayName("A declared length over the limit is refused on the header alone")
   void aDeclaredLengthOverTheLimitIsRefusedOnTheHeaderAlone() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/reconcile");
     request.setContent(new byte[RequestSizeFilter.MAX_BYTES + 1]);
@@ -89,6 +95,7 @@ class RequestSizeFilterTest {
 
   /** Fails if only a Transfer-Encoding header triggers the check: over HTTP/2 a body of any size would reach the JSON parser. */
   @Test
+  @DisplayName("A body with no declared length and no transfer encoding is capped too")
   void aBodyWithNoDeclaredLengthAndNoTransferEncodingIsCappedToo() throws Exception {
     AtomicReference<HttpServletRequest> reached = new AtomicReference<>();
     MockHttpServletResponse response = new MockHttpServletResponse();
@@ -102,6 +109,7 @@ class RequestSizeFilterTest {
 
   /** A form post is parsed by Tomcat from its own stream (capped by max-http-form-post-size); buffering it here would hide its parameters. */
   @Test
+  @DisplayName("A form post is left to the container, so its parameters can still be read")
   void aFormPostIsLeftToTheContainerSoItsParametersStillRead() throws Exception {
     MockHttpServletRequest form = undeclared("a=1".getBytes(StandardCharsets.UTF_8));
     form.setContentType("application/x-www-form-urlencoded");
@@ -114,6 +122,7 @@ class RequestSizeFilterTest {
   }
 
   @Test
+  @DisplayName("The buffered body behaves like a blocking servlet stream")
   void theBufferedBodyBehavesLikeABlockingServletStream() throws Exception {
     filter.doFilter(undeclared("ab".getBytes(StandardCharsets.UTF_8)), new MockHttpServletResponse(), (req, res) -> {
       try {
@@ -132,6 +141,7 @@ class RequestSizeFilterTest {
 
   /** Fails if multipart is waved through: multipart parsing is off, so it is a body like any other and must be capped here. */
   @Test
+  @DisplayName("A multipart body over the limit is refused like any other")
   void aMultipartBodyOverTheLimitIsRefusedLikeAnyOther() throws Exception {
     MockHttpServletRequest multipart = undeclared(new byte[RequestSizeFilter.MAX_BYTES + 1]);
     multipart.setContentType("multipart/form-data; boundary=x");

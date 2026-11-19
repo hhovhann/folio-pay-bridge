@@ -24,6 +24,7 @@ import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -42,6 +43,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
     "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
     "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
 @AutoConfigureMockMvc
+@DisplayName("Authentication and authorisation end to end (D-30)")
 class SecurityIntegrationTest {
   private static final String ISSUER = "https://auth.example.test/tenant-1";
   private static final String AUDIENCE = "folio-pay-bridge";
@@ -109,6 +111,7 @@ class SecurityIntegrationTest {
   }
 
   @Test
+  @DisplayName("With no credentials, the API is refused but health and the console page are not")
   void withNoCredentialsTheApiIsRefusedButHealthAndTheConsolePageAreNot() throws Exception {
     mvc.perform(get("/api/v1/charges")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
         .andExpect(header().string("WWW-Authenticate", "Bearer"));
@@ -117,12 +120,14 @@ class SecurityIntegrationTest {
   }
 
   @Test
+  @DisplayName("A valid token with the right scope is let in, and the authorization server's scope prefix is understood")
   void aValidTokenWithTheRightScopeIsLetInAndTheAuthorizationServersScopePrefixIsUnderstood() throws Exception {
     mvc.perform(bearer(get("/api/v1/charges"), valid(PREFIX + "payments:read"))).andExpect(status().isOk());
   }
 
   /** Fails if any one of the token checks is missing: each of these tokens is wrong in exactly one way. */
   @Test
+  @DisplayName("A token that is expired, for another API, from another issuer or forged is refused")
   void aTokenThatIsExpiredForAnotherApiFromAnotherIssuerOrForgedIsRefused() throws Exception {
     String scope = PREFIX + "payments:read";
     for (String bad : List.of(
@@ -137,6 +142,7 @@ class SecurityIntegrationTest {
 
   /** Fails if a client can do more than its scopes say: a reporting client must never move money or replay a posting. */
   @Test
+  @DisplayName("A client can do only what its scopes allow")
   void aClientCanDoOnlyWhatItsScopesAllow() throws Exception {
     String readOnly = valid(PREFIX + "payments:read");
     mvc.perform(bearer(post("/api/v1/payments"), readOnly).contentType(MediaType.APPLICATION_JSON).content("{}"))
@@ -150,6 +156,7 @@ class SecurityIntegrationTest {
   }
 
   @Test
+  @DisplayName("An API key is checked against its hash and carries its own scopes")
   void anApiKeyIsCheckedAgainstItsHashAndCarriesItsOwnScopes() throws Exception {
     mvc.perform(get("/api/v1/charges").header("X-Api-Key", READ_KEY)).andExpect(status().isOk());
     mvc.perform(post("/api/v1/payments").header("X-Api-Key", READ_KEY).contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
@@ -158,6 +165,7 @@ class SecurityIntegrationTest {
 
   /** Fails if a wrong key is ignored as if absent: a caller holding one valid credential could probe keys without ever being refused. */
   @Test
+  @DisplayName("A wrong API key is refused even alongside a valid token")
   void aWrongApiKeyIsRefusedEvenAlongsideAValidToken() throws Exception {
     mvc.perform(bearer(get("/api/v1/charges"), valid(PREFIX + "payments:read")).header("X-Api-Key", "fpb_test_wrong"))
         .andExpect(status().isUnauthorized());
@@ -165,6 +173,7 @@ class SecurityIntegrationTest {
 
   /** The dashboard learns how to sign in without credentials; the overview it then reads needs payments:read like any ledger. */
   @Test
+  @DisplayName("The dashboard's sign-in settings are public, but its data is not")
   void theDashboardsSignInSettingsArePublicButItsDataIsNot() throws Exception {
     mvc.perform(get("/api/v1/public/dashboard-config")).andExpect(status().isOk()).andExpect(jsonPath("$.auth").value("unavailable"));
     mvc.perform(get("/api/v1/overview")).andExpect(status().isUnauthorized());
@@ -174,6 +183,7 @@ class SecurityIntegrationTest {
 
   /** Fails if the scope that lets an app ask for money also lets it take money: a spa app holding a card token could charge any folio. */
   @Test
+  @DisplayName("An app that may ask for money cannot take it, and a payer cannot create requests")
   void anAppThatMayAskForMoneyCannotTakeItAndAPayerCannotCreateRequests() throws Exception {
     String request = "{\"reference\":\"SPA-1\",\"folioId\":\"RES-1\",\"amountMinor\":5000,\"currency\":\"USD\",\"dueDate\":\"2099-01-01\"}";
     mvc.perform(bearer(post("/api/v1/links"), valid(PREFIX + "links:write")).contentType(MediaType.APPLICATION_JSON).content(request))
@@ -191,6 +201,7 @@ class SecurityIntegrationTest {
    * or a client repeating another's key and parameters would be handed the other's charge (D-40).
    */
   @Test
+  @DisplayName("Two clients using the same idempotency key get two separate payments")
   void twoClientsUsingTheSameIdempotencyKeyGetTwoSeparatePayments() throws Exception {
     String card = mvc.perform(bearer(post("/api/v1/cards"), valid(PREFIX + "cards:write")).contentType(MediaType.APPLICATION_JSON)
         .content("{\"pan\":\"4111111111111111\",\"expiry\":\"12/29\"}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();

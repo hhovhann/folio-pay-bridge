@@ -17,8 +17,10 @@ import dev.foliopay.service.PaymentService.Outcome;
 import dev.foliopay.service.PaymentService.PaymentCommand;
 import dev.foliopay.service.PostingService;
 import java.time.LocalDate;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("Payments: the outcome a client sees")
 class PaymentServiceImplTest {
   private static final Money AMOUNT = new Money(2_500, "USD");
   private static final LocalDate DAY = LocalDate.of(2026, 11, 17);
@@ -37,6 +39,7 @@ class PaymentServiceImplTest {
   }
 
   @Test
+  @DisplayName("A captured and posted payment is OK")
   void aCapturedAndPostedPaymentIsOk() {
     Charge charge = charge(Charge.Status.CAPTURED);
     Posting posting = Fixtures.posting("post:" + charge.getId(), charge.getId(), "F-1", AMOUNT, DAY);
@@ -47,6 +50,7 @@ class PaymentServiceImplTest {
   }
 
   @Test
+  @DisplayName("A captured payment whose folio posting is waiting says so plainly")
   void aCapturedPaymentWhoseFolioPostingIsWaitingSaysSoPlainly() {
     Charge charge = charge(Charge.Status.CAPTURED);
     Posting posting = Fixtures.posting("post:" + charge.getId(), charge.getId(), "F-1", AMOUNT, DAY);
@@ -60,6 +64,7 @@ class PaymentServiceImplTest {
   }
 
   @Test
+  @DisplayName("A decline never reaches the PMS")
   void aDeclineNeverReachesThePms() {
     charge(Charge.Status.DECLINED);
     assertThat(service.pay(COMMAND).outcome()).isEqualTo(Outcome.DECLINED);
@@ -67,6 +72,7 @@ class PaymentServiceImplTest {
   }
 
   @Test
+  @DisplayName("A pending charge is not posted yet")
   void aPendingChargeIsNotPostedYet() {
     charge(Charge.Status.PENDING);
     var result = service.pay(COMMAND);

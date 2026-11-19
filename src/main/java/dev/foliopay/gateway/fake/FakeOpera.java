@@ -18,9 +18,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Stand-in for OPERA with an outage switch and the lost-response case. Reservation F-CLOSED is always rejected, and a payment without a
- * payment method or cashier is rejected as OPERA would. Like OPERA it posts on its own business date. Like OPERA (D-23) it does not deduplicate: every call is a new folio entry and is
- * counted, so a test sees a second post of the same payment. {@code find} returns the first entry with a reference.
- * Synthetic; no network. Wired only when foliopay.gateway=fake.
+ * payment method or cashier is rejected as OPERA would. Like OPERA it posts on its own business date. Like OPERA (D-23) it does not
+ * deduplicate: every call is a new folio entry and is counted, so a test sees a second post of the same payment. {@code find} returns
+ * the first entry with a reference. Synthetic; no network. Wired only when foliopay.gateway=fake.
  */
 @Component
 @ConditionalOnProperty(name = "foliopay.gateway", havingValue = "fake")

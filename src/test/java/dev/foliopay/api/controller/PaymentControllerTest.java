@@ -25,6 +25,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -41,6 +42,7 @@ import org.springframework.test.web.servlet.ResultActions;
 /** HTTP contract only: services are mocked, so this proves validation, status mapping, safe errors and what the JSON exposes. */
 @WebMvcTest(PaymentController.class)
 @Import({PaymentControllerTest.FixedClock.class, dev.foliopay.config.security.SecurityConfig.class, dev.foliopay.config.security.DashboardAuth.class})
+@DisplayName("Payment API: the HTTP contract of each endpoint, with the services mocked")
 class PaymentControllerTest {
   @TestConfiguration
   static class FixedClock {
@@ -63,6 +65,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("A valid payment without a date leaves the date to the service, so a repeat after night audit can resume")
   void aValidPaymentWithoutADateLeavesTheDateToTheServiceSoARepeatAfterNightAuditCanResume() throws Exception {
     Mockito.when(businessDates.checkRequested(any())).thenCallRealMethod();
     Charge charge = Fixtures.charge("k-1", "BK-1", "tok_secret_token", new Money(12_345, "USD"));
@@ -81,12 +84,14 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("A concurrent change to the same record is a conflict to retry, not a server error")
   void aConcurrentChangeToTheSameRecordIsAConflictToRetryNotAServerError() throws Exception {
     when(payments.pay(any())).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
     pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("send it again")));
   }
 
   @Test
+  @DisplayName("A date the client sends is checked against the PMS")
   void aDateTheClientSendsIsCheckedAgainstThePms() throws Exception {
     Mockito.when(businessDates.checkRequested(any())).thenCallRealMethod();
     when(businessDates.resolve(LocalDate.of(2026, 11, 17))).thenReturn(LocalDate.of(2026, 11, 17));
@@ -102,6 +107,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("Invalid input is rejected before any service is called")
   void invalidInputIsRejectedBeforeAnyServiceIsCalled() throws Exception {
     pay("{\"idempotencyKey\":\"x\"}").andExpect(status().isBadRequest());
     pay(VALID.replace("12345", "0")).andExpect(status().isBadRequest());
@@ -118,6 +124,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("A validation error names the field but never echoes the submitted value")
   void aValidationErrorNamesTheFieldButNeverEchoesTheSubmittedValue() throws Exception {
     String body = pay(VALID.replace(TOKEN, "4111111111111111").replace("\"USD\"", "\"4111111111111111\""))
         .andExpect(status().isBadRequest()).andReturn().getResponse().getContentAsString();
@@ -125,6 +132,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("Domain errors map to their HTTP status")
   void domainErrorsMapToTheirHttpStatus() throws Exception {
     doThrow(new ConflictException("Idempotency key was already used with different parameters")).when(payments).pay(any());
     pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("different parameters")));
@@ -137,6 +145,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("A downstream outage is a 503 telling the client to retry with the same key")
   void aDownstreamOutageIsA503TellingTheClientToRetryWithTheSameKey() throws Exception {
     doThrow(new dev.foliopay.gateway.OperaUnavailableException("jdbc secret-host")).when(payments).pay(any());
     String body = pay(VALID).andExpect(status().isServiceUnavailable()).andReturn().getResponse().getContentAsString();
@@ -147,6 +156,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("An unexpected failure returns a generic message and no internals")
   void anUnexpectedFailureReturnsAGenericMessageAndNoInternals() throws Exception {
     doThrow(new IllegalStateException("jdbc:postgresql://secret-host/folio password=hunter2")).when(payments).pay(any());
     String body = pay(VALID).andExpect(status().isInternalServerError()).andReturn().getResponse().getContentAsString();
@@ -154,6 +164,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("Responses carry hardening headers and are never cached")
   void responsesCarryHardeningHeadersAndAreNeverCached() throws Exception {
     pay(VALID)
         .andExpect(header().string("X-Content-Type-Options", "nosniff"))
@@ -163,6 +174,7 @@ class PaymentControllerTest {
 
   /** Fails if the two 409s look alike: a client could not tell "send it again" from "you sent a different request under an old key". */
   @Test
+  @DisplayName("The two conflicts carry different codes, and only the retryable one has Retry-After")
   void theTwoConflictsCarryDifferentCodesAndOnlyTheRetryableOneHasRetryAfter() throws Exception {
     when(payments.pay(any())).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
     pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONCURRENT_UPDATE")).andExpect(header().exists("Retry-After"));
@@ -173,6 +185,7 @@ class PaymentControllerTest {
   }
 
   @Test
+  @DisplayName("An outage is retryable and says when; a server error has a code but no detail")
   void anOutageIsRetryableAndSaysWhenAndAServerErrorHasACodeButNoDetail() throws Exception {
     doThrow(new dev.foliopay.gateway.PspTransientException("timeout")).when(payments).pay(any());
     pay(VALID).andExpect(jsonPath("$.code").value("DOWNSTREAM_UNAVAILABLE")).andExpect(header().string("Retry-After", "2"));

@@ -56,7 +56,8 @@ final class OhipSpec {
         path.getValue().path("parameters").forEach(p -> parameters.add(resolve(spec, p)));
         method.getValue().path("parameters").forEach(p -> parameters.add(resolve(spec, p)));
         Pattern template = Pattern.compile(Pattern.quote(base + path.getKey()).replaceAll("\\{[^}/]+}", "\\\\E[^/]+\\\\Q"));
-        operations.add(new Operation(method.getValue().path("operationId").asText(), method.getKey().toUpperCase(), template, spec, method.getValue(), parameters));
+        String id = method.getValue().path("operationId").asText();
+        operations.add(new Operation(id, method.getKey().toUpperCase(), template, spec, method.getValue(), parameters));
       }));
     }
   }
@@ -181,7 +182,8 @@ final class OhipSpec {
     }
     for (String pair : encoded.split("&")) {
       String[] kv = pair.split("=", 2);
-      out.computeIfAbsent(URLDecoder.decode(kv[0], StandardCharsets.UTF_8), k -> new ArrayList<>()).add(kv.length > 1 ? URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "");
+      String value = kv.length > 1 ? URLDecoder.decode(kv[1], StandardCharsets.UTF_8) : "";
+      out.computeIfAbsent(URLDecoder.decode(kv[0], StandardCharsets.UTF_8), k -> new ArrayList<>()).add(value);
     }
     return out;
   }

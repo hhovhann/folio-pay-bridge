@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,6 +46,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * collect and deliver itself, so it sees each step.
  */
 @org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+@DisplayName("Webhooks: against the real database and a real HTTP receiver (D-35)")
 class WebhookIntegrationTest extends TestBase {
   private static final String SECRET = "whsec_test_0123456789abcdef0123456789";
   private static final List<Received> RECEIVED = new CopyOnWriteArrayList<>();
@@ -102,6 +104,7 @@ class WebhookIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A captured payment and its folio posting are each announced once, signed and without card data")
   void aCapturedPaymentAndItsFolioPostingAreEachAnnouncedOnceSignedAndWithoutCardData() {
     PaymentService.Result paid = pay("BK-7");
 
@@ -123,6 +126,7 @@ class WebhookIntegrationTest extends TestBase {
 
   /** Fails if announced rows are fetched again: once 100 were waiting, every run would see the same 100 and newer events never go out. */
   @Test
+  @DisplayName("A backlog larger than one batch drains instead of stalling on the first page")
   void aBacklogLargerThanOneBatchDrainsInsteadOfStallingOnTheFirstPage() {
     for (int i = 0; i < 101; i++) {
       Charge c = new Charge(Charge.BRIDGE_CLIENT, "k-backlog-" + i, "BK-B" + i, "F-B" + i, dev.foliopay.Fixtures.DAY, token, new Money(100, "USD"));
@@ -136,6 +140,7 @@ class WebhookIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A decline is announced as a decline")
   void aDeclineIsAnnouncedAsADecline() {
     psp.arm(FakePsp.Fault.DECLINE_NEXT);
     PaymentService.Result declined = pay("BK-8");
@@ -148,6 +153,7 @@ class WebhookIntegrationTest extends TestBase {
 
   /** Fails if a failed delivery is dropped, or retried at once in a tight loop instead of after a wait. */
   @Test
+  @DisplayName("A receiver that fails keeps the event pending for a later attempt")
   void aReceiverThatFailsKeepsTheEventPendingForALaterAttempt() {
     ANSWER.set(500);
     pay("BK-9");
@@ -165,6 +171,7 @@ class WebhookIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Shadow runs are not revenue and are never announced")
   void shadowRunsAreNotRevenueAndAreNeverAnnounced() {
     Charge shadow = new Charge(Charge.BRIDGE_CLIENT, "shadow-run-1", "BK-S", "F-S", dev.foliopay.Fixtures.DAY, token, new Money(100, "USD"));
     shadow.markCaptured("cap_shadow");
@@ -175,6 +182,7 @@ class WebhookIntegrationTest extends TestBase {
 
   /** Fails without the send lease: two instances running the relay at the same moment would both deliver every event. */
   @Test
+  @DisplayName("Two relays running at once deliver each event once")
   void twoRelaysRunningAtOnceDeliverEachEventOnce() throws Exception {
     for (int i = 0; i < 5; i++) pay("BK-R" + i);
     notifications.collect();
@@ -189,6 +197,7 @@ class WebhookIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A weak secret or a plain HTTP address stops start-up")
   void aWeakSecretOrAPlainHttpAddressStopsStartUp() {
     assertThatThrownBy(() -> new WebhookProperties("https://hooks.example.test/x", "short", 12, Duration.ofSeconds(5), false, Duration.ofDays(30)).requireUsable())
         .hasMessageContaining("at least 32");
@@ -197,6 +206,7 @@ class WebhookIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("An operator can see every event and send a failed one again")
   void anOperatorCanSeeEveryEventAndSendAFailedOneAgain() throws Exception {
     ANSWER.set(500);
     pay("BK-OPS");
@@ -222,6 +232,7 @@ class WebhookIntegrationTest extends TestBase {
 
   /** The relay looks back a bounded window, so it does not rescan all of history every few seconds (review finding). */
   @Test
+  @DisplayName("A payment that last changed before the lookback window is not rescanned")
   void aPaymentThatLastChangedBeforeTheLookbackWindowIsNotRescanned() {
     Charge old = new Charge(Charge.BRIDGE_CLIENT, "k-old", "BK-OLD", "F-OLD", Fixtures.DAY, token, new Money(100, "USD"));
     old.markCaptured("cap_old");
@@ -236,6 +247,7 @@ class WebhookIntegrationTest extends TestBase {
    * announced as posted, and the integrator would believe the folio was never paid (review finding).
    */
   @Test
+  @DisplayName("A posting replayed long after it was created is still announced")
   void aPostingReplayedLongAfterItWasCreatedIsStillAnnounced() {
     Charge old = new Charge(Charge.BRIDGE_CLIENT, "k-replayed", "BK-R", "F-R", Fixtures.DAY, token, new Money(100, "USD"));
     old.markCaptured("cap_replayed");

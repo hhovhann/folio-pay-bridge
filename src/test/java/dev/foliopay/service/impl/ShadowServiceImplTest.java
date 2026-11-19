@@ -18,8 +18,10 @@ import dev.foliopay.service.CardVault;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.Outcome;
 import java.util.Optional;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("Shadow mode: the bridge compared with the legacy rules")
 class ShadowServiceImplTest {
   private final PaymentService payments = mock(PaymentService.class);
   private final CardVault vault = mock(CardVault.class);
@@ -37,6 +39,7 @@ class ShadowServiceImplTest {
   }
 
   @Test
+  @DisplayName("The same seed generates the same bookings, each with a valid shape")
   void theSameSeedGeneratesTheSameBookingsAndEachHasAValidShape() {
     var first = service.generate(7, 10);
     assertThat(first).isEqualTo(service.generate(7, 10)).hasSize(10);
@@ -48,6 +51,7 @@ class ShadowServiceImplTest {
   }
 
   @Test
+  @DisplayName("A payment that does not end posted is counted as an error, not a match")
   void aPaymentThatDoesNotEndPostedIsCountedAsAnErrorNotAMatch() {
     tokeniseReturnsAToken();
     when(payments.pay(any())).thenReturn(new PaymentService.Result(Outcome.DECLINED, Fixtures.charge("k", "b", "t", new Money(1, "USD")), null));
@@ -60,6 +64,7 @@ class ShadowServiceImplTest {
   }
 
   @Test
+  @DisplayName("A posting OPERA cannot find is a mismatch on both fields, and the samples are bounded")
   void aPostingOperaCannotFindIsAMismatchOnBothFieldsAndTheSamplesAreBounded() {
     tokeniseReturnsAToken();
     when(payments.pay(any())).thenAnswer(call -> new PaymentService.Result(Outcome.OK, Fixtures.charge("k", "b", "t", new Money(1, "USD")), posted("post:x")));

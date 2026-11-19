@@ -28,6 +28,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -35,6 +36,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
 /** The relay's decisions with test doubles; WebhookIntegrationTest proves the queries and the HTTP side against the real things. */
+@DisplayName("Webhook relay decisions, with test doubles")
 class NotificationServiceImplTest {
   private static final Instant NOW = Instant.parse("2026-11-18T08:00:00Z");
   private final NotificationRepository repository = mock(NotificationRepository.class);
@@ -63,6 +65,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A dead-lettered posting is announced with its category and reason, so the hotel knows why it is not on the folio")
   void aDeadLetteredPostingIsAnnouncedWithItsCategoryAndReasonSoTheHotelKnowsWhyItIsNotOnTheFolio() {
     Posting p = Fixtures.posting("post:ch-1", "ch-1", "RES-1", new Money(5_000, "USD"), Fixtures.DAY);
     p.moveToDeadLetter(Posting.FailureCategory.REJECTED_BY_OPERA, "FOLIO_CLOSED");
@@ -77,6 +80,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("An event another instance queued first is not counted twice")
   void anEventAnotherInstanceQueuedFirstIsNotCountedTwice() {
     Charge c = Fixtures.charge("k-1", "BK-1", "tok_secret", new Money(100, "USD"));
     c.markCaptured("cap_1");
@@ -87,6 +91,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("The card token is never in a payload")
   void theCardTokenIsNeverInAPayload() {
     Charge c = Fixtures.charge("k-1", "BK-1", "tok_secret", new Money(100, "USD"));
     c.markCaptured("cap_1");
@@ -100,6 +105,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A receiver that does not answer is retried later, and the last attempt ends failed")
   void aReceiverThatDoesNotAnswerIsRetriedLaterAndTheLastAttemptEndsFailed() {
     Notification n = due();
     when(sender.send(anyString(), anyLong(), anyString(), anyString())).thenThrow(new IllegalStateException("connection refused"));
@@ -113,6 +119,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("An event another instance is sending is not sent again")
   void anEventAnotherInstanceIsSendingIsNotSentAgain() {
     due();
     when(repository.claim(anyString(), any(), any())).thenReturn(0);
@@ -122,6 +129,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A failed event can be redelivered, and an unknown one is not found")
   void aFailedEventCanBeRedeliveredAndAnUnknownOneIsNotFound() {
     Notification n = due();
     n.recordFailure("down", NOW, 1);
@@ -132,6 +140,7 @@ class NotificationServiceImplTest {
   }
 
   @Test
+  @DisplayName("The event list is bounded and newest first")
   void theListIsBoundedAndNewestFirst() {
     when(repository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
     service.findAll();

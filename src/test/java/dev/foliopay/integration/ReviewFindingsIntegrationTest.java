@@ -29,6 +29,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -37,6 +38,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** One test per substantiated finding of the security and idempotency review, run through the real database. */
 @AutoConfigureMockMvc
+@DisplayName("Security and idempotency review: one test per finding, through the real database")
 class ReviewFindingsIntegrationTest extends TestBase {
   private static final LocalDate DAY = LocalDate.of(2026, 11, 17);
   @Autowired BookingEventService bookings;
@@ -54,6 +56,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A paid link cannot be paid again with another card")
   void aPaidLinkCannotBePaidAgainWithAnotherCard() {
     PaymentLink link = newLink("R1");
     String other = secondCard();
@@ -66,6 +69,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Two cards racing on one open link produce exactly one capture")
   void twoCardsRacingOnOneOpenLinkProduceExactlyOneCapture() throws Exception {
     PaymentLink link = newLink("R2");
     String other = secondCard();
@@ -91,6 +95,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("The same key with a different folio is a conflict, not an OK for the original")
   void theSameKeyWithADifferentFolioIsAConflictNotAnOkForTheOriginal() {
     String key = "k-" + UUID.randomUUID();
     payments.pay(PaymentCommand.bridge(key, "BK-A", "F-A", token, new Money(5_000, "USD"), DAY));
@@ -101,6 +106,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A capture declined after authorisation releases the hold, through the real database")
   void aCaptureDeclinedAfterAuthorisationReleasesTheHold() {
     psp.arm(FakePsp.Fault.DECLINE_CAPTURE_NEXT);
 
@@ -112,6 +118,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Link charge keys never contain the card token")
   void linkChargeKeysNeverContainTheCardToken() throws Exception {
     PaymentLink link = newLink("R3");
     bookings.pay(link.getId(), token, DAY);
@@ -121,6 +128,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A request with a foreign Host header is refused")
   void aRequestWithAForeignHostHeaderIsRefused() throws Exception {
     mvc.perform(get("/api/v1/charges").header("Host", "attacker.example")).andExpect(status().isBadRequest());
     mvc.perform(get("/api/v1/charges").header("Host", "127.0.0.1:8081")).andExpect(status().isOk());
@@ -128,12 +136,14 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("An oversized body is refused before it is parsed")
   void anOversizedBodyIsRefusedBeforeItIsParsed() throws Exception {
     String huge = "{\"mode\":\"clean\",\"csv\":\"" + "x".repeat(1_100_000) + "\"}";
     mvc.perform(post("/api/v1/reconcile").contentType(MediaType.APPLICATION_JSON).content(huge)).andExpect(status().isPayloadTooLarge());
   }
 
   @Test
+  @DisplayName("A business date that is not the hotel's is refused, and the default comes from the PMS")
   void aBusinessDateThatIsNotTheHotelsIsRefusedAndTheDefaultComesFromThePms() throws Exception {
     opera.setBusinessDate(LocalDate.of(2026, 11, 16)); // after midnight but before night audit
     String body = "{\"idempotencyKey\":\"bd-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + token + "\",\"amountMinor\":500,\"currency\":\"USD\"%s}";
@@ -145,6 +155,7 @@ class ReviewFindingsIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A stored upstream message is bounded and on a single line")
   void aStoredUpstreamMessageIsBoundedAndSingleLine() {
     var result = payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", "F-CLOSED", token, new Money(5_000, "USD"), DAY));
     assertThat(result.posting().getLastError()).doesNotContain("\n").hasSizeLessThanOrEqualTo(255);

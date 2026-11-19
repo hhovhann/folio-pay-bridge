@@ -8,11 +8,14 @@ import ch.qos.logback.classic.util.LogbackMDCAdapter;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.net.URL;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Loads the real logback-spring.xml, so removing the masking converter from the production config fails this test. */
+@DisplayName("Production log configuration: the masking converter is in place")
 class ProductionLogConfigTest {
   @Test
+  @DisplayName("A card number logged by mistake is masked on the console")
   void aCardNumberLoggedByMistakeIsMaskedOnTheConsole() throws Exception {
     PrintStream original = System.out;
     ByteArrayOutputStream captured = new ByteArrayOutputStream();

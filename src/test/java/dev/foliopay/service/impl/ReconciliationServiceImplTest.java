@@ -26,9 +26,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+@DisplayName("Reconciliation: captures and postings against the acquirer statement")
 class ReconciliationServiceImplTest {
   private final ChargeRepository charges = mock(ChargeRepository.class);
   private final PostingRepository postings = mock(PostingRepository.class);
@@ -68,6 +70,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A pasted statement is parsed and reconciled")
   void aPastedStatementIsParsedAndReconciled() {
     capture("cap_1", 1_000, true);
 
@@ -78,6 +81,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A clean statement matches everything, with no exceptions")
   void aCleanStatementMatchesEverythingWithNoExceptions() {
     capture("cap_1", 1_000, true);
     capture("cap_2", 2_000, true);
@@ -90,6 +94,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A capture the acquirer never settled is missing")
   void aCaptureTheAcquirerNeverSettledIsMissing() {
     capture("cap_1", 1_000, true);
     ReconReport report = reconcile();
@@ -98,6 +103,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A short settlement is an amount difference")
   void aShortSettlementIsAnAmountDifference() {
     capture("cap_1", 1_000, true);
     ReconReport report = reconcile(new SettlementLine("cap_1", 850, "USD"));
@@ -109,12 +115,14 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A line we never captured is unknown")
   void aLineWeNeverCapturedIsUnknown() {
     ReconReport report = reconcile(new SettlementLine("cap_ghost", 7_700, "USD"));
     assertThat(report.items()).singleElement().satisfies(i -> assertThat(i.category()).isEqualTo(Category.UNKNOWN_IN_SETTLEMENT));
   }
 
   @Test
+  @DisplayName("A settled but unposted capture is flagged for the PMS")
   void aSettledButUnpostedCaptureIsFlaggedForThePms() {
     capture("cap_1", 1_000, false);
     ReconReport report = reconcile(new SettlementLine("cap_1", 1_000, "USD"));
@@ -123,6 +131,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A double presentment is not silently dropped")
   void aDoublePresentmentIsNotSilentlyDropped() {
     capture("cap_1", 1_000, true);
     ReconReport report = reconcile(new SettlementLine("cap_1", 1_000, "USD"), new SettlementLine("cap_1", 1_000, "USD"));
@@ -131,6 +140,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A settlement in another currency is not a match, even with the same number")
   void aSettlementInAnotherCurrencyIsNotAMatchEvenWithTheSameNumber() {
     capture("cap_1", 10_000, true);
     ReconReport report = reconcile(new SettlementLine("cap_1", 10_000, "JPY"));
@@ -140,6 +150,7 @@ class ReconciliationServiceImplTest {
   private static ReconReport.Total usd(ReconReport report) { return report.totals().get("USD"); }
 
   @Test
+  @DisplayName("Totals are kept per currency, so yen and dollars are never added up")
   void totalsAreKeptPerCurrencySoYenAndDollarsAreNeverAddedUp() {
     capture("cap_1", 1_000, true);
     Charge yen = Fixtures.charge("k-yen", "BK-Y", "tok", new Money(100, "JPY"));
@@ -159,6 +170,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A currency difference shows each side in its own currency")
   void aCurrencyDifferenceShowsEachSideInItsOwnCurrency() {
     capture("cap_1", 10_000, true);
     ReconReport report = reconcile(new SettlementLine("cap_1", 10_000, "JPY"));
@@ -171,6 +183,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("Shadow runs are not revenue and stay out of the report")
   void shadowRunsAreNotRevenueAndStayOutOfTheReport() {
     Charge shadow = Fixtures.charge("shadow-run1-BK-1", "BK-1", "tok", new Money(9_000, "USD"));
     shadow.markCaptured("cap_shadow");
@@ -187,6 +200,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A distorted acquirer statement produces one of each simulated problem")
   void aDistortedAcquirerStatementProducesOneOfEachSimulatedProblem() {
     capture("cap_a", 1_000, true);
     capture("cap_b", 2_000, true);
@@ -200,6 +214,7 @@ class ReconciliationServiceImplTest {
 
   /** Fails if the whole history is expected in every file: from the second day on, every earlier capture would be reported missing. */
   @Test
+  @DisplayName("Only captures taken in the statement's period are expected in it")
   void onlyCapturesTakenInTheStatementsPeriodAreExpectedInIt() {
     Charge yesterday = capture("cap_old", 1_000, true);
     Charge today = capture("cap_new", 2_000, true);
@@ -213,6 +228,7 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("A late settlement of an older capture is matched, not reported unknown")
   void aLateSettlementOfAnOlderCaptureIsMatchedNotReportedUnknown() {
     Charge old = capture("cap_old", 1_000, true);
     LocalDate day = old.getBusinessDate();
@@ -226,6 +242,7 @@ class ReconciliationServiceImplTest {
 
   /** Fails if lines in two currencies are summed into one figure labelled with the first currency: an amount nobody ever settled. */
   @Test
+  @DisplayName("A reference settled in two currencies gives one item per currency, never a sum across them")
   void aReferenceSettledInTwoCurrenciesGivesOneItemPerCurrencyNeverASumAcrossThem() {
     capture("cap_1", 1_000, true);
 
@@ -240,12 +257,14 @@ class ReconciliationServiceImplTest {
   }
 
   @Test
+  @DisplayName("An unknown reference in two currencies is reported per currency")
   void anUnknownReferenceInTwoCurrenciesIsReportedPerCurrency() {
     ReconReport report = reconcile(new SettlementLine("cap_x", 500, "USD"), new SettlementLine("cap_x", 700, "EUR"));
     assertThat(report.items()).extracting(ReconReport.Item::settledCurrency, ReconReport.Item::settledMinor).containsExactly(org.assertj.core.groups.Tuple.tuple("EUR", 700L), org.assertj.core.groups.Tuple.tuple("USD", 500L));
   }
 
   @Test
+  @DisplayName("A period that ends before it starts is refused")
   void aPeriodThatEndsBeforeItStartsIsRefused() {
     assertThatThrownBy(() -> new Period(LocalDate.of(2026, 11, 18), LocalDate.of(2026, 11, 17))).isInstanceOf(InvalidRequestException.class);
   }
@@ -256,6 +275,7 @@ class ReconciliationServiceImplTest {
 
   /** Fails if one IN list holds every id: PostgreSQL's driver refuses more than 65,535 bind parameters in one statement. */
   @Test
+  @DisplayName("Large id lists are queried in slices of at most a thousand")
   void largeIdListsAreQueriedInSlicesOfAtMostAThousand() {
     for (int i = 0; i < 2_500; i++) capture("cap_" + i, 100, true);
 

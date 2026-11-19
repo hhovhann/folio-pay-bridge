@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.foliopay.api.ApiDeprecation;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /** An old version kept for existing clients announces its end in the standard headers, so a client's monitoring sees it before it goes (D-39). */
+@DisplayName("API deprecation: an old version announces its end in standard headers (D-39)")
 class ApiDeprecationInterceptorTest {
   @RestController
   static class Versions {
@@ -27,6 +29,7 @@ class ApiDeprecationInterceptorTest {
 
   /** Fails if a deprecated endpoint stops saying so, or says it in a form clients cannot parse (RFC 9745 date, RFC 8594 HTTP date). */
   @Test
+  @DisplayName("A deprecated endpoint carries Deprecation, Sunset and its successor")
   void aDeprecatedEndpointCarriesDeprecationSunsetAndItsSuccessor() throws Exception {
     mvc.perform(get("/api/v1/old"))
         .andExpect(status().isOk())
@@ -36,6 +39,7 @@ class ApiDeprecationInterceptorTest {
   }
 
   @Test
+  @DisplayName("A current endpoint carries no deprecation headers")
   void aCurrentEndpointCarriesNone() throws Exception {
     mvc.perform(get("/api/v2/payments"))
         .andExpect(status().isOk())

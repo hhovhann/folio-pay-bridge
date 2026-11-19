@@ -12,11 +12,14 @@ import java.io.PrintStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /** Loads the real logback-json.xml, so the production JSON format cannot drop the card mask or the request id without failing here. */
+@DisplayName("Production JSON logs: the card mask and the request id survive")
 class JsonLogConfigTest {
   @Test
+  @DisplayName("Each log line is one JSON object with the request id and no card number")
   void eachLineIsOneJsonObjectWithTheRequestIdAndNoCardNumber() throws Exception {
     PrintStream original = System.out;
     ByteArrayOutputStream captured = new ByteArrayOutputStream();

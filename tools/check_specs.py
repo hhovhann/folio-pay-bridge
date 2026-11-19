@@ -17,11 +17,15 @@ errors = []
 
 
 def ran_tests():
-    """Map 'SimpleClassName.method' to True (passed) or False (failed/errored/skipped) from the surefire XML reports."""
+    """Map 'SimpleClassName.method' to True (passed) or False (failed/errored/skipped) from the surefire XML reports.
+
+    The class comes from the test suite's name, the class's full name: a test case's classname is the class's @DisplayName when it has one.
+    """
     results = {}
     for xml in (root / "target" / "surefire-reports").glob("TEST-*.xml"):
-        for case in ET.parse(xml).getroot().iter("testcase"):
-            simple = case.get("classname", "").rsplit(".", 1)[-1]
+        suite = ET.parse(xml).getroot()
+        simple = suite.get("name", "").rsplit(".", 1)[-1]
+        for case in suite.iter("testcase"):
             bad = any(child.tag in ("failure", "error", "skipped") for child in case)
             results[f"{simple}.{case.get('name').split('(')[0]}"] = not bad
     return results

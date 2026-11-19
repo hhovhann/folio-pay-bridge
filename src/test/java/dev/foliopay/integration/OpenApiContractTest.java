@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
     "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
     "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=true", "springdoc.api-docs.enabled=true"})
 @AutoConfigureMockMvc
+@DisplayName("OpenAPI: the published description is what the code serves")
 class OpenApiContractTest {
   private static final Path COMMITTED = Path.of("docs", "openapi.json");
   private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
@@ -37,6 +39,7 @@ class OpenApiContractTest {
   }
 
   @Test
+  @DisplayName("The committed OpenAPI file matches what the code serves")
   void theCommittedSpecMatchesWhatTheCodeServes() throws Exception {
     JsonNode live = served();
     if ("true".equals(System.getenv("UPDATE_OPENAPI"))) {
@@ -47,6 +50,7 @@ class OpenApiContractTest {
   }
 
   @Test
+  @DisplayName("A card number is accepted by exactly one operation")
   void aCardNumberIsAcceptedByExactlyOneOperation() throws Exception {
     JsonNode doc = served();
     List<String> acceptingPan = new ArrayList<>();
@@ -59,6 +63,7 @@ class OpenApiContractTest {
   }
 
   @Test
+  @DisplayName("No response schema carries a card number or the card token")
   void noResponseSchemaCarriesACardNumberOrTheCardToken() throws Exception {
     JsonNode schemas = served().path("components").path("schemas");
     for (String name : List.of("CardResponse", "ChargeView", "PostingView", "PaymentResponse", "LinkView")) {
@@ -71,6 +76,7 @@ class OpenApiContractTest {
   }
 
   @Test
+  @DisplayName("Payment operations are documented")
   void paymentOperationsAreDocumented() throws Exception {
     JsonNode paths = served().path("paths");
     assertThat(paths.fieldNames()).toIterable().contains("/api/v1/cards", "/api/v1/payments", "/api/v1/postings/{id}/replay", "/api/v1/booking-events", "/api/v1/links/{id}/pay", "/api/v1/reconcile");

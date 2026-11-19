@@ -23,6 +23,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.WebApplicationType;
@@ -41,9 +42,11 @@ import org.springframework.web.client.RestClient;
     "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
     "foliopay.keys=local", "foliopay.gateway=http", "foliopay.demo-controls=false",
     "foliopay.retry.initial-backoff=10ms", "foliopay.http.read-timeout=1s", "foliopay.http.connect-timeout=1s",
-    "foliopay.http.opera-app-key=demo-app-key", "foliopay.http.opera-client-id=fpbridge", "foliopay.http.opera-client-secret=fpbridge-secret", "foliopay.http.opera-enterprise-id=DEMOENT", "foliopay.http.opera-scope=demo-scope",
+    "foliopay.http.opera-app-key=demo-app-key", "foliopay.http.opera-client-id=fpbridge", "foliopay.http.opera-client-secret=fpbridge-secret",
+    "foliopay.http.opera-enterprise-id=DEMOENT", "foliopay.http.opera-scope=demo-scope",
     "foliopay.http.psp-api-key=demo-psp-key", "spring.datasource.url=jdbc:h2:mem:fullflow;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
     "foliopay.auth.api-keys=tests:0000000000000000000000000000000000000000000000000000000000000000:payments:read"}) // a real gateway needs API keys
+@DisplayName("Full flow over real HTTP: the bridge against the OPERA and processor simulators")
 class FullFlowHttpIntegrationTest {
   private static ConfigurableApplicationContext operaSim;
   private static ConfigurableApplicationContext pspSim;
@@ -113,6 +116,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A payment is authorised, captured and posted to the reservation's folio over HTTP")
   void aPaymentIsAuthorisedCapturedAndPostedToTheReservationFolioOverHttp() {
     var result = pay("RES-1", 12_345);
 
@@ -124,13 +128,15 @@ class FullFlowHttpIntegrationTest {
     assertThat(payment.path("code").asText()).as("the hotel's payment method code").isEqualTo("CC");
     assertThat(payment.path("cashierId").asLong()).as("the bridge's interface cashier").isEqualTo(9001);
     assertThat(payment.path("amount").asText()).as("OPERA takes a decimal, not minor units").isEqualTo("123.45");
-    assertThat(payment.path("businessDate").asText()).as("posted on OPERA's own business date").isEqualTo(state(operaUrl).path("businessDate").asText());
+    assertThat(payment.path("businessDate").asText()).as("posted on OPERA's own business date")
+        .isEqualTo(state(operaUrl).path("businessDate").asText());
     assertThat(payment.path("reference").asText()).isEqualTo(result.posting().getIdempotencyKey());
     assertThat(payment.path("remark").asText()).contains(result.charge().getPspRef());
     assertThat(state(pspUrl).path("ledger")).extracting(e -> e.path("kind").asText()).containsExactly("AUTH", "CAPTURE");
   }
 
   @Test
+  @DisplayName("The card number reaches only the processor, and only its last four digits are kept")
   void theCardNumberReachesOnlyTheProcessorAndOnlyItsLastFourAreKept() {
     pay("RES-1", 5_000);
     assertThat(state(pspUrl).toString()).contains("1111").doesNotContain("4111111111111111");
@@ -138,6 +144,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("An expired access token is replaced once without failing the payment")
   void anExpiredAccessTokenIsReplacedOnceWithoutFailingThePayment() {
     pay("RES-1", 1_000);
     int issuedBefore = state(operaUrl).path("tokensIssued").asInt();
@@ -150,6 +157,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A reply lost after OPERA posted is found again, not posted twice")
   void aReplyLostAfterOperaPostedIsFoundAgainNotPostedTwice() {
     fault(operaUrl, "TIMEOUT_AFTER_POST"); // OPERA records the payment, then answers after our read timeout
 
@@ -161,6 +169,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("An OPERA rate limit is waited out and retried")
   void aRateLimitIsWaitedOutAndRetried() {
     fault(operaUrl, "THROTTLE_NEXT");
     assertThat(pay("RES-1", 3_000).outcome()).isEqualTo(Outcome.OK);
@@ -169,6 +178,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A lock conflict on the reservation is retried")
   void aLockConflictOnTheReservationIsRetried() {
     fault(operaUrl, "LOCK_CONFLICT_NEXT");
     assertThat(pay("RES-1", 3_000).outcome()).isEqualTo(Outcome.OK);
@@ -177,6 +187,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("An OPERA outage dead-letters the captured payment, and replay posts it once OPERA is back")
   void anOperaOutageDeadLettersTheCapturedPaymentAndReplayPostsItOnceOperaIsBack() {
     fault(operaUrl, "DOWN");
     var result = pay("RES-1", 40_000);
@@ -196,6 +207,7 @@ class FullFlowHttpIntegrationTest {
    * a retrying client) must leave one payment on the folio, not one per replay that looked before another had posted.
    */
   @Test
+  @DisplayName("Parallel replays against an OPERA that does not deduplicate post once")
   void parallelReplaysAgainstANonDeduplicatingOperaPostOnce() throws Exception {
     fault(operaUrl, "DOWN");
     String postingId = pay("RES-1", 12_000).posting().getId();
@@ -219,6 +231,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A closed folio is rejected with OPERA's reason, and replay leaves it alone")
   void aClosedFolioIsRejectedWithOperasReasonAndReplayLeavesItAlone() {
     var result = pay("CLOSED-77", 9_900);
 
@@ -229,6 +242,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("OPERA refuses a call without the application key or the hotel header")
   void operaRefusesACallWithoutTheApplicationKeyOrTheHotelHeader() {
     String token = CONTROL.post().uri(operaUrl + "/oauth/v1/tokens").header("x-app-key", "demo-app-key").header("enterpriseId", "DEMOENT")
         .headers(h -> h.setBasicAuth("fpbridge", "fpbridge-secret")).contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
@@ -245,6 +259,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("The business date comes from OPERA and moves only at night audit")
   void theBusinessDateComesFromOperaAndMovesOnlyAtNightAudit() {
     LocalDate before = businessDates.resolve(null);
     assertThatThrownBy(() -> businessDates.resolve(before.minusDays(1))).isInstanceOf(InvalidRequestException.class);
@@ -256,6 +271,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("When OPERA is down, the payment is still taken on the last known business date and the posting waits")
   void whenOperaIsDownThePaymentIsStillTakenUsingTheLastKnownBusinessDateAndThePostingWaits() {
     LocalDate known = businessDates.resolve(null);
     fault(operaUrl, "DOWN");
@@ -268,6 +284,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A processor that captures then goes quiet is retried with the same key and charges once")
   void aProcessorThatCapturesThenGoesQuietIsRetriedWithTheSameKeyAndChargesOnce() {
     fault(pspUrl, "TIMEOUT_AFTER_CAPTURE");
 
@@ -280,6 +297,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A decline is final and nothing reaches the folio")
   void aDeclineIsFinalAndNothingReachesTheFolio() {
     fault(pspUrl, "DECLINE_NEXT");
     var result = pay("RES-1", 4_000);
@@ -288,6 +306,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("A capture declined after authorisation releases the hold at the processor")
   void aCaptureDeclinedAfterAuthorisationReleasesTheHoldAtTheProcessor() {
     fault(pspUrl, "DECLINE_CAPTURE_NEXT");
     assertThat(pay("RES-1", 4_000).outcome()).isEqualTo(Outcome.DECLINED);
@@ -299,6 +318,7 @@ class FullFlowHttpIntegrationTest {
   }
 
   @Test
+  @DisplayName("Reconciliation against the processor's own settlement file matches everything posted")
   void reconciliationAgainstTheProcessorsOwnSettlementFileMatchesEverythingPosted() {
     pay("RES-1", 1_000);
     pay("RES-2", 2_500);
@@ -313,6 +333,7 @@ class FullFlowHttpIntegrationTest {
 
   /** End to end over HTTP: the hotel's side verifies the signature (it answers 401 otherwise) and receives each event once. */
   @Test
+  @DisplayName("The hotel's middleware receives signed capture and posting events over HTTP")
   void theHotelsMiddlewareReceivesSignedCaptureAndPostingEventsOverHttp() {
     pay("RES-WH", 3_300);
 

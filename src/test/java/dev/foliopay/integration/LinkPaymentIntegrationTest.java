@@ -16,10 +16,12 @@ import dev.foliopay.repository.PaymentLinkRepository;
 import dev.foliopay.service.BookingEventService;
 import dev.foliopay.service.PaymentService.Outcome;
 import java.time.LocalDate;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /** The payment-link product path through the real database: booking event, guest pays, link closes. */
+@DisplayName("Payment links: the product path through the real database")
 class LinkPaymentIntegrationTest extends TestBase {
   private static final LocalDate TODAY = LocalDate.of(2026, 11, 17);
   @Autowired BookingEventService bookings;
@@ -31,6 +33,7 @@ class LinkPaymentIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("Paying a link charges, posts and closes it, and a double click charges once")
   void payingALinkChargesPostsAndClosesItAndADoubleClickChargesOnce() {
     PaymentLink link = newAdvanceLink("B3", 80_000);
 
@@ -48,6 +51,7 @@ class LinkPaymentIntegrationTest extends TestBase {
    * charged too. Now the retry (no date, as the console sends it) resumes the first charge on its own date, and the second card is refused.
    */
   @Test
+  @DisplayName("A charge left pending before night audit is resumed after it, and no second card is charged")
   void aChargeLeftPendingBeforeNightAuditIsResumedAfterItAndNoSecondCardIsCharged() {
     opera.setBusinessDate(TODAY);
     PaymentLink link = newAdvanceLink("B8", 50_000);
@@ -71,6 +75,7 @@ class LinkPaymentIntegrationTest extends TestBase {
 
   /** Against the real database: the unique open-slot column, not the mocked exception of the unit test, keeps one live link per booking. */
   @Test
+  @DisplayName("Parallel deliveries of one booking event leave one live link")
   void parallelDeliveriesOfOneBookingEventLeaveOneLiveLink() throws Exception {
     var event = new BookingEvent(BookingEvent.Type.NEW, "B9", "F-B9", RatePlan.FLEXIBLE, TODAY.plusDays(30), new Money(100_000, "USD"));
     java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
@@ -90,6 +95,7 @@ class LinkPaymentIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A link is paid on capture even when OPERA is down, and the posting waits")
   void aLinkIsPaidOnCaptureEvenWhenOperaIsDownAndThePostingWaits() {
     opera.arm(FakeOpera.Fault.DOWN);
     PaymentLink link = newAdvanceLink("B6", 40_000);
@@ -99,6 +105,7 @@ class LinkPaymentIntegrationTest extends TestBase {
   }
 
   @Test
+  @DisplayName("A guest whose card is declined can pay the same link with another card")
   void aGuestWhoseCardIsDeclinedCanPayTheSameLinkWithAnotherCard() {
     PaymentLink link = newAdvanceLink("B7", 30_000);
     String otherCard = vault.tokenise(new Pan("4242424242424242"), "11/28").getToken();

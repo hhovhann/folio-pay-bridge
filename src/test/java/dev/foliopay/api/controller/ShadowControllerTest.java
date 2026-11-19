@@ -7,11 +7,14 @@ import static org.mockito.Mockito.when;
 import dev.foliopay.api.dto.ShadowRequest;
 import dev.foliopay.domain.exception.NotFoundException;
 import dev.foliopay.service.ShadowService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+@DisplayName("Shadow mode API: refused when the outside systems are real")
 class ShadowControllerTest {
   @Test
+  @DisplayName("Shadow runs are refused when the systems are external, because they would push synthetic payments through them")
   @SuppressWarnings("unchecked")
   void shadowRunsAreRefusedWhenTheSystemsAreExternalBecauseTheyWouldPushSyntheticPaymentsThroughThem() {
     ObjectProvider<ShadowService> none = mock(ObjectProvider.class);

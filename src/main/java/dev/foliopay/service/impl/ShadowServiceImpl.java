@@ -83,7 +83,8 @@ class ShadowServiceImpl implements ShadowService {
         continue;
       }
       var posting = result.posting();
-      List<Mismatch> differences = compare(booking, opera.find(settings.hotelId(), posting.getFolioId(), posting.getIdempotencyKey()).orElse(null), posting.getBusinessDate());
+      OperaClient.Posted posted = opera.find(settings.hotelId(), posting.getFolioId(), posting.getIdempotencyKey()).orElse(null);
+      List<Mismatch> differences = compare(booking, posted, posting.getBusinessDate());
       differences.forEach(m -> byField.merge(m.field(), 1, Integer::sum));
       differences.stream().limit(Math.max(0, MAX_SAMPLES - samples.size())).forEach(samples::add);
       if (differences.isEmpty()) {
@@ -114,7 +115,8 @@ class ShadowServiceImpl implements ShadowService {
       differences.add(new Mismatch(booking.ref(), "amount", String.valueOf(expected.amountMinor()), actual));
     }
     if (posted == null || !recordedDate.equals(expected.businessDate())) {
-      differences.add(new Mismatch(booking.ref(), "businessDate", String.valueOf(expected.businessDate()), posted == null ? "none" : String.valueOf(recordedDate)));
+      String actual = posted == null ? "none" : String.valueOf(recordedDate);
+      differences.add(new Mismatch(booking.ref(), "businessDate", String.valueOf(expected.businessDate()), actual));
     }
     return differences;
   }

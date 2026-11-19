@@ -14,8 +14,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("Business date: from the PMS, through its outages and slow replies")
 class BusinessDateServiceImplTest {
   private static final LocalDate PMS_DATE = LocalDate.of(2026, 11, 16);
   private final OperaClient opera = mock(OperaClient.class);
@@ -24,6 +26,7 @@ class BusinessDateServiceImplTest {
   private BusinessDateServiceImpl service(Clock clock) { return new BusinessDateServiceImpl(opera, settings, clock); }
 
   @Test
+  @DisplayName("The business date comes from the PMS, not the wall clock")
   void theDateComesFromThePmsNotTheWallClock() {
     when(opera.businessDate("H1")).thenReturn(PMS_DATE);
     Clock wall = Clock.fixed(Instant.parse("2026-11-17T01:00:00Z"), ZoneOffset.UTC); // after midnight, before night audit
@@ -31,12 +34,14 @@ class BusinessDateServiceImplTest {
   }
 
   @Test
+  @DisplayName("A different date from the client is refused")
   void aDifferentDateFromTheClientIsRefused() {
     when(opera.businessDate("H1")).thenReturn(PMS_DATE);
     assertThatThrownBy(() -> service(Clock.systemUTC()).resolve(PMS_DATE.plusDays(1))).isInstanceOf(InvalidRequestException.class).hasMessageContaining(PMS_DATE.toString());
   }
 
   @Test
+  @DisplayName("When the PMS is down, the last known date keeps the payment flowing")
   void whenThePmsIsDownTheLastKnownDateKeepsThePaymentFlowing() {
     BusinessDateServiceImpl service = service(Clock.systemUTC());
     when(opera.businessDate(anyString())).thenReturn(PMS_DATE).thenThrow(new OperaUnavailableException("503"));
@@ -46,12 +51,14 @@ class BusinessDateServiceImplTest {
   }
 
   @Test
+  @DisplayName("With no earlier answer, a PMS outage is not hidden")
   void withNoEarlierAnswerAPmsOutageIsNotHidden() {
     when(opera.businessDate(anyString())).thenThrow(new OperaUnavailableException("503"));
     assertThatThrownBy(() -> service(Clock.systemUTC()).resolve(null)).isInstanceOf(OperaUnavailableException.class);
   }
 
   @Test
+  @DisplayName("An answer older than a day is not trusted")
   void anAnswerOlderThanADayIsNotTrusted() {
     java.util.concurrent.atomic.AtomicReference<Instant> now = new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-11-16T10:00:00Z"));
     Clock moving = new Clock() {
@@ -69,6 +76,7 @@ class BusinessDateServiceImplTest {
 
   /** Review finding M3: the PMS call used to sit inside a synchronized method, so one slow answer made every payment wait in line. */
   @Test
+  @DisplayName("A slow PMS answer for one request does not hold up another")
   void aSlowPmsAnswerForOneRequestDoesNotHoldUpAnother() throws Exception {
     java.util.concurrent.CountDownLatch firstIsStuck = new java.util.concurrent.CountDownLatch(1);
     java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
@@ -105,6 +113,7 @@ class BusinessDateServiceImplTest {
 
   /** Fails if the last reply to arrive wins: a slow reply from before night audit would put the fallback back to the old date. */
   @Test
+  @DisplayName("A slow reply from before night audit cannot move the remembered date back")
   void aSlowReplyFromBeforeNightAuditCannotMoveTheRememberedDateBack() throws Exception {
     MovingClock clock = new MovingClock();
     BusinessDateServiceImpl service = service(clock);
@@ -133,6 +142,7 @@ class BusinessDateServiceImplTest {
    * would carry yesterday's date, and OPERA rejects those postings for good. Found by the full-flow demo's dry run (agent log 39).
    */
   @Test
+  @DisplayName("The first answer after an outage is used at once, so a night audit during the outage is not missed")
   void theFirstAnswerAfterAnOutageIsUsedAtOnceSoANightAuditDuringTheOutageIsNotMissed() {
     BusinessDateServiceImpl service = service(new MovingClock());
     when(opera.businessDate(anyString())).thenReturn(PMS_DATE).thenThrow(new OperaUnavailableException("timeout")).thenReturn(PMS_DATE.plusDays(1));
@@ -144,6 +154,7 @@ class BusinessDateServiceImplTest {
 
   /** Fails if the rule is "the latest date wins": a date the hotel corrected backwards would be ignored until a restart. */
   @Test
+  @DisplayName("A newer answer wins even when it is an earlier date, because the PMS is the authority")
   void aNewerAnswerWinsEvenWhenItIsAnEarlierDateBecauseThePmsIsTheAuthority() {
     BusinessDateServiceImpl service = service(new MovingClock());
     when(opera.businessDate(anyString())).thenReturn(PMS_DATE.plusDays(1)).thenReturn(PMS_DATE);
