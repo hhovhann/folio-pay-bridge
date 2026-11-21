@@ -152,5 +152,6 @@ A pilot, not production. These are the corrections made while building it with C
     - The 182 lines over 150 characters were wrapped by a script that breaks only outside strings and comments; all 619 test runs passed before and after.
     - `CodeConventionsTest` and `CleanCodeTest` are deleted. `ProjectRulesTest` keeps the five rules no tool can check, and `ArchitectureTest` keeps its test names on ArchUnit.
     - A violation of each rule was put back on purpose, and the build refused each one (`var/mutate_p22.py`).
+    - The first push failed CI in the image build: Checkstyle runs in `validate`, and the Dockerfile did not copy the new `config/` folder. The local build passed, but the image had not been built locally, though the standards ask for every artifact to be built (log 9). The Dockerfile copies `config/` now. The image was built and started locally, and answered its health probe, before the second push.
 
 Pattern: the agents are quick at the shape of the code and weak at **what the test would actually catch**, at **what is really on the screen**, and at **saying a fix is complete when it is not**. So the brief makes tests name their failure, the demo asserts every claim, and a log entry that says "fixed" names the check that proves it.

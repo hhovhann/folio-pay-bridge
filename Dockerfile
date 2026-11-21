@@ -7,6 +7,8 @@ COPY .mvn .mvn
 COPY mvnw pom.xml ./
 RUN ./mvnw -q -B dependency:go-offline
 COPY src src
+# Checkstyle runs in the validate phase of every Maven build, this one too.
+COPY config config
 # The operator dashboard is built into the jar by the Maven build (pinned Node, npm ci from the lock file).
 COPY dashboard dashboard
 RUN ./mvnw -q -B package -DskipTests -DskipDashboardTests=true
