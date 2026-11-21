@@ -6,26 +6,26 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: No card numbers or credentials in the repository (AI and human guardrail)
         run: python3 tools/guard_secrets.py --repo
       - name: The secret guard still finds what it must, lets through what it must, and scans its own allowlist file
         run: python3 tools/guard_secrets.py --self-test
       - name: The command guard still blocks every force-push and deletion form it lists
         run: python3 tools/guard_commands.py --self-test
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with: { distribution: corretto, java-version: '17', cache: maven }
       - run: ./mvnw -B verify
       - run: python3 tools/check_specs.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with: { name: surefire-reports, path: target/surefire-reports }
-      - uses: actions/upload-artifact@v4   # which lines the coverage gate counted as missed, when it fails here and not locally
+      - uses: actions/upload-artifact@v7   # which lines the coverage gate counted as missed, when it fails here and not locally
         if: always()
         with: { name: coverage-report, path: target/site/jacoco }
   image:
     runs-on: ubuntu-latest
     needs: verify
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -t folio-pay-bridge:ci .
