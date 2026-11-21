@@ -88,10 +88,10 @@ Rotate them on a schedule. They reach the container as environment variables (se
 ### 2.5 Image
 ```bash
 aws ecr create-repository --repository-name folio-pay-bridge
-docker build -t folio-pay-bridge:0.2.0 .          # Amazon Linux 2023, Corretto 17, runs as uid 10001
-docker tag folio-pay-bridge:0.2.0 <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:0.2.0
+docker build -t folio-pay-bridge:1.0.0 .          # Amazon Linux 2023, Corretto 17, runs as uid 10001
+docker tag folio-pay-bridge:1.0.0 <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:1.0.0
 aws ecr get-login-password | docker login --username AWS --password-stdin <account>.dkr.ecr.<region>.amazonaws.com
-docker push <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:0.2.0
+docker push <account>.dkr.ecr.<region>.amazonaws.com/folio-pay-bridge:1.0.0
 ```
 Pin the image by digest in the task definition and scan it (ECR scanning).
 

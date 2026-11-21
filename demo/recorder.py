@@ -1,6 +1,7 @@
 """The recorder behind the narrated video (demo/make_fullflow_demo.py): local Kokoro or macOS voice, the overlay drawn into every page
-(demo/overlay.js: a top bar naming the system and the chapter, captions, a cursor with click ripples, title and proof cards), so all of it
-is burned into the video; assertions that each narrated claim is really on the screen; and the final mix to MP4 with .vtt and .srt captions
+(demo/overlay.js: a top bar naming the system and the chapter, a caption band, a cursor with click ripples, title and proof cards), so all of
+it is burned into the video; assertions that each narrated claim is really on the screen, in view and not covered, and that no text at
+the end of a scene runs out of its box; and the final mix to MP4 with .vtt and .srt captions
 and a chapter list. Needs ffmpeg and a Playwright Chromium; voice comes from Kokoro models or macOS `say`.
 DEMO_FAST=1 does a dry run: no voice, short waits, no output, every assertion still checked. DEMO_SHOTS=<dir> saves a still per scene."""
 import json
@@ -32,7 +33,7 @@ SPOKEN = {"PMS": "P M S", "KMS": "K M S", "AWS": "A W S", "PCI": "P C I", "UTC":
           "OHIP": "O H I P", "HTTP": "H T T P", "RDS": "R D S", "3-D Secure": "three D secure", "OAuth2": "O auth two"}
 
 INIT_JS = (pathlib.Path(__file__).resolve().parent / "overlay.js").read_text(encoding="utf-8")
-OVERLAY_BAR = 46  # the overlay's top bar pushes each page down by this many pixels
+CAPTION_WIDTH = 80  # characters on the caption band's one line; problems() fails a scene whose caption is wider than the screen
 
 
 def nap(x):
@@ -98,7 +99,8 @@ def at(t):
         nap(d)
 
 
-def chunk_text(text, width=62):
+def chunk_text(text, width=CAPTION_WIDTH):
+    """One line per caption: the band below the page has room for one, so a caption never covers the page."""
     words, rows, cur = text.split(), [], ""
     for w in words:
         if len(cur) + len(w) + 1 > width:
@@ -107,7 +109,7 @@ def chunk_text(text, width=62):
         else:
             cur = (cur + " " + w).strip()
     rows.append(cur)
-    return ["\n".join(rows[i:i + 2]) for i in range(0, len(rows), 2)]
+    return rows
 
 
 def say(clips, texts, cid):
@@ -126,6 +128,9 @@ def say(clips, texts, cid):
 
 
 def until(t_end, pad=0.6):
+    if R.page is not None:  # the end of a scene: nothing on screen may be cut off or spill out of its box
+        problems = R.page.evaluate("() => window.__demo ? window.__demo.problems() : []")
+        assert not problems, f"scene {R.timeline[-1][0]}: text a viewer cannot read whole: {problems[:6]}"
     if SHOTS and R.page is not None:  # one still per scene, to review the look without recording a video
         pathlib.Path(SHOTS).mkdir(parents=True, exist_ok=True)
         R.page.screenshot(path=str(pathlib.Path(SHOTS) / f"{len(R.timeline):02d}-{R.timeline[-1][0]}.png"))
@@ -189,14 +194,26 @@ def tap(pg, loc, pause=0.5):
     nap(pause)
 
 
+def settle(pg):
+    """Wait until the page has stopped scrolling. A dry run's short pauses once checked the screen in the middle of a smooth scroll, and
+    passed what the finished scroll then hid under the top bar (agent log 69)."""
+    pg.evaluate("""() => new Promise(done => {
+      let y = scrollY, still = 0;
+      const look = () => { if (scrollY === y) { still += 1; } else { still = 0; y = scrollY; } if (still > 6) { done(); } else { requestAnimationFrame(look); } };
+      requestAnimationFrame(look);
+    })""")
+
+
 def reveal(pg, selector, pause=1.0):
     """Scroll a part of the page to just under the overlay's top bar."""
     pg.evaluate("(s) => document.querySelector(s).scrollIntoView({behavior: 'smooth', block: 'start'})", selector)
+    settle(pg)
     nap(pause)
 
 
 def scroll(pg, y, pause=0.8):
     pg.evaluate("(y) => window.scrollTo({top: y, behavior: 'smooth'})", y)
+    settle(pg)
     nap(pause)
 
 
@@ -217,11 +234,27 @@ def type_into(pg, loc, text, delay=45):
 
 # ---------------------------------------------------------------- the story
 def expect(pg, sel, text, timeout=15000):
-    """The narration must match the screen: fail loudly if it does not."""
+    """The narration must match the screen: the text is on the page and a viewer can read it, between the top bar and the caption band,
+    not scrolled out of its box, not faded, not under a card. Fails loudly if it is not."""
     try:
-        pg.wait_for_function("([s,t]) => (document.querySelector(s)||{textContent:''}).textContent.includes(t)", arg=[sel, text], timeout=timeout)
+        pg.wait_for_function("([s,t]) => window.__demo && window.__demo.visible(s, t) === ''", arg=[sel, text], timeout=timeout)
     except Exception:
-        raise AssertionError(f"narration expects '{text}' in {sel}, screen has: {pg.locator(sel).inner_text()[:300]}")
+        why = pg.evaluate("([s,t]) => window.__demo ? window.__demo.visible(s, t) : 'has no overlay to judge it'", [sel, text])
+        raise AssertionError(f"narration expects '{text}' in {sel} on screen, but it {why}; the element has: {pg.locator(sel).inner_text()[:200]}")
+
+
+def bring(pg, sel, text, pause=0.8):
+    """Scroll a line the voice talks about into view, inside a scrolling box too (the operator log keeps its last forty lines)."""
+    assert pg.evaluate("([s,t]) => window.__demo.bring(s, t)", [sel, text]), f"'{text}' is not in {sel}"
+    settle(pg)
+    nap(pause)
+
+
+def present(pg, sel, text, timeout=15000):
+    """Text is on the page, in view or not. For a cause the voice does not point at (a planted fault used up), and for text that arrives
+    on its own (a webhook): a page that grows after it was scrolled leaves new rows below the band, so the script waits for them, then
+    scrolls, then expect() proves they are in view."""
+    pg.wait_for_function("([s,t]) => (document.querySelector(s)||{textContent:''}).textContent.includes(t)", arg=[sel, text], timeout=timeout)
 
 
 def absent(pg, sel, text):
@@ -305,15 +338,6 @@ def still_picture(mp4, longest=STILLEST):
     if not starts:
         return None
     return float(starts[0]), float(lengths[0]) if lengths else float("inf")
-
-
-def check_test_count(minimum=170):
-    """The narration states a test count: refuse to record unless the last test run really had at least that many."""
-    import glob
-    import xml.etree.ElementTree as ET
-    total = sum(int(ET.parse(f).getroot().get("tests", 0)) for f in glob.glob(str(ROOT / "target/surefire-reports/TEST-*.xml")))
-    if total < minimum:
-        raise SystemExit(f"Run ./mvnw test first: the narration claims over {minimum} tests and the last run had {total}")
 
 
 if __name__ == "__main__" and sys.argv[1:2] == ["--check"]:

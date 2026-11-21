@@ -9,7 +9,7 @@
   </parent>
   <groupId>dev.foliopay</groupId>
   <artifactId>folio-pay-bridge</artifactId>
-  <version>0.2.0</version>
+  <version>1.0.0</version>
   <name>folio-pay-bridge</name>
   <description>Hotel payments slice: virtual-card charging and folio posting, PCI-minded, with shadow mode against a legacy stand-in</description>
   <properties>

@@ -52,7 +52,7 @@ PROBLEMS = [("Charged twice", "a retry after a timeout", "Idempotency keys", "th
             ("Books do not match", "captures vs settlement", "Reconciliation", "every exception has a name")]
 
 
-def lines():
+def lines(numbers):
     return {
         "intro": "This is the full flow, not a mock-up, and it is explained step by step. Four containers talk over real network calls: the payment bridge I built, a database, a simulator of a hotel PMS in the style of the Oracle Hospitality Integration Platform, and a simulator of a card processor. Everything is synthetic. First, the problem it solves.",
         "problem": "Why it exists. One hotel payment has to agree across three systems: the PMS, the card processor and the guest's card. Things go wrong in five ways. A retry can charge a card twice. A reply that arrives too late can post a payment twice. An outage can leave money charged but never on the folio. Card numbers can leak into logs. And the books may not match what the processor settles. The bridge answers each one, and the video shows every answer working.",
@@ -70,14 +70,22 @@ def lines():
         "audit": "Edge case five: night audit runs and the business date moves, and I also expire the access token. The next payment makes the processor capture the money and then go quiet. The bridge fetches a new token, reads the new business date from the PMS, retries with the same key, and the processor charges once.",
         "recon": "At the end of the day, finance reconciles. The bridge downloads the settlement file, what the acquirer paid out, and matches every capture against what was posted. Five captures, five matches. Now a messy statement: one capture missing, one settled short, one we never made. Each exception has a name finance can act on.",
         "logs": "The operator log shows all of this with the card number masked. A mask catches mistakes, but the code never logs the number in the first place, and the vault view shows ciphertext, never the number. Every call that changes something, every refusal, and every time a card is opened also go to an audit trail, which the application refuses to run without.",
-        "coverage": "How do I know the other cases hold? Over five hundred automated tests, and a coverage report above ninety nine percent of lines. The important tests were checked the hard way: I put each bug back on purpose, over a hundred of them, and every one made its test fail. A page in the repository lists every edge case and the test that fails if it breaks, and also what is not covered.",
+        "coverage": coverage_line(numbers),
         "production": "How it should work in production. On AWS, the bridge runs as two or more tasks in private subnets, behind a load balancer and a web application firewall, with PostgreSQL on RDS, keys in KMS, and fixed outbound addresses for OPERA Cloud and the acquirer. The runbook is written, but not yet run in an account. Booking events would come from OHIP's streaming API, which delivers at least once, with no acknowledgement and no dead letter queue, so the bridge would store its offset and skip an event it has already seen. The processor becomes the acquirer's checkout, with 3-D Secure and hosted card entry, so a guest's number never reaches this service. Authentication is already in: OAuth2 tokens or hashed API keys, each limited by scope. Still to add: tenants for many operators and properties, a sweeper for crashes between steps, and chargeback cases with scheme deadlines.",
         "close": "That is the full flow: " + ", ".join(CASES[:-1]) + ", and " + CASES[-1] + ", against separate systems. The PMS here is a simulator I wrote in the shape of the Oracle Hospitality Integration Platform. It is not Oracle software, and the real thing needs Oracle's own sandbox, which is the next step. The code, the tests and the log of what the agents got wrong are in the public repository.",
     }
 
 
+def coverage_line(n):
+    """What the voice says in the proof scene: the build's own numbers, read from its reports, never a floor typed in (agent log 57)."""
+    return (f"How do I know the other cases hold? {n['tests']} automated tests, every one passing, and a coverage report of {n['lines']} percent "
+            f"of lines. The important tests were checked the hard way: I put each bug back on purpose, {n['mutations']} of them, and every one "
+            "made its test fail. Standard tools, Checkstyle and ArchUnit, hold the coding rules on every build. A page in the repository lists "
+            "every edge case and the test that fails if it breaks, and also what is not covered.")
+
+
 def proof():
-    """The numbers the coverage scene shows, read from the build's own reports (and the README's mutation tally), never typed in."""
+    """The numbers the coverage scene shows and says, read from the build's own reports (and the README's mutation tally), never typed in."""
     reports = [ET.parse(f).getroot() for f in glob.glob(str(md.ROOT / "target/surefire-reports/TEST-*.xml"))]
     tests = sum(int(r.get("tests", 0)) for r in reports)
     failed = sum(int(r.get("failures", 0)) + int(r.get("errors", 0)) for r in reports)
@@ -88,12 +96,13 @@ def proof():
     tally = next(x for x in (md.ROOT / "README.md").read_text(encoding="utf-8").splitlines() if "mutation-checked" in x)
     pairs = [(int(a), int(b)) for a, b in re.findall(r"(\d+) of (\d+) in", tally)]
     caught, tried = sum(a for a, _ in pairs), sum(b for _, b in pairs)
-    # what the voice says must be what the build measured
-    assert failed == 0 and tests >= 450, f"the narration says over 450 tests, all passing: {tests} ran, {failed} failed"
-    assert covered["LINE"] > 99.0, f"the narration says above 99% of lines: {covered['LINE']:.2f}"
-    assert caught == tried and caught > 100, f"the narration says over a hundred mutations, every one caught: {caught} of {tried}"
+    # the voice says every test passed and every mutation was caught; the numbers themselves are read, so they cannot go stale
+    assert tests > 0, "Run ./mvnw clean verify first: there are no test reports"
+    assert failed == 0, f"the narration says every test passes: {failed} of {tests} failed"
+    assert caught == tried, f"the narration says every mutation was caught: {caught} of {tried}"
     return {"tests": tests, "testsNote": f"{tests - skipped} passed · {failed} failed", "lines": round(covered["LINE"], 1),
-            "branches": round(covered["BRANCH"], 1), "mutations": caught}
+            "branches": round(covered["BRANCH"], 1), "mutations": caught,
+            "rules": "Checkstyle and ArchUnit hold the coding rules on every build"}
 
 
 def post(url):
@@ -115,7 +124,7 @@ def arm(pg, page_url, ready, fault, current_selector=None):
     md.expect(pg, tid("current-fault"), fault)
 
 
-def story(pg, clips, texts):
+def story(pg, clips, texts, numbers):
     def S(cid):
         md.chapter(CHAPTERS.index(cid) + 1, len(CHAPTERS), TITLES[cid])
         return md.say(clips, texts, cid)
@@ -146,6 +155,7 @@ def story(pg, clips, texts):
 
     # every party in one card payment, lit one by one as the voice names it; each claim is checked against the page's own panel
     visit(pg, BRIDGE + "who-is-who.html", tid("actor-issuer"))
+    md.overlay(pg, "fit")  # the parties and the panel that explains them are seen whole, above the caption band
     e = S("who")
     for phrase, state, shown in [("The guest pays", "actor:guest", "Guest"), ("front desk runs", "actor:pms", "OPERA"),
                                  ("the part I built", "actor:bridge", "Payment bridge"), ("a payment processor", "actor:processor", "Processor"),
@@ -196,6 +206,7 @@ def story(pg, clips, texts):
 
     visit(pg, OPERA, tid("payments"))
     e = S("folio")
+    md.reveal(pg, "section:has([data-testid=payments])")
     md.expect(pg, tid("payments"), "RES-ADV"); md.expect(pg, tid("payments"), "800.00"); md.expect(pg, tid("payments"), "FPBRIDGE")
     when("folio", "I open the reservation")
     md.tap(pg, "[data-reservation=RES-ADV]", 0.8); md.expect(pg, tid("folio-title"), "RES-ADV")
@@ -204,8 +215,9 @@ def story(pg, clips, texts):
     md.until(e)
 
     e = S("webhook")
+    md.present(pg, tid("webhooks"), "payment.captured", timeout=20000); md.present(pg, tid("webhooks"), "folio.posted", timeout=20000)
     md.reveal(pg, tid("webhooks"))
-    md.expect(pg, tid("webhooks"), "payment.captured", timeout=20000); md.expect(pg, tid("webhooks"), "folio.posted", timeout=20000); md.nap(2.5)
+    md.expect(pg, tid("webhooks"), "payment.captured"); md.expect(pg, tid("webhooks"), "folio.posted"); md.nap(2.5)
     md.until(e)
 
     e = S("repeat")
@@ -220,8 +232,8 @@ def story(pg, clips, texts):
     md.tap(pg, tid("tokenise"), 0.6); md.expect(pg, tid("token-note"), "not stored")
     md.tap(pg, tid("pay-RES-FLEX"), 0.8); md.expect(pg, tid("pay-note"), "charged and posted", timeout=30000); md.nap(0.8)
     visit(pg, OPERA, tid("payments"))
-    md.reveal(pg, tid("payments"))
-    md.expect(pg, tid("count"), "(2)"); md.expect(pg, tid("current-fault"), "NONE"); md.nap(2.0)
+    md.reveal(pg, "section:has([data-testid=payments])")
+    md.expect(pg, tid("count"), "(2)"); md.present(pg, tid("current-fault"), "NONE"); md.nap(2.0)  # the planted fault was used up
     md.until(e)
 
     # the PMS goes down after the payment is captured
@@ -245,6 +257,7 @@ def story(pg, clips, texts):
     md.tap(pg, tid("tokenise"), 0.6); md.expect(pg, tid("token-note"), "not stored")
     md.tap(pg, tid("pay-B-FLEX"), 0.8); md.expect(pg, tid("pay-note"), "DECLINED"); md.expect(pg, tid("links"), "OPEN"); md.nap(1.5)
     visit(pg, PSP, tid("ledger"))
+    md.reveal(pg, tid("ledger"))
     md.expect(pg, tid("ledger"), "VOID"); md.nap(2.0)
     visit(pg, BRIDGE, tid("tokenise"))
     md.tap(pg, tid("tokenise"), 0.6); md.expect(pg, tid("token-note"), "not stored")
@@ -268,34 +281,42 @@ def story(pg, clips, texts):
     visit(pg, PSP, tid("ledger"))
     md.expect(pg, tid("current-fault"), "NONE"); md.nap(2.0)
     visit(pg, OPERA, tid("payments"))
-    md.reveal(pg, tid("payments"))
+    md.reveal(pg, "section:has([data-testid=payments])")
     md.expect(pg, tid("count"), "(5)")
     assert int(pg.locator(tid("tokens")).inner_text()) > tokens_before, "the bridge must have fetched a new access token"
     md.nap(2.0)
     md.until(e)
 
     visit(pg, BRIDGE, tid("recon-clean"))
+    md.reveal(pg, "section:has([data-testid=recon-clean])")
     e = S("recon")
     md.tap(pg, tid("recon-clean"), 0.8); md.expect(pg, tid("recon-note"), "5"); md.expect(pg, tid("recon-note"), "matched"); md.expect(pg, tid("recon-note"), "none"); md.nap(2.5)
-    md.tap(pg, tid("recon-messy"), 0.8); md.expect(pg, tid("recon-items"), "MISSING_IN_SETTLEMENT"); md.expect(pg, tid("recon-items"), "AMOUNT_DIFFERENCE"); md.expect(pg, tid("recon-items"), "UNKNOWN_IN_SETTLEMENT"); md.nap(2.5)
+    md.tap(pg, tid("recon-messy"), 0.8); md.present(pg, tid("recon-items"), "MISSING_IN_SETTLEMENT"); md.reveal(pg, tid("recon-note"))
+    md.expect(pg, tid("recon-items"), "MISSING_IN_SETTLEMENT"); md.expect(pg, tid("recon-items"), "AMOUNT_DIFFERENCE"); md.expect(pg, tid("recon-items"), "UNKNOWN_IN_SETTLEMENT"); md.nap(2.5)
     md.until(e)
 
     e = S("logs")
     md.scroll(pg, 0, 0.5)
-    md.expect(pg, tid("vault-rows"), "sealed PAN"); md.expect(pg, tid("logs"), "****"); md.absent(pg, tid("logs"), "4111111111111111"); md.nap(2.5)
-    md.expect(pg, tid("logs"), "event=API_CALL"); md.absent(pg, tid("logs"), "tok_"); md.nap(2.0)
+    md.expect(pg, tid("vault-rows"), "sealed PAN")
+    md.bring(pg, tid("logs"), "****"); md.expect(pg, tid("logs"), "****"); md.absent(pg, tid("logs"), "4111111111111111"); md.nap(2.5)
+    md.bring(pg, tid("logs"), "event=API_CALL"); md.expect(pg, tid("logs"), "event=API_CALL"); md.absent(pg, tid("logs"), "tok_"); md.nap(2.0)
     md.until(e)
 
-    numbers = proof()
     visit(pg, (md.ROOT / "target/site/jacoco/index.html").as_uri(), "table")
     e = S("coverage")
     md.expect(pg, "body", "Total")
-    md.overlay(pg, "card", "proof", numbers, True)
-    for phrase, cards in [("Over five hundred", [1]), ("above ninety nine percent", [2, 3]), ("I put each bug back", [4])]:
+    # the report is seen while the question is asked, then the card with the numbers covers it whole
+    for phrase, cards in [(f"{numbers['tests']} automated tests", [1]), ("a coverage report", [2, 3]), ("I put each bug back", [4])]:
         when("coverage", phrase)
+        if cards == [1]:
+            md.overlay(pg, "card", "proof", numbers)
+            md.nap(0.7)
         for n in cards:
             md.overlay(pg, "reveal", n)
+    when("coverage", "Standard tools")
+    md.expect(pg, tid("proof-rules"), "Checkstyle and ArchUnit")
     md.until(e)
+    md.overlay(pg, "hideCard")
 
     visit(pg, BRIDGE + "architecture.html", tid("production"))
     e = S("production")
@@ -335,10 +356,10 @@ def wait_for(url):
 def main():
     md.OUT.mkdir(parents=True, exist_ok=True)
     work = pathlib.Path(tempfile.mkdtemp(prefix="fpb-fullflow-"))
-    texts = lines()
+    numbers = proof()  # read before the voice is made: the proof scene says these numbers
+    texts = lines(numbers)
     if not md.FAST and not md.MODELS:
         raise SystemExit("Set KOKORO_MODELS to the directory with the Kokoro model files")
-    md.check_test_count(500)  # the narration says "over five hundred"
     for port in PORTS.values():
         if not port_free(port):
             raise SystemExit(f"Port {port} is in use: stop what is running there first")
@@ -357,7 +378,7 @@ def main():
             pg = ctx.new_page()
             md.R.page, md.R.t0 = pg, time.monotonic()
             try:
-                story(pg, clips, texts)
+                story(pg, clips, texts, numbers)
             except Exception:
                 (md.ROOT / "var").mkdir(exist_ok=True)
                 pg.screenshot(path=str(md.ROOT / "var/fullflow-failure.png"))

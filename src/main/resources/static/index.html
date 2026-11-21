@@ -45,7 +45,7 @@ pre{margin:6px 0 0;background:var(--bg);border:1px solid var(--line);border-radi
   <h2 style="margin-top:10px">What the database stores</h2>
   <pre data-testid="vault-rows">(nothing)</pre>
   <h2 style="margin-top:10px">Failure switches <span>fake processor and fake PMS</span></h2>
-  <div class="row"><select id="psp" data-testid="psp-fault"><option value="NONE">Processor: normal</option><option value="TIMEOUT_AFTER_CAPTURE">Processor: captures, then times out</option><option value="DECLINE_NEXT">Processor: declines next</option></select>
+  <div class="row"><select id="psp" data-testid="psp-fault" style="flex-basis:100%"><option value="NONE">Processor: normal</option><option value="TIMEOUT_AFTER_CAPTURE">Processor: captures, then times out</option><option value="DECLINE_NEXT">Processor: declines next</option></select>
   <select id="opera" data-testid="opera-fault"><option value="NONE">PMS: up</option><option value="DOWN">PMS: down</option><option value="TIMEOUT_AFTER_POST">PMS: posts, then times out</option></select>
   <button data-testid="apply-faults" data-action="applyFaults" data-args='[]'>Apply</button></div>
   <div class="ctr" data-testid="truth"><div><b class="big" id="c-psp">0</b><small>processor captures</small></div><div><b class="big" id="c-amt">0.00</b><small>captured total</small></div><div><b class="big" id="c-opera">0</b><small>PMS postings</small></div></div>

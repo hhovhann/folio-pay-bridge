@@ -1,6 +1,8 @@
 // The narrated video's overlay. demo/recorder.py adds it to every page before the page's own scripts: a top bar that names the system on
-// screen and the chapter, captions, a cursor with click ripples, and full-screen cards. It is drawn into the page, so it is in the video,
-// and it never takes a click (pointer-events: none), so the script clicks exactly what a person would.
+// screen and the chapter, a caption band, a cursor with click ripples, and full-screen cards. It is drawn into the page, so it is in the
+// video, and it never takes a click (pointer-events: none), so the script clicks exactly what a person would. The bar and the band each
+// keep a strip of the screen to themselves, so a caption never lies over the page: what the voice names must be visible between them,
+// and visible() and problems() let the recorder prove it.
 (() => {
   if (window.__demo) return;
   const ICON = {
@@ -30,8 +32,9 @@
     return {k: 'bridge', name: 'Folio Pay Bridge', tag: 'operator console', icon: 'bridge'};
   };
   const FONT = '-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif';
+  const BAR = 46, BAND = 50; // the top bar and the caption band, in CSS pixels; demo/recorder.py uses the same numbers
   const CSS = `
-html{padding-top:46px!important;scroll-padding-top:58px}
+html{padding-top:46px!important;padding-bottom:50px!important;scroll-padding-top:58px;scroll-padding-bottom:62px}
 #demo-bar,#demo-caption,#demo-cursor,.demo-ripple,#demo-card{pointer-events:none;font-family:${FONT};box-sizing:border-box}
 #demo-bar{position:fixed;top:0;left:0;right:0;height:46px;z-index:2147483600;display:flex;align-items:center;gap:14px;padding:0 14px 0 8px;
   background:linear-gradient(90deg,#0a0f1f,#121b36);color:#e5e9f5;font-size:14px;font-weight:600;line-height:1;box-shadow:0 2px 14px rgba(0,0,0,.28)}
@@ -46,19 +49,19 @@ html{padding-top:46px!important;scroll-padding-top:58px}
 #demo-bar .prog span.on{background:var(--demo-c);box-shadow:0 0 8px var(--demo-c)}
 #demo-bar .brand{display:flex;align-items:center;gap:7px;margin-left:10px;color:#fff;font-weight:700;letter-spacing:.01em;white-space:nowrap}
 #demo-bar .brand i{display:grid;place-items:center;width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#2563eb,#7c3aed)}
-#demo-caption{position:fixed;z-index:2147483601;left:0;right:0;margin:0 auto;width:max-content;max-width:1080px;bottom:20px;display:none;
-  background:rgba(9,13,26,.9);color:#fff;font-size:21px;font-weight:600;line-height:1.38;padding:10px 22px 10px 18px;border-radius:12px;
-  border-left:5px solid var(--demo-c);text-align:center;white-space:pre-line;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+#demo-caption{position:fixed;z-index:2147483601;left:0;right:0;bottom:0;height:50px;display:flex;align-items:center;justify-content:center;
+  padding:0 24px;background:linear-gradient(90deg,#0a0f1f,#121b36);color:#fff;font-size:19.5px;font-weight:600;line-height:1;white-space:nowrap;
+  border-top:2px solid var(--demo-c);box-shadow:0 -2px 14px rgba(0,0,0,.28)}
 #demo-cursor{position:fixed;z-index:2147483605;width:24px;height:24px;margin:-12px 0 0 -12px;border-radius:50%;left:-60px;top:-60px;
   background:rgba(255,255,255,.35);border:3px solid var(--demo-c);box-shadow:0 0 0 2px rgba(255,255,255,.85),0 4px 14px rgba(0,0,0,.35);
   transition:left .45s cubic-bezier(.3,.7,.2,1),top .45s cubic-bezier(.3,.7,.2,1)}
 .demo-ripple{position:fixed;z-index:2147483604;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;border:3px solid var(--demo-c);
   animation:demo-ripple .75s ease-out forwards}
 @keyframes demo-ripple{to{transform:scale(4.5);opacity:0}}
-#demo-card{position:fixed;inset:0;z-index:2147483599;display:grid;place-items:center;opacity:0;transition:opacity .6s;color:#e8ecf8;
+#demo-card{position:fixed;top:46px;bottom:50px;left:0;right:0;z-index:2147483599;display:grid;place-items:center;opacity:0;transition:opacity .6s;color:#e8ecf8;
   background:radial-gradient(1100px 620px at 18% 8%,#1d2b62 0%,#0b1124 55%,#060912 100%)}
 #demo-card.on{opacity:1}
-#demo-card.panel{inset:auto 18px auto auto;top:64px;width:520px;border-radius:18px;padding:22px 24px;background:rgba(9,13,26,.94);
+#demo-card.panel{left:auto;right:18px;bottom:auto;top:64px;width:520px;border-radius:18px;padding:22px 24px;background:rgba(9,13,26,.94);
   box-shadow:0 20px 60px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.1);place-items:stretch}
 #demo-card .kick{font-size:12.5px;letter-spacing:.16em;font-weight:700;color:#8ea0d6;margin-bottom:10px}
 #demo-card h1{display:flex;align-items:center;gap:16px;margin:0;font-size:52px;font-weight:800;letter-spacing:-.02em;color:#fff}
@@ -89,6 +92,9 @@ html{padding-top:46px!important;scroll-padding-top:58px}
 #demo-card .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.1);margin:8px 0 6px;overflow:hidden}
 #demo-card .bar u{display:block;height:100%;width:0;background:var(--k);transition:width 1.4s cubic-bezier(.3,.7,.2,1)}
 #demo-card .st.on .bar u{width:var(--w)}
+#demo-card .proof{width:940px}#demo-card:not(.panel) .stats{gap:16px}#demo-card:not(.panel) .st{padding:20px 22px}
+#demo-card:not(.panel) .st b{font-size:50px}#demo-card:not(.panel) .st span{font-size:17px}#demo-card:not(.panel) .st small{font-size:14px}
+#demo-card:not(.panel) h2{font-size:34px;margin-bottom:22px}
 #demo-card .note{margin-top:18px;font-size:15px;color:#9fb0d6;max-width:860px;line-height:1.5}
 #demo-card .pr{display:grid;grid-template-columns:1fr 40px 1fr;gap:10px 0;align-items:center;width:1000px}
 #demo-card .pr>div{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;font-size:16.5px;opacity:.12;transform:translateY(8px);transition:all .6s}
@@ -116,8 +122,7 @@ html{padding-top:46px!important;scroll-padding-top:58px}
       + (ch ? `<div class="chap"><b>${String(ch[0]).padStart(2, '0')} / ${ch[1]}</b>${esc(ch[2])}</div>` : '<div class="chap"></div>')
       + `<div class="prog">${prog}</div><div class="brand"><i>${icon('bridge', 15)}</i>Folio Pay Bridge</div>`;
     const cap = el('demo-caption');
-    cap.textContent = state.caption;
-    cap.style.display = state.caption ? 'block' : 'none';
+    cap.textContent = state.caption; // the band stays when it is empty, so the page never moves under it
   }
 
   function mount() {
@@ -143,11 +148,11 @@ html{padding-top:46px!important;scroll-padding-top:58px}
         <div class="ln"></div>${node('psp', 'card', 'Card processor', 'simulator', 4)}<div></div><div></div><div class="lv"></div><div></div><div></div>
         <div></div><div></div>${node('db', 'pg', 'PostgreSQL 16', 'ciphertext only', 2)}<div></div><div></div></div></div>`,
     // Numbers read by the recorder from the build's own reports, then shown here.
-    proof: d => `<div class="kick">MEASURED BY THE BUILD, NOT ESTIMATED</div><h2>The proof</h2><div class="stats">
+    proof: d => `<div class="proof"><div class="kick">MEASURED BY THE BUILD, NOT ESTIMATED</div><h2>The proof</h2><div class="stats">
       ${[['tests', d.tests, 'backend tests', d.testsNote, 100], ['lines', d.lines + '%', 'line coverage', 'gate: 99%', d.lines],
          ['branches', d.branches + '%', 'branch coverage', 'gate: 90%', d.branches], ['mutations', d.mutations, 'bugs put back on purpose', 'every one caught by its test', 100]]
         .map(([k, v, t, s, w], i) => `<div class="st" data-r="${i + 1}" style="--k:${['#22c55e', '#38bdf8', '#a78bfa', '#f59e0b'][i]};--w:${w}%"><b>${esc(v)}</b><span>${t}</span><div class="bar"><u></u></div><small>${s}</small></div>`).join('')}
-      </div>`,
+      </div><p class="note" data-testid="proof-rules">${esc(d.rules)}</p></div>`,
     // The problem each part of the bridge exists for, lit as the voice names it, next to the fix the video then shows.
     problems: d => `<div><div class="kick">THE PROBLEM · THREE SYSTEMS MUST AGREE ON ONE PAYMENT</div><h2 style="font-size:34px;margin-bottom:22px">What goes wrong without a bridge</h2>
       <div class="pr">${d.rows.map(([p, ps, s, ss], i) => `<div class="p" data-r="${i + 1}">${icon('alert', 22)}<div>${esc(p)}<small>${esc(ps)}</small></div></div>`
@@ -189,6 +194,143 @@ html{padding-top:46px!important;scroll-padding-top:58px}
     hideCard() { const c = el('demo-card'); if (c) c.classList.remove('on'); },
     // architecture.html and who-is-who.html highlight one step, or one party, while the voice explains it (both read body[data-step]).
     step(n) { if (n) document.body.dataset.step = n; else delete document.body.dataset.step; },
+    // A page meant to be seen whole (who-is-who.html) is scaled to the space between the bar and the band, never cut by the band.
+    fit() {
+      document.body.style.zoom = '';
+      const need = document.documentElement.scrollHeight - BAR - BAND, room = innerHeight - BAR - BAND;
+      if (need > room) document.body.style.zoom = String(Math.floor(room / need * 1000) / 1000);
+    },
+    // '' when some occurrence of text inside the element sel can be read on screen; otherwise why not. The recorder's expect() waits on it.
+    visible(sel, text) {
+      const root = document.querySelector(sel);
+      if (!root) return 'is not on the page';
+      if (!root.textContent.includes(text)) return 'is not in it yet';
+      let why = '';
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        for (let i = n.data.indexOf(text); i >= 0; i = n.data.indexOf(text, i + 1)) {
+          const range = document.createRange();
+          range.setStart(n, i);
+          range.setEnd(n, i + text.length);
+          const rects = [...range.getClientRects()].filter(r => r.width > 0);
+          why = rects.length ? rects.map(r => hidden(r, n.parentElement)).find(x => x) || '' : 'has no size';
+          if (!why) return '';
+        }
+      }
+      if (why) return why;
+      // the text runs across elements: judge the smallest element that holds all of it
+      let e = root;
+      for (let c = e; c; c = [...e.children].find(k => k.textContent.includes(text))) e = c;
+      return hidden(e.getBoundingClientRect(), e);
+    },
+    // Scrolls the first occurrence of text inside sel to the middle of its scrolling box (a long log), then into the window's view.
+    bring(sel, text) {
+      const root = document.querySelector(sel);
+      const walker = root ? document.createTreeWalker(root, NodeFilter.SHOW_TEXT) : null;
+      for (let n = walker && walker.nextNode(); n; n = walker.nextNode()) {
+        const i = n.data.indexOf(text);
+        if (i < 0) continue;
+        const range = document.createRange();
+        range.setStart(n, i);
+        range.setEnd(n, i + text.length);
+        for (let a = n.parentElement; a && a !== document.body; a = a.parentElement) {
+          if (!/auto|scroll/.test(getComputedStyle(a).overflowY)) continue;
+          const r = range.getBoundingClientRect(), b = a.getBoundingClientRect();
+          a.scrollTop += r.top - (b.top + b.height / 2);
+          break;
+        }
+        const r = range.getBoundingClientRect();
+        if (r.top < BAR || r.bottom > innerHeight - BAND) window.scrollBy(0, r.top - (BAR + innerHeight - BAND) / 2);
+        return true;
+      }
+      return false;
+    },
+    // Text on screen that a viewer cannot read whole: spilling out of its box or its drawing, cut by its box, or a cut-off select.
+    problems() {
+      const out = [];
+      const cap = el('demo-caption');
+      if (cap && cap.scrollWidth > cap.clientWidth + 1) out.push(`the caption is wider than the screen: ${cap.textContent}`);
+      const card = el('demo-card');
+      if (card && card.classList.contains('on') && !card.classList.contains('panel')) return out; // a full card covers the page on purpose
+      const shown = r => r.width > 0 && r.bottom > BAR && r.top < innerHeight - BAND;
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {acceptNode: n => n.data.trim() ? 1 : 3});
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const p = n.parentElement;
+        if (!p || p.closest('script,style,noscript,option') || faded(p)) continue;
+        const range = document.createRange();
+        range.selectNodeContents(n);
+        const r = range.getBoundingClientRect();
+        if (!shown(r)) continue;
+        const box = p.closest('svg') ? drawing(p) : bordered(p);
+        if (box && (r.right > box.right + 1 || r.left < box.left - 1)) out.push(`"${n.data.trim().slice(0, 48)}" runs out of its box`);
+        const clip = clipper(p);
+        if (clip && (r.right > clip.right + 1 || r.left < clip.left - 1)) out.push(`"${n.data.trim().slice(0, 48)}" is cut off by its box`);
+      }
+      const ctx = document.createElement('canvas').getContext('2d');
+      for (const s of document.querySelectorAll('select')) {
+        const st = getComputedStyle(s);
+        if (!shown(s.getBoundingClientRect()) || faded(s)) continue;
+        ctx.font = `${st.fontWeight} ${st.fontSize} ${st.fontFamily}`;
+        const label = s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : '';
+        if (ctx.measureText(label).width > s.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight) - 20) {
+          out.push(`the choice "${label}" is cut off`);
+        }
+      }
+      return [...new Set(out)];
+    },
   };
+
+  // Why a piece of text at rect r, inside element from, cannot be read; '' when it can.
+  function hidden(r, from) {
+    if (r.width < 1 || r.height < 1) return 'has no size';
+    if (r.top < BAR - 1 || r.bottom > innerHeight - BAND + 1 || r.left < -1 || r.right > innerWidth + 1) {
+      return `is at y ${Math.round(r.top)} to ${Math.round(r.bottom)}, not between the bar and the caption band (${BAR} to ${innerHeight - BAND})`;
+    }
+    if (faded(from)) return 'is hidden or faded';
+    const clip = clipper(from, true);
+    if (clip && (r.top < clip.top - 1 || r.bottom > clip.bottom + 1 || r.left < clip.left - 1 || r.right > clip.right + 1)) {
+      return 'is scrolled or cut out of its box';
+    }
+    const card = el('demo-card');
+    if (card && card.classList.contains('on') && !card.contains(from)) {
+      const c = card.getBoundingClientRect();
+      if (r.left < c.right && r.right > c.left && r.top < c.bottom && r.bottom > c.top) return 'is under a card';
+    }
+    return '';
+  }
+  // hidden, not displayed, or dimmed below half: the pages dim what the voice is not talking about
+  function faded(e) {
+    let opacity = 1;
+    for (let a = e; a && a.nodeType === 1; a = a.parentElement) {
+      const st = getComputedStyle(a);
+      if (st.display === 'none' || st.visibility === 'hidden') return true;
+      opacity *= parseFloat(st.opacity);
+    }
+    return opacity < 0.5;
+  }
+  // the nearest ancestor that clips its content (both axes, or only the horizontal one), as a rectangle
+  function clipper(e, bothAxes) {
+    for (let a = e; a && a !== document.documentElement; a = a.parentElement) {
+      const st = getComputedStyle(a);
+      if (st.overflowX !== 'visible' || (bothAxes && st.overflowY !== 'visible')) return a.getBoundingClientRect();
+    }
+    return null;
+  }
+  // the nearest ancestor with a border on both sides: the box the text is drawn in
+  function bordered(e) {
+    for (let a = e; a && a !== document.body; a = a.parentElement) {
+      const st = getComputedStyle(a);
+      if (parseFloat(st.borderLeftWidth) > 0 && parseFloat(st.borderRightWidth) > 0 && st.borderLeftStyle !== 'none') return a.getBoundingClientRect();
+    }
+    return null;
+  }
+  // in a drawing, the box a label belongs to: the first rect of the nearest group that has one
+  function drawing(e) {
+    for (let g = e.parentElement; g && g.tagName !== 'svg'; g = g.parentElement) {
+      const rect = [...g.children].find(k => k.tagName === 'rect');
+      if (rect) return rect.getBoundingClientRect();
+    }
+    return null;
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();
