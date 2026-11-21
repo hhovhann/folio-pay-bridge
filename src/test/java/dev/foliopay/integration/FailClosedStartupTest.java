@@ -3,13 +3,17 @@ package dev.foliopay.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import dev.foliopay.FolioPayApplication;
+import dev.foliopay.logging.AuditLog;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -74,20 +78,43 @@ class FailClosedStartupTest {
   @Test
   @DisplayName("With a real gateway and no authentication, the application does not start")
   void withARealGatewayAndNoAuthenticationItDoesNotStart() {
-    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=http",
+    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=http", "foliopay.allow-plaintext-transport=true",
         "foliopay.http.opera-base-url=http://127.0.0.1:1", "foliopay.http.opera-app-key=a", "foliopay.http.opera-client-id=b",
         "foliopay.http.opera-client-secret=c", "foliopay.http.opera-enterprise-id=d", "foliopay.http.opera-scope=e",
         "foliopay.http.psp-base-url=http://127.0.0.1:1", "foliopay.http.psp-api-key=d"))
         .hasStackTraceContaining("No authentication configured");
   }
 
+  /** Fails if the TLS guard is not wired: a production start with the processor over plain HTTP would send card numbers in the clear (D-45). */
+  @Test
+  @DisplayName("With a real gateway over plain HTTP, the application does not start")
+  void withARealGatewayOverPlainHttpItDoesNotStart() {
+    assertThatThrownBy(() -> start("foliopay.keys=local", "foliopay.gateway=http",
+        "foliopay.http.opera-base-url=https://opera.example.test", "foliopay.http.opera-app-key=a", "foliopay.http.opera-client-id=b",
+        "foliopay.http.opera-client-secret=c", "foliopay.http.opera-enterprise-id=d", "foliopay.http.opera-scope=e",
+        "foliopay.http.psp-base-url=http://psp.example.test", "foliopay.http.psp-api-key=d"))
+        .hasStackTraceContaining("foliopay.http.psp-base-url (use https)");
+  }
+
+  /** Fails if the audit trail can be switched off: PCI DSS 10.2 needs every start, refusal and card access recorded (D-43). */
+  @Test
+  @DisplayName("With the audit trail switched off, the application does not start")
+  void withTheAuditTrailSwitchedOffItDoesNotStart() {
+    try {
+      assertThatThrownBy(() -> start("foliopay.keys=local", "foliopay.gateway=fake", "logging.level.dev.foliopay.audit=OFF"))
+          .hasStackTraceContaining("The audit trail");
+    } finally {
+      ((Logger) LoggerFactory.getLogger(AuditLog.LOGGER)).setLevel(Level.INFO); // the logging system is shared by every test in this JVM
+    }
+  }
+
   /** Fails if a token set-up that binds tokens to no issuer, or to no API (neither audience nor scope prefix), can start. */
   @Test
   @DisplayName("An OAuth2 set-up without issuer or audience does not start")
   void anOAuth2SetUpWithoutIssuerOrAudienceDoesNotStart() {
-    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.auth.jwt.jwk-set-uri=http://127.0.0.1:1/jwks"))
+    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.auth.jwt.jwk-set-uri=https://127.0.0.1:1/jwks"))
         .hasStackTraceContaining("foliopay.auth.jwt.issuer is required");
-    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.auth.jwt.jwk-set-uri=http://127.0.0.1:1/jwks",
+    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.auth.jwt.jwk-set-uri=https://127.0.0.1:1/jwks",
         "foliopay.auth.jwt.issuer=https://auth.example.test")).hasStackTraceContaining("foliopay.auth.jwt.audience");
   }
 }

@@ -21,6 +21,7 @@ This is a work sample, not any company's software, and it does not claim to matc
 |---|---|---|
 | APIs for third-party and internal apps, secured for machines | **Built** | OAuth2 client credentials (JWT, JWKS, audience, scopes) or hashed scoped API keys (D-30), `SecurityIntegrationTest` |
 | Acquirer independence: keep the hotel's own acquirer and PSP | **Built (port)**, **Simulated** (one PSP) | `PspClient` port with an HTTP adapter; a second acquirer is a second adapter, the core does not change |
+| The card chain behind the processor (acquirer, card network, issuer): who approves, who holds the money, who pays the hotel | **Simulated** (the processor simulator answers for all three; its ledger names the network and the issuer's approval code) | `PspSimulator`, `docs/who-is-who.md`, the interactive `/who-is-who.html` |
 | Card tokenisation; keys in KMS; nothing sensitive in logs | **Built** (KMS against a stub) | `CardVaultImpl`, `KmsKeyService`, `PciIntegrationTest` (D-6 to D-8, D-31) |
 | 3-D Secure payments and a hosted payment page | **Not built** | The PSP's hosted fields or 3DS SDK so the PAN never reaches the bridge; the authorisation carries the 3DS result (ECI, authentication value) for liability shift |
 | Virtual cards (VCC) from OTAs charged without manual keying | **Built** (the charge-and-post core) | Tokenise, authorise, capture, post to folio: this repository's main flow. Not built: receiving VCCs from OTA channel feeds |

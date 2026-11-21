@@ -22,6 +22,7 @@ import dev.foliopay.domain.model.BookingEvent.Type;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.PaymentLink;
+import dev.foliopay.domain.rule.PaymentRequestPolicy;
 import dev.foliopay.repository.PaymentLinkRepository;
 import dev.foliopay.service.BookingEventService;
 import dev.foliopay.service.ChargeService;
@@ -39,8 +40,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -55,7 +60,7 @@ class BookingEventServiceImplTest {
   private final ChargeService charges = mock(ChargeService.class);
   private final TransactionTemplate tx = mock(TransactionTemplate.class);
   private final AtomicBoolean inTransaction = new AtomicBoolean();
-  private final BookingEventServiceImpl service = new BookingEventServiceImpl(links, payments, charges, tx);
+  private final BookingEventServiceImpl service = new BookingEventServiceImpl(links, payments, charges, tx, new PaymentRequestPolicy(20, 7));
   private final List<PaymentLink> store = new ArrayList<>();
 
   @BeforeEach
@@ -93,8 +98,8 @@ class BookingEventServiceImplTest {
 
   /** A link that is already claimed (PAYING) by the given card, the way the atomic claim leaves it. */
   private PaymentLink claimedBy(String card, PaymentLink link) {
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAYING);
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "payerFingerprint", Fingerprint.of(card));
+    ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAYING);
+    ReflectionTestUtils.setField(link, "payerFingerprint", Fingerprint.of(card));
     return link;
   }
 
@@ -119,7 +124,7 @@ class BookingEventServiceImplTest {
   @DisplayName("A parallel twin that creates the live link first is treated as the repeat it is")
   void aParallelTwinThatCreatesTheLiveLinkFirstIsTreatedAsTheRepeatItIs() {
     when(links.saveAndFlush(any(PaymentLink.class)))
-        .thenThrow(new org.springframework.dao.DataIntegrityViolationException("one live link per booking"))
+        .thenThrow(new DataIntegrityViolationException("one live link per booking"))
         .thenAnswer(call -> add(call.getArgument(0)));
 
     var outcome = service.handle(event(Type.NEW, RatePlan.FLEXIBLE, 30, 100_000), TODAY);
@@ -158,7 +163,7 @@ class BookingEventServiceImplTest {
   @DisplayName("A change after payment needs a person, not a new request")
   void aChangeAfterPaymentNeedsAHumanNotANewRequest() {
     PaymentLink paid = openLink(20_000);
-    org.springframework.test.util.ReflectionTestUtils.setField(paid, "status", PaymentLink.Status.PAID);
+    ReflectionTestUtils.setField(paid, "status", PaymentLink.Status.PAID);
     var out = service.handle(event(Type.MODIFIED, RatePlan.FLEXIBLE, 30, 150_000), TODAY);
     assertThat(out.refundReview()).isTrue();
     assertThat(out.links()).hasSize(1);
@@ -177,7 +182,7 @@ class BookingEventServiceImplTest {
   @Test
   @DisplayName("Cancelling after payment flags a refund review")
   void cancellingAfterPaymentFlagsARefundReview() {
-    org.springframework.test.util.ReflectionTestUtils.setField(openLink(20_000), "status", PaymentLink.Status.PAID);
+    ReflectionTestUtils.setField(openLink(20_000), "status", PaymentLink.Status.PAID);
     assertThat(service.handle(event(Type.CANCELLED, RatePlan.FLEXIBLE, 30, 100_000), TODAY).refundReview()).isTrue();
   }
 
@@ -236,8 +241,8 @@ class BookingEventServiceImplTest {
   @DisplayName("A second card after the link is paid is refused and never charged")
   void aSecondCardAfterTheLinkIsPaidIsRefusedAndNeverCharged() {
     PaymentLink link = openLink(80_000);
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "payerFingerprint", Fingerprint.of(CARD_A));
+    ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
+    ReflectionTestUtils.setField(link, "payerFingerprint", Fingerprint.of(CARD_A));
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_B, TODAY)).isInstanceOf(GoneException.class);
     verify(payments, never()).pay(any());
@@ -247,8 +252,8 @@ class BookingEventServiceImplTest {
   @DisplayName("The same card paying a paid link again resumes the same idempotent charge")
   void theSameCardPayingAPaidLinkAgainResumesTheSameIdempotentCharge() {
     PaymentLink link = openLink(80_000);
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "payerFingerprint", Fingerprint.of(CARD_A));
+    ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
+    ReflectionTestUtils.setField(link, "payerFingerprint", Fingerprint.of(CARD_A));
     when(payments.pay(any())).thenReturn(new PaymentService.Result(Outcome.OK, chargeWith("CAPTURED", link), null));
 
     service.pay(link.getId(), CARD_A, TODAY);
@@ -351,9 +356,9 @@ class BookingEventServiceImplTest {
   @DisplayName("The link list is bounded")
   void theLinkListIsBounded() {
     Page<PaymentLink> page = new PageImpl<>(List.of());
-    when(links.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(page);
+    when(links.findAll(any(Pageable.class))).thenReturn(page);
     assertThat(service.findAll()).isEmpty();
-    ArgumentCaptor<org.springframework.data.domain.Pageable> asked = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+    ArgumentCaptor<Pageable> asked = ArgumentCaptor.forClass(Pageable.class);
     verify(links).findAll(asked.capture());
     assertThat(asked.getValue().getPageSize()).isEqualTo(500);
     verify(links, never()).findAll();
@@ -405,7 +410,7 @@ class BookingEventServiceImplTest {
     PaymentLink link = claimedBy(CARD_A, openLink(80_000));
     when(links.findByBookingRef("req:B1")).thenReturn(List.of(link));
     assertThat(service.request(remote(9_000, null), TODAY).note()).startsWith("A payment is in progress");
-    org.springframework.test.util.ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
+    ReflectionTestUtils.setField(link, "status", PaymentLink.Status.PAID);
     assertThat(service.request(remote(9_000, null), TODAY).note()).startsWith("Already paid");
     verify(links, never()).saveAndFlush(any());
   }
@@ -425,7 +430,7 @@ class BookingEventServiceImplTest {
     PaymentLink old = openLink(1_000);
     PaymentLink twins = new PaymentLink("req:B1", "RES-B1", new Money(5_000, "USD"), TODAY.plusDays(2), "Payment request");
     when(links.findByBookingRef("req:B1")).thenReturn(List.of(old)).thenReturn(List.of(twins));
-    when(links.saveAndFlush(any(PaymentLink.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(PaymentLink.class, old.getId()));
+    when(links.saveAndFlush(any(PaymentLink.class))).thenThrow(new ObjectOptimisticLockingFailureException(PaymentLink.class, old.getId()));
 
     assertThat(service.request(remote(5_000, null), TODAY).note()).startsWith("No change");
   }

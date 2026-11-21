@@ -33,10 +33,7 @@ import org.springframework.stereotype.Service;
 @Service
 class ReconciliationServiceImpl implements ReconciliationService {
   private static final Logger log = LoggerFactory.getLogger(ReconciliationServiceImpl.class);
-  private static final int MIN_LINES_TO_DISTORT = 3;
   static final int IN_LIST_CHUNK = 1_000;
-  private static final long SHORT_SETTLEMENT_MINOR = 150;
-  private static final long UNKNOWN_LINE_MINOR = 7_700;
   /** Shadow-mode runs push synthetic bookings through the real flow; they are not revenue and are kept out of reconciliation. */
   private static final String SHADOW_PREFIX = "shadow-";
   private final ChargeRepository charges;
@@ -51,8 +48,11 @@ class ReconciliationServiceImpl implements ReconciliationService {
 
   @Override
   public ReconReport reconcile(List<SettlementLine> statement, Period period) {
-    Map<String, List<SettlementLine>> linesByRef = statement.stream().collect(Collectors.groupingBy(SettlementLine::pspRef, LinkedHashMap::new, Collectors.toList()));
-    Map<Boolean, List<Charge>> byShadow = expected(linesByRef.keySet(), period).stream().collect(Collectors.partitioningBy(c -> c.getIdempotencyKey().startsWith(SHADOW_PREFIX)));
+    log.debug("reconcile(lines={}, from={}, to={})", statement.size(), period.from(), period.to());
+    Map<String, List<SettlementLine>> linesByRef =
+        statement.stream().collect(Collectors.groupingBy(SettlementLine::pspRef, LinkedHashMap::new, Collectors.toList()));
+    Map<Boolean, List<Charge>> byShadow = expected(linesByRef.keySet(), period).stream()
+        .collect(Collectors.partitioningBy(c -> c.getIdempotencyKey().startsWith(SHADOW_PREFIX)));
     List<Charge> captured = byShadow.get(false);
     Set<String> shadowRefs = byShadow.get(true).stream().map(Charge::getPspRef).collect(Collectors.toSet());
     Set<String> postedChargeIds = inChunks(captured.stream().map(Charge::getId).toList(),
@@ -79,25 +79,21 @@ class ReconciliationServiceImpl implements ReconciliationService {
         byCurrency(lines).forEach((currency, sum) -> items.add(new Item(Category.UNKNOWN_IN_SETTLEMENT, ref, "", 0, "", sum, currency)));
       }
     });
-    log.info("Reconciled {} statement lines against {} captures: {} matched, {} exceptions", statement.size(), captured.size(), matched, items.size());
+    log.info("Reconciled {} statement lines against {} captures: {} matched, {} exceptions",
+        statement.size(), captured.size(), matched, items.size());
     return new ReconReport(matched, countByCategory(items), items, totals);
   }
 
   @Override
   public ReconReport reconcileCsv(String csv, Period period) {
+    log.debug("reconcileCsv(characters={}, from={}, to={})", csv.length(), period.from(), period.to());
     return reconcile(SettlementParser.parse(csv), period);
   }
 
   @Override
-  public ReconReport reconcileAcquirerStatement(boolean distorted, Period period) {
-    List<SettlementLine> statement = new ArrayList<>(psp.settlementStatement());
-    if (distorted && statement.size() >= MIN_LINES_TO_DISTORT) {
-      statement.remove(0); // one capture missing from the statement
-      SettlementLine second = statement.get(0);
-      statement.set(0, new SettlementLine(second.pspRef(), second.amountMinor() - SHORT_SETTLEMENT_MINOR, second.currency())); // one settled short
-      statement.add(new SettlementLine("cap_unknown1", UNKNOWN_LINE_MINOR, second.currency())); // one we never captured
-    }
-    return reconcile(statement, period);
+  public ReconReport reconcileAcquirerStatement(Period period) {
+    log.debug("reconcileAcquirerStatement(from={}, to={})", period.from(), period.to());
+    return reconcile(psp.settlementStatement(), period);
   }
 
   /** Captures taken in the period, plus those the statement names (a late settlement of an older capture is matched, not "unknown"). */
@@ -120,7 +116,8 @@ class ReconciliationServiceImpl implements ReconciliationService {
       return List.of(item(Category.MISSING_IN_SETTLEMENT, charge, 0, ""));
     }
     List<Item> found = new ArrayList<>();
-    Map<String, List<SettlementLine>> groups = lines.stream().collect(Collectors.groupingBy(SettlementLine::currency, TreeMap::new, Collectors.toList()));
+    Map<String, List<SettlementLine>> groups =
+        lines.stream().collect(Collectors.groupingBy(SettlementLine::currency, TreeMap::new, Collectors.toList()));
     groups.forEach((currency, group) -> {
       long settled = group.stream().mapToLong(SettlementLine::amountMinor).sum();
       Category category = !currency.equals(charge.getCurrency()) ? Category.CURRENCY_DIFFERENCE
@@ -138,7 +135,8 @@ class ReconciliationServiceImpl implements ReconciliationService {
   }
 
   private static Item item(Category category, Charge charge, long settledMinor, String settledCurrency) {
-    return new Item(category, charge.getPspRef(), charge.getBookingRef(), charge.getAmountMinor(), charge.getCurrency(), settledMinor, settledCurrency);
+    return new Item(
+        category, charge.getPspRef(), charge.getBookingRef(), charge.getAmountMinor(), charge.getCurrency(), settledMinor, settledCurrency);
   }
 
   /**

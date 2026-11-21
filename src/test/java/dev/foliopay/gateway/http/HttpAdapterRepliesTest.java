@@ -244,6 +244,22 @@ class HttpAdapterRepliesTest {
     assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class).isNotInstanceOf(PspTransientException.class);
   }
 
+  /**
+   * Fails if an error code read from outside reaches our message unredacted: the message is stored on the charge, returned by the API and
+   * logged, so a processor or OPERA that echoes a card number, a card token or a credential would spread it to all three.
+   */
+  @Test
+  @DisplayName("A third-party error that echoes a card number, a card token or a credential is redacted before it becomes our message")
+  void aThirdPartyErrorThatEchoesSecretsIsRedactedBeforeItBecomesOurMessage() {
+    String token = "tok_" + "0123456789abcdef".repeat(2);
+    replies.put("/v1/captures", new Reply(422, "{\"code\":\"BAD_CARD 4111111111111111 " + token + "\"}"));
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class)
+        .hasMessageContaining("BAD_CARD").hasMessageNotContaining("4111111111111111").hasMessageNotContaining(token);
+    replies.put(OPERA_PAYMENTS, new Reply(400, "{\"o:errorCode\":\"INVALID password=hunter22\"}"));
+    assertThatThrownBy(() -> opera().postPayment(payment())).isInstanceOf(OperaRejectedException.class)
+        .hasMessageContaining("INVALID").hasMessageNotContaining("hunter22");
+  }
+
   /** Fails if the reason is cut out of the body by hand: a truncated body used to throw StringIndexOutOfBounds instead of a rejection. */
   @Test
   @DisplayName("A truncated or non-JSON rejection from OPERA is still a rejection, not a crash")

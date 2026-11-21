@@ -9,7 +9,8 @@ import java.time.Instant;
 
 /**
  * What is stored for a card: ciphertext, the wrapped data key, and the digits PCI allows (first six and last four, for display). No
- * plaintext PAN, no CVV.
+ * plaintext PAN, no CVV. At the end of its retention period (D-44) the ciphertext and the wrapped key are destroyed and the row stays, so
+ * the charges that name the card stay valid.
  */
 @Entity
 @Table(name = "card_token")
@@ -41,12 +42,20 @@ public class CardToken {
   private String expiry;
 
   @Column(name = "created_at", nullable = false)
-  private Instant createdAt = Instant.now();
+  private Instant createdAt;
+
+  @Column(name = "last_used_at", nullable = false)
+  private Instant lastUsedAt;
+
+  @Column(name = "purged_at")
+  private Instant purgedAt;
 
   protected CardToken() {}
 
-  public CardToken(String token, byte[] sealedPan, byte[] wrappedKey, String keyId, Pan pan, String expiry) {
+  public CardToken(String token, byte[] sealedPan, byte[] wrappedKey, String keyId, Pan pan, String expiry, Instant storedAt) {
     this.token = token;
+    this.createdAt = storedAt;
+    this.lastUsedAt = storedAt;
     this.sealedPan = sealedPan;
     this.wrappedKey = wrappedKey;
     this.keyId = keyId;
@@ -63,4 +72,5 @@ public class CardToken {
   public String getLast4() { return last4; }
   public String getExpiry() { return expiry; }
   public Instant getCreatedAt() { return createdAt; }
+  public Instant getLastUsedAt() { return lastUsedAt; }
 }

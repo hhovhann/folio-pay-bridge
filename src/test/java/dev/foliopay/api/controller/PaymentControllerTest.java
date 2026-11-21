@@ -11,12 +11,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.foliopay.Fixtures;
+import dev.foliopay.config.security.DashboardAuth;
+import dev.foliopay.config.security.SecurityConfig;
 import dev.foliopay.domain.exception.ConflictException;
 import dev.foliopay.domain.exception.GoneException;
+import dev.foliopay.domain.exception.IdempotencyKeyReusedException;
 import dev.foliopay.domain.exception.NotFoundException;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
+import dev.foliopay.gateway.OperaUnavailableException;
+import dev.foliopay.gateway.PspTransientException;
 import dev.foliopay.gateway.PspUnreadableReplyException;
+import dev.foliopay.service.BusinessDateService;
 import dev.foliopay.service.ChargeService;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.Outcome;
@@ -26,6 +32,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -36,13 +43,14 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
 /** HTTP contract only: services are mocked, so this proves validation, status mapping, safe errors and what the JSON exposes. */
 @WebMvcTest(PaymentController.class)
-@Import({PaymentControllerTest.FixedClock.class, dev.foliopay.config.security.SecurityConfig.class, dev.foliopay.config.security.DashboardAuth.class})
+@Import({PaymentControllerTest.FixedClock.class, SecurityConfig.class, DashboardAuth.class})
 @DisplayName("Payment API: the HTTP contract of each endpoint, with the services mocked")
 class PaymentControllerTest {
   @TestConfiguration
@@ -55,7 +63,7 @@ class PaymentControllerTest {
   @MockitoBean PaymentService payments;
   @MockitoBean ChargeService charges;
   @MockitoBean PostingService postings;
-  @MockitoBean dev.foliopay.service.BusinessDateService businessDates;
+  @MockitoBean BusinessDateService businessDates;
 
   private static final String TOKEN = "tok_" + "c".repeat(32);
   private static final String VALID =
@@ -87,8 +95,8 @@ class PaymentControllerTest {
   @Test
   @DisplayName("A concurrent change to the same record is a conflict to retry, not a server error")
   void aConcurrentChangeToTheSameRecordIsAConflictToRetryNotAServerError() throws Exception {
-    when(payments.pay(any())).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
-    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("send it again")));
+    when(payments.pay(any())).thenThrow(new ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
+    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(Matchers.containsString("send it again")));
   }
 
   @Test
@@ -136,7 +144,7 @@ class PaymentControllerTest {
   @DisplayName("Domain errors map to their HTTP status")
   void domainErrorsMapToTheirHttpStatus() throws Exception {
     doThrow(new ConflictException("Idempotency key was already used with different parameters")).when(payments).pay(any());
-    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("different parameters")));
+    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.detail").value(Matchers.containsString("different parameters")));
 
     doThrow(new NotFoundException("Unknown payment link")).when(payments).pay(any());
     pay(VALID).andExpect(status().isNotFound());
@@ -148,11 +156,11 @@ class PaymentControllerTest {
   @Test
   @DisplayName("A downstream outage is a 503 telling the client to retry with the same key")
   void aDownstreamOutageIsA503TellingTheClientToRetryWithTheSameKey() throws Exception {
-    doThrow(new dev.foliopay.gateway.OperaUnavailableException("jdbc secret-host")).when(payments).pay(any());
+    doThrow(new OperaUnavailableException("jdbc secret-host")).when(payments).pay(any());
     String body = pay(VALID).andExpect(status().isServiceUnavailable()).andReturn().getResponse().getContentAsString();
     assertThat(body).contains("same idempotency key").doesNotContain("secret-host");
 
-    doThrow(new dev.foliopay.gateway.PspTransientException("timeout")).when(payments).pay(any());
+    doThrow(new PspTransientException("timeout")).when(payments).pay(any());
     pay(VALID).andExpect(status().isServiceUnavailable());
   }
 
@@ -177,18 +185,18 @@ class PaymentControllerTest {
   @Test
   @DisplayName("The two conflicts carry different codes, and only the retryable one has Retry-After")
   void theTwoConflictsCarryDifferentCodesAndOnlyTheRetryableOneHasRetryAfter() throws Exception {
-    when(payments.pay(any())).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
+    when(payments.pay(any())).thenThrow(new ObjectOptimisticLockingFailureException(Charge.class, "c-1"));
     pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("CONCURRENT_UPDATE")).andExpect(header().exists("Retry-After"));
 
-    org.mockito.Mockito.reset(payments);
-    when(payments.pay(any())).thenThrow(new dev.foliopay.domain.exception.IdempotencyKeyReusedException());
+    Mockito.reset(payments);
+    when(payments.pay(any())).thenThrow(new IdempotencyKeyReusedException());
     pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED")).andExpect(header().doesNotExist("Retry-After"));
   }
 
   @Test
   @DisplayName("An outage is retryable and says when; a server error has a code but no detail")
   void anOutageIsRetryableAndSaysWhenAndAServerErrorHasACodeButNoDetail() throws Exception {
-    doThrow(new dev.foliopay.gateway.PspTransientException("timeout")).when(payments).pay(any());
+    doThrow(new PspTransientException("timeout")).when(payments).pay(any());
     pay(VALID).andExpect(jsonPath("$.code").value("DOWNSTREAM_UNAVAILABLE")).andExpect(header().string("Retry-After", "2"));
 
     doThrow(new IllegalStateException("boom")).when(payments).pay(any());

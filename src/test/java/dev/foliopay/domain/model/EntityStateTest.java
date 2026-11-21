@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.foliopay.Fixtures;
 import dev.foliopay.domain.model.Posting.FailureCategory;
+import java.time.Instant;
 import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -165,7 +166,7 @@ class EntityStateTest {
   @Test
   @DisplayName("A stored card keeps only what PCI allows, and when it was stored")
   void aStoredCardKeepsOnlyWhatPciAllowsAndWhenItWasStored() {
-    CardToken card = new CardToken("tok_1", new byte[] {1}, new byte[] {2}, "k", new Pan("4111111111111111"), "12/29");
+    CardToken card = new CardToken("tok_1", new byte[] {1}, new byte[] {2}, "k", new Pan("4111111111111111"), "12/29", Instant.EPOCH);
     assertThat(card.getToken()).isEqualTo("tok_1");
     assertThat(card.getSealedPan()).containsExactly(1);
     assertThat(card.getWrappedKey()).containsExactly(2);

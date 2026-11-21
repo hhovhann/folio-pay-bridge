@@ -110,6 +110,7 @@ Task definition essentials:
     "environment": [
       { "name": "SPRING_PROFILES_ACTIVE", "value": "postgres" },
       { "name": "LOGGING_CONFIG", "value": "classpath:logback-json.xml" },
+      { "name": "SERVER_FORWARD_HEADERS_STRATEGY", "value": "native" },
       { "name": "DB_POOL_SIZE", "value": "10" },
       { "name": "FOLIOPAY_KEYS", "value": "kms" },
       { "name": "FOLIOPAY_KMS_KEY_ID", "value": "alias/folio-pay-bridge" },
@@ -151,8 +152,15 @@ Task definition essentials:
 - Run at least two tasks across two AZs, so a deploy never takes the service to zero.
 
 ### 2.7 Logs and alarms
-- Logs go to CloudWatch (`awslogs` driver). The application masks card numbers in messages and in exception text, and never logs them; still keep log access restricted and retention short.
+- Logs go to CloudWatch (`awslogs` driver). The application never logs card numbers, card tokens, credentials or raw bodies, and redacts what slips through in messages, exception text and the log context (`LogRedactor`); still keep log access restricted (retention: below).
 - Alarms: any posting `DEAD_LETTER` older than 15 minutes; 5xx rate; payment latency; RDS CPU and connections; KMS throttling. (Metrics for the dead-letter queue are not built yet: until they are, alarm on the console count or on a log filter for `dead-lettered`.)
+- **The audit trail (D-43, PCI DSS 10.3, 10.5).** It is the logger `dev.foliopay.audit`, one JSON line per event, in the same stream as the rest.
+  - Copy it out with a subscription filter on the service's log group, `{ $.logger = "dev.foliopay.audit" }`, to Amazon Data Firehose and on to an S3 bucket with Object Lock (compliance mode, 1 year) and versioning. Only the security team can read the bucket.
+  - Keep the service's own log group at least 90 days, so three months stay searchable in CloudWatch Logs Insights.
+  - Alarm on any `AUTHENTICATION_FAILED` or `ACCESS_DENIED` rate above normal, and on any start where `CONFIGURATION_LOADED` differs from the last one.
+  - Time comes from Amazon Time Sync on the hosts (10.6).
+  - The caller's address (`origin`) comes from the load balancer's `X-Forwarded-For`: `SERVER_FORWARD_HEADERS_STRATEGY=native` in the task definition trusts it only from the load balancer's private addresses. Without it every refusal shows the load balancer's own address. The tasks must be reachable only through the load balancer (security groups), or a caller could write the header itself.
+- **Card retention (D-44).** `FOLIOPAY_VAULT_RETENTION` (90 days unless the hotel decides otherwise; longer than its longest time from booking to check-out). The purge runs on every task and is safe that way.
 
 ## 3. The deployment window (midnight to 3am Dubai = 20:00 to 23:00 UTC)
 1. Merge only after `./mvnw test` and `python3 tools/check_specs.py` are green in CI.
@@ -176,8 +184,8 @@ Task definition essentials:
 ## 5. Proving KMS in a real account (manual, before going live)
 The KMS adapter is tested against a stubbed client only. To close that, in a throwaway AWS account:
 1. Create a symmetric KMS key (alias `alias/folio-pay-bridge-test`) and an IAM role or user with `kms:GenerateDataKey` and `kms:Decrypt` on that key only, with the `kms:EncryptionContext:token` condition from section 2.2.
-2. Start a local PostgreSQL (`docker run -d -p 127.0.0.1:5432:5432 -e POSTGRES_DB=folio -e POSTGRES_USER=folio -e POSTGRES_PASSWORD=folio postgres:16`): KMS keys are refused on an in-memory database by design.
-3. Run `AWS_PROFILE=<that profile> AWS_REGION=<region> DB_URL=jdbc:postgresql://127.0.0.1:5432/folio DB_USER=folio DB_PASSWORD=folio java -jar target/folio-pay-bridge-0.2.0.jar --spring.profiles.active=postgres --foliopay.keys=kms --foliopay.kms.key-id=alias/folio-pay-bridge-test --foliopay.gateway=fake --foliopay.demo-controls=true`.
+2. Start a local, throwaway PostgreSQL (`docker run -d -p 127.0.0.1:5432:5432 -e POSTGRES_DB=folio -e POSTGRES_USER=folio -e POSTGRES_PASSWORD=folio postgres:16`): KMS keys are refused on an in-memory database by design.
+3. Run `AWS_PROFILE=<that profile> AWS_REGION=<region> DB_URL=jdbc:postgresql://127.0.0.1:5432/folio DB_USER=folio DB_PASSWORD=folio java -jar target/folio-pay-bridge-0.2.0.jar --spring.profiles.active=postgres --foliopay.allow-plaintext-transport=true --foliopay.keys=kms --foliopay.kms.key-id=alias/folio-pay-bridge-test --foliopay.gateway=fake --foliopay.demo-controls=true`.
 4. Tokenise a public test card and pay with it. In CloudTrail, `GenerateDataKey` and `Decrypt` must carry `"encryptionContext": {"token": "tok_..."}`, and `card_token.key_id` must hold the key's ARN, not the alias.
 5. Call `Decrypt` with another token as the context and confirm KMS refuses. Move the alias to a new key and confirm the old card still pays (D-31).
 Only then tick the boxes in phases 1, 9 and 14, with the date and the account type (never the account id).

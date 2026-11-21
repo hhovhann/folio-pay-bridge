@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 /**
  * An OPERA-style property management system, in memory: reservations with folio windows, room charges posted at night audit, payments, a
@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
  * payment method is refused, it does NOT deduplicate (so a caller that is unsure must look first), and it can be made to fail in the ways a
  * real one fails. Amounts are minor units inside; OHIP's decimals exist only on the wire.
  */
-@Component
+@Service
 @Profile("opera")
 public class OperaSimulator {
   /** LOCK_CONFLICT_NEXT: another workstation holds the reservation. Real OPERA has such locks; the status OHIP gives them is not in Oracle's

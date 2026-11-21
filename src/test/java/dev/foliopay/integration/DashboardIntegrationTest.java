@@ -13,6 +13,7 @@ import dev.foliopay.service.OverviewService;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.PaymentCommand;
 import java.util.UUID;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +45,7 @@ class DashboardIntegrationTest extends TestBase {
     OverviewService.Overview o = overview.overview();
 
     assertThat(o.capturedToday()).extracting(OverviewService.Captured::currency, OverviewService.Captured::amountMinor, OverviewService.Captured::count)
-        .containsExactly(org.assertj.core.groups.Tuple.tuple("AED", 45_000L, 1L), org.assertj.core.groups.Tuple.tuple("USD", 110_000L, 3L));
+        .containsExactly(Tuple.tuple("AED", 45_000L, 1L), Tuple.tuple("USD", 110_000L, 3L));
     assertThat(o.deadLettersReplayable()).isEqualTo(1);
     assertThat(o.deadLettersRejected()).isZero();
     assertThat(o.chargesPending()).isZero();

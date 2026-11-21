@@ -24,10 +24,18 @@ button,select{font:inherit;padding:6px 11px;border:1px solid #cfd5e3;border-radi
 .ref{font:12px ui-monospace,Menlo,monospace;color:#344054}
 tr.fresh{animation:fresh 3s ease-out}@keyframes fresh{0%,25%{background:#fde68a}100%{background:transparent}}
 .fault{padding:1px 9px;border-radius:99px;background:var(--okbg);color:var(--ok)}.fault.bad{background:var(--badbg);color:var(--bad)}
-@media (max-width:900px){main{grid-template-columns:1fr 1fr}.half{grid-column:1/-1}}
+.route{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}.hop{flex:1;min-width:150px;display:flex;gap:9px;align-items:center;padding:8px 10px;border-radius:10px;background:#f8f9fb;border:1.5px solid var(--line)}
+.hop i{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:#fff;flex:none}.hop b{display:block;font-size:13px}.hop small{color:var(--mut);font-size:12px}
+.hop.dim{border-style:dashed}.arrow{align-self:center;width:34px;height:2px;background:#c5ccd9;position:relative;flex:none}.arrow:after{content:"";position:absolute;right:-1px;top:-4px;border:5px solid transparent;border-left-color:#c5ccd9}
+.arrow:before{content:"";position:absolute;left:0;top:-3px;width:8px;height:8px;border-radius:50%;background:var(--psp);opacity:0}
+.route.go .arrow:before{animation:hop 2.4s ease-in-out}.route.go .arrow:nth-of-type(2):before{animation-delay:.35s}.route.go .arrow:nth-of-type(3):before{animation-delay:.7s}
+@keyframes hop{0%{left:0;opacity:1}45%{left:26px;opacity:1}50%{opacity:0}100%{opacity:0}}
+.route.go .hop.answer{animation:answer 2.4s ease-out}@keyframes answer{0%,30%{background:#f8f9fb}45%{background:var(--okbg);border-color:var(--ok)}100%{background:#f8f9fb}}
+.code{font:600 12.5px ui-monospace,Menlo,monospace}.net{font-weight:700;font-size:11.5px;letter-spacing:.04em}
+@media (max-width:900px){main{grid-template-columns:1fr 1fr}.half{grid-column:1/-1}.arrow{display:none}}
 </style></head><body>
-<header><div class="logo"><svg class="ic"><use href="/icons.svg#i-card"/></svg></div><div><h1>Card processor</h1><div class="sub">simulator: authorise, capture, void, settlement</div></div></header>
-<div class="banner">Synthetic. It deduplicates on the Idempotency-Key header, and it keeps only the last four digits of a card.</div>
+<header><div class="logo"><svg class="ic"><use href="/icons.svg#i-card"/></svg></div><div><h1>Card processor</h1><div class="sub">simulator: the processor, and the acquirer, card network and issuer behind it</div></div></header>
+<div class="banner">Synthetic. It deduplicates on the Idempotency-Key header, and it keeps only the last four digits of a card. It also answers for the acquirer, the card network and the issuer, which the demo does not run.</div>
 <main>
 <section class="kpi"><i style="background:#15803d"><svg class="ic"><use href="/icons.svg#i-coins"/></svg></i><div><div class="big" data-testid="captured">0.00</div><small class="mut">captured today: what the acquirer would settle</small></div></section>
 <section class="kpi"><i style="background:#1d4ed8"><svg class="ic"><use href="/icons.svg#i-lock"/></svg></i><div><div class="big" id="n-auth">0</div><small class="mut">authorisations (holds)</small></div></section>
@@ -39,6 +47,13 @@ tr.fresh{animation:fresh 3s ease-out}@keyframes fresh{0%,25%{background:#fde68a}
   <p class="mut">Current fault: <b class="fault" data-testid="current-fault">NONE</b></p></section>
 <section class="half"><h2><svg class="ic"><use href="/icons.svg#i-lock"/></svg>Idempotency</h2>
   <p class="mut">Every call carries an Idempotency-Key. A repeated key returns the first result instead of charging again, which is why a retry after a lost reply is safe.</p></section>
+<section class="wide"><h2><svg class="ic"><use href="/icons.svg#i-globe"/></svg>Behind the processor <small class="mut" style="font-weight:400">the parties the bridge never calls; in real life each authorisation travels to the guest's bank and back in about two seconds. <a data-testid="who-link" href="/">Who is who →</a></small></h2>
+  <div class="route" data-testid="route">
+  <div class="hop"><i style="background:#0f766e"><svg class="ic"><use href="/icons.svg#i-card"/></svg></i><div><b>Processor</b><small>takes the bridge's request</small></div></div><span class="arrow"></span>
+  <div class="hop dim"><i style="background:#0e7490"><svg class="ic"><use href="/icons.svg#i-bank"/></svg></i><div><b>Acquirer</b><small>the hotel's card bank</small></div></div><span class="arrow"></span>
+  <div class="hop dim"><i style="background:#4338ca"><svg class="ic"><use href="/icons.svg#i-globe"/></svg></i><div><b>Card network</b><small data-testid="route-network">routes by the first digits</small></div></div><span class="arrow"></span>
+  <div class="hop dim answer"><i style="background:#a16207"><svg class="ic"><use href="/icons.svg#i-bank"/></svg></i><div><b>Issuer, the guest's bank</b><small data-testid="route-answer">says yes or no, holds the money</small></div></div>
+  </div></section>
 <section class="wide"><h2><svg class="ic"><use href="/icons.svg#i-list"/></svg>Ledger</h2>
-  <table data-testid="ledger"><thead><tr><th>Reference</th><th>Kind</th><th>Card</th><th>Amount</th><th>State</th><th>Of authorisation</th><th>Time</th></tr></thead><tbody></tbody></table></section>
+  <table data-testid="ledger"><thead><tr><th>Reference</th><th>Kind</th><th>Card</th><th>Network</th><th>Issuer's code</th><th>Amount</th><th>State</th><th>Of authorisation</th><th>Time</th></tr></thead><tbody></tbody></table></section>
 </main><script src="/sim/sim.js"></script></body></html>

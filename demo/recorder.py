@@ -6,6 +6,7 @@ DEMO_FAST=1 does a dry run: no voice, short waits, no output, every assertion st
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -264,6 +265,10 @@ def finish(clips, work, video_path):
 KOKORO_RATE = 24000
 
 
+# No scene holds one picture this long: the longest, the production chapter, changes its highlights within a minute.
+STILLEST = 75
+
+
 def check_output(mp4, expected_rate=KOKORO_RATE, expected_seconds=None):
     """Reads the finished file back with ffprobe and refuses it unless its audio is what the published video must be: Kokoro's 24 kHz
     (a stand-in voice only when DEMO_MACOS_VOICE asked for it by name) and the length of the recording. Run it on any file before it is
@@ -281,7 +286,25 @@ def check_output(mp4, expected_rate=KOKORO_RATE, expected_seconds=None):
         raise SystemExit(f"{mp4}: a {rate} Hz stand-in voice that nobody asked for by name")
     if expected_seconds is not None and abs(seconds - expected_seconds) > 1.0:
         raise SystemExit(f"{mp4}: {seconds:.1f} s long, the recording was {expected_seconds:.1f} s")
-    print(f"checked {mp4}: {rate} Hz, {seconds:.1f} s", flush=True)
+    frozen = still_picture(mp4)
+    if frozen:
+        start, length = frozen
+        raise SystemExit(f"{mp4}: the picture stands still for {length:.0f} s from {start:.0f} s while the voice goes on: the machine slept or "
+                         "the browser stalled during the recording; record again (with `caffeinate -i` on macOS)")
+    print(f"checked {mp4}: {rate} Hz, {seconds:.1f} s, the picture moves throughout", flush=True)
+
+
+def still_picture(mp4, longest=STILLEST):
+    """The first stretch where the picture stands still for longer than any scene does, as (start, length), or None. The audio check
+    passed a video whose picture lagged its voice by four minutes: the Mac slept mid-recording, and the browser's clock counted the sleep
+    while the narration's did not (agent log 66). A click ripple or a caption fade is noise, not motion (n=0.01)."""
+    run = subprocess.run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(mp4), "-vf", f"freezedetect=n=0.01:d={longest}", "-map", "0:v",
+                          "-f", "null", "-"], capture_output=True, text=True, check=True)
+    starts = re.findall(r"freeze_start: ([\d.]+)", run.stderr)
+    lengths = re.findall(r"freeze_duration: ([\d.]+)", run.stderr)
+    if not starts:
+        return None
+    return float(starts[0]), float(lengths[0]) if lengths else float("inf")
 
 
 def check_test_count(minimum=170):

@@ -17,15 +17,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * The published API description (docs/openapi.json) must be what the code really serves. After an intentional API change regenerate it:
  * {@code UPDATE_OPENAPI=true ./mvnw test -Dtest=OpenApiContractTest}.
  */
-@SpringBootTest(properties = {
-    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
-    "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=true", "springdoc.api-docs.enabled=true"})
+@SpringBootTest(properties = "springdoc.api-docs.enabled=true")
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @DisplayName("OpenAPI: the published description is what the code serves")
 class OpenApiContractTest {

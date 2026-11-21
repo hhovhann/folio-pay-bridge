@@ -3,6 +3,8 @@ package dev.foliopay.config.security;
 import dev.foliopay.api.ApiPaths;
 import dev.foliopay.api.error.ErrorCode;
 import dev.foliopay.api.error.Problems;
+import dev.foliopay.logging.AuditLog;
+import dev.foliopay.logging.AuditLog.Event;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -17,8 +19,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -133,8 +137,10 @@ public class SecurityConfig {
             .requestMatchers(HttpMethod.POST, V1 + "/payments", V1 + "/links/*/pay").hasAuthority(PAYMENTS_WRITE)
             .requestMatchers(HttpMethod.POST, V1 + "/links").hasAuthority(LINKS_WRITE)
             .requestMatchers(HttpMethod.POST, V1 + "/booking-events").hasAuthority(BOOKINGS_WRITE)
-            .requestMatchers(HttpMethod.GET, V1 + "/charges", V1 + "/postings", V1 + "/links", V1 + "/notifications", V1 + "/overview").hasAuthority(PAYMENTS_READ)
-            .requestMatchers(ApiPaths.ALL_VERSIONS).hasAuthority(OPERATIONS) // replay, redeliver, reconcile, and anything added later: least access by default
+            .requestMatchers(HttpMethod.GET, V1 + "/charges", V1 + "/postings", V1 + "/links", V1 + "/notifications", V1 + "/overview")
+            .hasAuthority(PAYMENTS_READ)
+            // replay, redeliver, reconcile, and anything added later: least access by default
+            .requestMatchers(ApiPaths.ALL_VERSIONS).hasAuthority(OPERATIONS)
             .anyRequest().permitAll()) // health probes, the dashboard and console pages, the API description (off unless a profile turns it on)
         .build();
   }
@@ -173,11 +179,18 @@ public class SecurityConfig {
   }
 
   private static void unauthorized(HttpServletRequest request, HttpServletResponse response, Exception e) throws IOException {
+    AuditLog.event(Event.AUTHENTICATION_FAILED).client("unauthenticated").resource(request.getRequestURI())
+        .detail("method", request.getMethod()).detail("origin", request.getRemoteAddr()).detail("reason", e.getClass().getSimpleName()).failure();
     response.setHeader("WWW-Authenticate", "Bearer");
     Problems.write(response, HttpServletResponse.SC_UNAUTHORIZED, ErrorCode.UNAUTHORIZED, "Missing, unknown or expired credentials");
   }
 
   private static AccessDeniedHandler forbidden() {
-    return (request, response, e) -> Problems.write(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.FORBIDDEN, "These credentials do not allow this operation");
+    return (request, response, e) -> {
+      Authentication caller = SecurityContextHolder.getContext().getAuthentication();
+      AuditLog.event(Event.ACCESS_DENIED).client(caller == null ? null : caller.getName()).resource(request.getRequestURI())
+          .detail("method", request.getMethod()).detail("origin", request.getRemoteAddr()).failure();
+      Problems.write(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.FORBIDDEN, "These credentials do not allow this operation");
+    };
   }
 }

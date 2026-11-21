@@ -23,8 +23,10 @@ class PaymentServiceImpl implements PaymentService {
 
   @Override
   public Result pay(PaymentCommand command) {
-    Charge charge = charges.charge(
-        new ChargeCommand(command.clientId(), command.idempotencyKey(), command.bookingRef(), command.folioId(), command.businessDate(), command.cardToken(), command.amount()));
+    log.debug("pay(client={}, key={}, booking={}, folio={}, amount={} {}, businessDate={})", command.clientId(), command.idempotencyKey(),
+        command.bookingRef(), command.folioId(), command.amount().minor(), command.amount().currency(), command.businessDate());
+    Charge charge = charges.charge(new ChargeCommand(command.clientId(), command.idempotencyKey(), command.bookingRef(), command.folioId(),
+        command.businessDate(), command.cardToken(), command.amount()));
     return switch (charge.getStatus()) {
       case DECLINED -> new Result(Outcome.DECLINED, charge, null);
       case PENDING -> new Result(Outcome.CHARGE_PENDING, charge, null);

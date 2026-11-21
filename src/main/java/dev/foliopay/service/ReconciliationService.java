@@ -33,6 +33,6 @@ public interface ReconciliationService {
   /** Reconciles against a pasted acquirer CSV (psp_ref,amount_minor,currency). A bad row fails loudly. */
   ReconReport reconcileCsv(String csv, Period period);
 
-  /** Reconciles against the acquirer's own statement. {@code distorted} simulates a messy one for demos. */
-  ReconReport reconcileAcquirerStatement(boolean distorted, Period period);
+  /** Reconciles against the acquirer's own statement, as the processor reports it. */
+  ReconReport reconcileAcquirerStatement(Period period);
 }

@@ -85,15 +85,33 @@ Status: done 2026-11-19
   - agent log 52's test.
 
 ## Phase 19 - Cleanup, and the final code and security review
-Status: in progress
+Status: done 2026-11-20
 - Code only tests used is removed; one check that could not fail is gone; the icons are one sprite; dead references in the docs are fixed.
 - The final code review's findings are fixed, each with a test that failed first: a reply that is not a folio, an unreadable settlement statement, the guards, the spec checker, the dashboard's date, the webhook lease.
 - Dependencies with published advisories are pinned to patched releases; the two left are written down.
+- Every rule called enforced checks what it says: the style rules read the tests too, and every API operation is tested both succeeding and refused, measured from the requests the tests send.
+- The standards gain a performance section (no cost that grows with the hotel, N+1 measured) and a table of principles with what holds each.
+
+## Phase 20 - Who is who: every party in a card payment, for someone new
+Status: done 2026-11-20
+- An interactive page shows the eleven parties and one payment in nine steps: messages in seconds, money in days. Each party is marked built here, simulator, or played by the processor simulator.
+- The processor simulator names the card network and the issuer's approval code, and shows the chain behind it.
+- The video gets a "Who is who" chapter. The README opens with a path for each reader. Onboarding starts with an hour that needs no code.
+
+## Phase 21 - Safe logs, an audit trail, and code rules a build holds
+Status: done 2026-11-21
+- Nothing sensitive in a log at any boundary (`LogRedactor`; six records that printed a card token now redacted; no raw body or exception message in a log call). An audit trail of security-relevant events that cannot be switched off (D-43).
+- PCI DSS v4.0.1 mapped requirement by requirement in `SECURITY.md`: card retention (D-44), verified TLS outside the process (D-45), dependency scanning in CI (D-46).
+- Policy values are configuration, demo values stay in the demo, and `CleanCodeTest` and `ArchitectureTest` hold the size limits, the entry logs, the stereotypes and one encryption service.
 
 ## Next
 1. Multi-tenancy: operators and properties on every row, credential and webhook; per-property settings; data residency (`docs/architecture.md` section 9).
-2. Hosted card entry and 3-D Secure, so the card number never reaches the service; chargeback evidence.
+2. Hosted card entry and 3-D Secure, so the card number never reaches the service; chargeback evidence. The acquirer's own hosted checkout (for example Visa Acceptance Solutions' Unified Checkout, with its pay-by-link and 3-D Secure) takes the card in its fields and gives the bridge a token. The bridge's payment links become the acquirer's links, the vault holds no card numbers, and the bridge leaves most of PCI DSS scope (`SECURITY.md`, "Scope"). Until then, card retention counts from a card's last use; with the booking known to the vault it could count from check-out (D-44).
 3. A sweeper for payments stranded by a crash between two steps; alarms on dead letters and failed webhooks.
 4. Real adapters: OHIP sandbox, an acquirer's test environment, KMS and Cognito in an AWS account. For OHIP, the first sandbox session settles what Oracle's specification leaves open (D-42): whether a folio window's `totalResults` counts postings or folios (phase 19); does `postBillingPayment`'s 201 carry the postings or only a `Location`; the sign of a payment on a folio; whether payments before arrival must be deposits (`action: Deposit`, `getDepositFolio`) at each hotel; the status OHIP gives a locked reservation; the rate limits; how `getFolio` pages (does `offset` count postings, the default page size, the order of postings while the front desk is posting); whether postings billed to a generated folio are listed without `includeFolioHistory=true` (the OHIP review's third finding: if not, a replay after the folio is billed could post again). Then run Oracle's Postman collections against the sandbox, and point the bridge at it by configuration (`FOLIOPAY_HTTP_OPERA_*`).
 5. Store the business date OPERA posted on (read back by `find`) beside the bridge's own, so reconciliation can explain a charge booked before night audit and posted after it.
-
+6. CI quality and security gates beyond OSV-Scanner (D-46), each a new CI dependency for the owner to approve:
+   - static analysis with a quality gate (SonarQube or SonarCloud);
+   - a formatter that checks style (Spotless with google-java-format, proposed in phase 15), which would also retire the long-line ratchet;
+   - GitHub's CodeQL code scanning, and secret scanning with push protection;
+   - mutation testing over the whole code (PIT) instead of the per-fix mutation scripts.

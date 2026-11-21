@@ -6,10 +6,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.foliopay.TestBase;
+import dev.foliopay.domain.model.BookingEvent;
+import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.PaymentLink;
 import dev.foliopay.repository.PaymentLinkRepository;
+import dev.foliopay.service.BookingEventService;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import org.assertj.core.groups.Tuple;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,7 +42,7 @@ class RemoteCreationIntegrationTest extends TestBase {
   @DisplayName("A payment request creates one open link, and sending it again changes nothing")
   void aRequestCreatesOneOpenLinkAndSendingItAgainChangesNothing() throws Exception {
     create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value("Friday brunch, table for 4"));
-    create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value(org.hamcrest.Matchers.startsWith("No change")));
+    create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value(Matchers.startsWith("No change")));
 
     assertThat(links.findByBookingRef("req:FNB-2026-1201")).singleElement().satisfies(l -> {
       assertThat(l.getStatus()).isEqualTo(PaymentLink.Status.OPEN);
@@ -53,7 +58,7 @@ class RemoteCreationIntegrationTest extends TestBase {
     create("EVT-77", 120_000, due(5), null).andExpect(status().isOk());
 
     assertThat(links.findByBookingRef("req:EVT-77")).extracting(PaymentLink::getStatus, PaymentLink::getAmountMinor)
-        .containsExactlyInAnyOrder(org.assertj.core.groups.Tuple.tuple(PaymentLink.Status.SUPERSEDED, 100_000L), org.assertj.core.groups.Tuple.tuple(PaymentLink.Status.OPEN, 120_000L));
+        .containsExactlyInAnyOrder(Tuple.tuple(PaymentLink.Status.SUPERSEDED, 100_000L), Tuple.tuple(PaymentLink.Status.OPEN, 120_000L));
   }
 
   @Test
@@ -67,15 +72,15 @@ class RemoteCreationIntegrationTest extends TestBase {
     assertThat(links.findByBookingRef("req:SPA-1")).isEmpty();
   }
 
-  @Autowired private dev.foliopay.service.BookingEventService bookings;
+  @Autowired private BookingEventService bookings;
 
   /** Fails if a remote request shares the booking namespace: an app with payments:write could replace a booking's deposit link. */
   @Test
   @DisplayName("A request named like a booking never touches that booking's link")
   void aRequestNamedLikeABookingNeverTouchesThatBookingsLink() throws Exception {
-    bookings.handle(new dev.foliopay.domain.model.BookingEvent(dev.foliopay.domain.model.BookingEvent.Type.NEW, "BK-1001", "RES-1001",
-        dev.foliopay.domain.model.BookingEvent.RatePlan.ADVANCE_PURCHASE, LocalDate.now(ZoneId.of("Asia/Dubai")).plusDays(30),
-        new dev.foliopay.domain.model.Money(200_000, "AED")), LocalDate.now(ZoneId.of("Asia/Dubai")));
+    bookings.handle(new BookingEvent(BookingEvent.Type.NEW, "BK-1001", "RES-1001",
+        BookingEvent.RatePlan.ADVANCE_PURCHASE, LocalDate.now(ZoneId.of("Asia/Dubai")).plusDays(30),
+        new Money(200_000, "AED")), LocalDate.now(ZoneId.of("Asia/Dubai")));
 
     create("BK-1001", 5_000, due(2), "Spa treatment").andExpect(status().isOk());
 

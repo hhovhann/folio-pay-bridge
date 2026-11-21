@@ -7,12 +7,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.foliopay.TestBase;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 /** HTTP end to end: JSON in, JSON out, real services and database behind it. */
 @AutoConfigureMockMvc
@@ -20,7 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 class ApiIntegrationTest extends TestBase {
   @Autowired MockMvc mvc;
 
-  private String json(org.springframework.test.web.servlet.ResultActions actions) throws Exception {
+  private String json(ResultActions actions) throws Exception {
     return actions.andReturn().getResponse().getContentAsString();
   }
 
@@ -28,7 +30,7 @@ class ApiIntegrationTest extends TestBase {
   @DisplayName("Tokenising returns a token and never the number, nor does the vault view")
   void tokenisingReturnsATokenAndNeverTheNumberNorDoesTheVaultView() throws Exception {
     String body = json(mvc.perform(post("/api/v1/cards").contentType(MediaType.APPLICATION_JSON).content("{\"pan\":\"4242 4242 4242 4242\",\"expiry\":\"11/28\"}"))
-        .andExpect(status().isCreated()).andExpect(jsonPath("$.token").value(org.hamcrest.Matchers.startsWith("tok_"))).andExpect(jsonPath("$.last4").value("4242")));
+        .andExpect(status().isCreated()).andExpect(jsonPath("$.token").value(Matchers.startsWith("tok_"))).andExpect(jsonPath("$.last4").value("4242")));
     assertThat(body).doesNotContain("4242424242424242").doesNotContain("4242 4242");
     assertThat(json(mvc.perform(get("/api/v1/vault")))).doesNotContain("4242424242424242");
   }

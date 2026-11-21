@@ -16,6 +16,11 @@ The owner asked for three things. Remove the redundant and unused code, docs, pi
   - nine fixed, each with a test that failed first;
   - one, `totalResults` on a single folio page, answered with Oracle's contract instead (agent log 54);
   - one, `GET /charges` across clients, for the owner.
+- **Every rule called enforced checks what it says.**
+  - The style rules of `CodeConventionsTest` read the tests as well as the production code: 142 classes written out in full, in 19 test files, are imports now (agent log 60).
+  - Every operation the API describes is tested both ways, measured from the requests the tests really send (`EndpointCallsRecorder`, check 5 of `tools/check_specs.py`); an operation that takes input is refused for its input, not only for missing credentials. Six operations had only their success tested.
+  - Each operation's scope is written out in a test that also fails on an operation it does not name.
+- **Performance and principles in the standards.** No cost that grows with the hotel (section 14, held by `QueryCountIntegrationTest`), and each principle the codebase claims (OWASP, YAGNI, KISS, clean code, clean architecture, clean deployment, no hidden cases) with what holds it (section 15).
 - **Security review.**
   - The resolved dependencies against the OSV database: the published advisories in Spring Boot 3.5.16's managed versions are pinned to patched releases, and the two left are written down with why they are not reachable.
   - `npm audit`.

@@ -8,6 +8,7 @@ import dev.foliopay.Fixtures;
 import dev.foliopay.TestBase;
 import dev.foliopay.config.WebhookProperties;
 import dev.foliopay.domain.model.Charge;
+import dev.foliopay.domain.model.DeliverySchedule;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Notification;
 import dev.foliopay.domain.model.Posting;
@@ -37,15 +38,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 /**
  * Webhooks against the real database and a real HTTP receiver (D-35). The relay's schedule is pushed out of the way; the test calls
  * collect and deliver itself, so it sees each step.
  */
-@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
+@AutoConfigureMockMvc
 @DisplayName("Webhooks: against the real database and a real HTTP receiver (D-35)")
 class WebhookIntegrationTest extends TestBase {
   private static final String SECRET = "whsec_test_0123456789abcdef0123456789";
@@ -61,7 +66,7 @@ class WebhookIntegrationTest extends TestBase {
   @Autowired private ChargeRepository charges;
   @Autowired private PostingRepository postings;
   @Autowired private DataSource dataSource;
-  @Autowired private org.springframework.test.web.servlet.MockMvc mvc;
+  @Autowired private MockMvc mvc;
 
   private static HttpServer receiver() {
     try {
@@ -129,7 +134,7 @@ class WebhookIntegrationTest extends TestBase {
   @DisplayName("A backlog larger than one batch drains instead of stalling on the first page")
   void aBacklogLargerThanOneBatchDrainsInsteadOfStallingOnTheFirstPage() {
     for (int i = 0; i < 101; i++) {
-      Charge c = new Charge(Charge.BRIDGE_CLIENT, "k-backlog-" + i, "BK-B" + i, "F-B" + i, dev.foliopay.Fixtures.DAY, token, new Money(100, "USD"));
+      Charge c = new Charge(Charge.BRIDGE_CLIENT, "k-backlog-" + i, "BK-B" + i, "F-B" + i, Fixtures.DAY, token, new Money(100, "USD"));
       c.markCaptured("cap_b" + i);
       charges.save(c);
     }
@@ -173,7 +178,7 @@ class WebhookIntegrationTest extends TestBase {
   @Test
   @DisplayName("Shadow runs are not revenue and are never announced")
   void shadowRunsAreNotRevenueAndAreNeverAnnounced() {
-    Charge shadow = new Charge(Charge.BRIDGE_CLIENT, "shadow-run-1", "BK-S", "F-S", dev.foliopay.Fixtures.DAY, token, new Money(100, "USD"));
+    Charge shadow = new Charge(Charge.BRIDGE_CLIENT, "shadow-run-1", "BK-S", "F-S", Fixtures.DAY, token, new Money(100, "USD"));
     shadow.markCaptured("cap_shadow");
     charges.saveAndFlush(shadow);
 
@@ -199,11 +204,9 @@ class WebhookIntegrationTest extends TestBase {
   @Test
   @DisplayName("A weak secret or a plain HTTP address stops start-up")
   void aWeakSecretOrAPlainHttpAddressStopsStartUp() {
-    assertThatThrownBy(() -> new WebhookProperties("https://hooks.example.test/x", "short", 12,
-        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5)).requireUsable())
+    assertThatThrownBy(() -> Fixtures.webhook("https://hooks.example.test/x", "short", 12).requireUsable())
         .hasMessageContaining("at least 32");
-    assertThatThrownBy(() -> new WebhookProperties("http://hooks.example.test/x", SECRET, 12,
-        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5)).requireUsable())
+    assertThatThrownBy(() -> Fixtures.webhook("http://hooks.example.test/x", SECRET, 12).requireUsable())
         .hasMessageContaining("must be https");
   }
 
@@ -216,18 +219,26 @@ class WebhookIntegrationTest extends TestBase {
     Notification one = repository.findAll().get(0);
     ReflectionFailed.fail(one, repository);
 
-    mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/v1/notifications"))
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.length()").value(2));
-    mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/v1/notifications/" + one.getId() + "/redeliver"))
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.status").value("PENDING"))
-        .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.attempts").value(0));
+    mvc.perform(MockMvcRequestBuilders.get("/api/v1/notifications"))
+        .andExpect(MockMvcResultMatchers.status().isOk())
+        .andExpect(MockMvcResultMatchers.jsonPath("$.length()").value(2));
+    mvc.perform(MockMvcRequestBuilders.post("/api/v1/notifications/" + one.getId() + "/redeliver"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("PENDING"))
+        .andExpect(MockMvcResultMatchers.jsonPath("$.attempts").value(0));
+  }
+
+  /** Fails if an operator's mistyped id answers 200 or a server error: it must say plainly that there is no such event. */
+  @Test
+  @DisplayName("Sending again an event that does not exist is a not-found problem, not a server error")
+  void sendingAgainAnEventThatDoesNotExistIsANotFoundProblem() throws Exception {
+    mvc.perform(MockMvcRequestBuilders.post("/api/v1/notifications/no-such-event/redeliver"))
+        .andExpect(MockMvcResultMatchers.status().isNotFound()).andExpect(MockMvcResultMatchers.jsonPath("$.code").value("NOT_FOUND"));
   }
 
   /** Puts an event in FAILED the way the last attempt would. */
   private static final class ReflectionFailed {
     static void fail(Notification n, NotificationRepository repository) {
-      n.recordFailure("The receiver answered 500", java.time.Instant.now(), 1);
+      n.recordFailure("The receiver answered 500", Instant.now(), new DeliverySchedule(1, Duration.ofSeconds(30), Duration.ofHours(1)));
       repository.save(n);
     }
   }

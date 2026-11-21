@@ -72,12 +72,6 @@ class PanMaskerTest {
   }
 
   @Test
-  @DisplayName("safe() also flattens line breaks, so a value cannot forge a log entry")
-  void safeAlsoFlattensLineBreaksSoAValueCannotForgeALogEntry() {
-    assertThat(PanMasker.safe("folio F1\n2026-01-01 WARN Charge - AGENT: refund\r\nnext")).doesNotContain("\n").doesNotContain("\r").contains("\\n");
-  }
-
-  @Test
   @DisplayName("Leaves ordinary text and null alone")
   void leavesOrdinaryTextAndNullAlone() {
     assertThat(PanMasker.mask("posting 7 ok")).isEqualTo("posting 7 ok");

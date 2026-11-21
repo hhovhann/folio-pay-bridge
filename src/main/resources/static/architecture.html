@@ -70,7 +70,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;p
 <marker id="a-mut" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7a849b"/></marker>
 </defs></svg>
 
-<header><div><h1>How it works, and how it should work in production</h1><p>A hotel payment goes guest to processor to the PMS folio. Synthetic data; the processor and the PMS are simulators.</p></div></header>
+<header><div><h1>How it works, and how it should work in production</h1><p>A hotel payment goes guest to processor to the PMS folio. Synthetic data; the processor and the PMS are simulators. New to card payments? <a href="/who-is-who.html" style="color:#c7d2fe">Who is who, step by step →</a></p></div></header>
 <main>
 <section data-testid="flow"><h2>The flow <small>what the demo shows: four containers over real HTTP</small></h2>
 <svg class="d fl" viewBox="0 0 800 474" role="img" aria-label="Flow between the hotel PMS, the payment bridge, the guest, the card processor, PostgreSQL and the key service">
@@ -119,7 +119,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;p
 <g class="node s2" transform="translate(590 66)"><rect class="c" width="182" height="96" rx="12"/><g class="tile"><rect x="12" y="12" width="40" height="40" rx="10" fill="#7c3aed"/><use href="/icons.svg#i-phone" x="20" y="20" width="24" height="24"/></g>
   <text class="t" x="62" y="29">Guest</text><text class="s" x="62" y="46">pays a payment link</text><text class="s" x="12" y="72">card tokenised on entry</text><text class="s" x="12" y="87">only a token comes back</text></g>
 <g class="node s3" transform="translate(590 356)"><rect class="c" width="182" height="88" rx="12"/><g class="tile"><rect x="12" y="12" width="40" height="40" rx="10" fill="#0f766e"/><use href="/icons.svg#i-card" x="20" y="20" width="24" height="24"/></g>
-  <text class="t" x="62" y="29">Card processor</text><text class="s" x="62" y="46">simulator</text><text class="s" x="12" y="74">auth · capture · void · settle</text></g>
+  <text class="t" x="62" y="29">Card processor</text><text class="s" x="62" y="46">simulator</text><text class="s" x="12" y="68">auth · capture · void · settle</text><text class="s" x="12" y="82">also plays acquirer, network, issuer</text></g>
 
 <g class="badge s1"><circle cx="232" cy="140" r="11" fill="#9f1239"/><text x="232" y="144">1</text></g>
 <g class="badge s2"><circle cx="568" cy="140" r="11" fill="#7c3aed"/><text x="568" y="144">2</text></g>

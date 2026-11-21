@@ -125,7 +125,7 @@ Status: **Covered** = a test fails if the behaviour breaks. **Partial** = covere
 | Validation error | Names the field, never the value | `PaymentControllerTest.aValidationErrorNamesTheFieldButNeverEchoesTheSubmittedValue` | Covered |
 | Unexpected failure | Generic 500, no internals | `PaymentControllerTest.anUnexpectedFailureReturnsAGenericMessageAndNoInternals` | Covered |
 | Downstream outage | 503 with a retry hint | `PaymentControllerTest.aDownstreamOutageIsA503TellingTheClientToRetryWithTheSameKey` | Covered |
-| Log forging through ids, messages, line breaks | Ids restricted; text flattened and bounded | `SafeTextTest.flattensLineBreaksAndControlCharacters`, `PanMaskerTest.safeAlsoFlattensLineBreaksSoAValueCannotForgeALogEntry` | Covered |
+| Log forging through ids, messages, line breaks | Ids restricted; text flattened and bounded | `SafeTextTest.flattensLineBreaksAndControlCharacters`, `LogRedactorTest.safeAlsoFlattensLineBreaksSoAValueCannotForgeALogEntry` | Covered |
 | Foreign Host header (DNS rebinding), oversized body | 400, 413 | `ReviewFindingsIntegrationTest.aRequestWithAForeignHostHeaderIsRefused`, `ReviewFindingsIntegrationTest.anOversizedBodyIsRefusedBeforeItIsParsed` | Covered |
 | Oversized chunked body (no declared length) | Read up to the limit, then 413; a body within it reaches the controller whole | `RequestSizeFilterTest.aChunkedBodyOverTheLimitIsRefusedWithoutReachingTheController`, `RequestSizeFilterTest.aChunkedBodyWithinTheLimitReachesTheControllerWhole` | Covered |
 | Security headers, no caching | Present | `PaymentControllerTest.responsesCarryHardeningHeadersAndAreNeverCached` | Covered |
@@ -180,6 +180,32 @@ Status: **Covered** = a test fails if the behaviour breaks. **Partial** = covere
 | An endpoint of an old API version is still called | `Deprecation`, `Sunset` and successor `Link` headers on every response, and a log line naming the client (D-39) | `ApiDeprecationInterceptorTest.aDeprecatedEndpointCarriesDeprecationSunsetAndItsSuccessor` | Covered |
 | DEBUG logging switched on in production | Debug lines carry ids, keys and amounts, never a card number or a card token; JSON lines stay masked | `PciIntegrationTest.theCardNumberAndTheCardTokenAreNeverLoggedEvenAtDebugLevel`, `JsonLogConfigTest.eachLineIsOneJsonObjectWithTheRequestIdAndNoCardNumber` | Covered |
 | A layer reaches past its neighbour (a controller to a repository, a service to HTTP, the domain to Spring) | The build fails | `ArchitectureTest.controllersNeverTouchARepositoryAnImplementationAnAdapterOrTheVaultsCrypto`, `ArchitectureTest.servicesNeverTouchHttpOrTheApiLayer`, `ArchitectureTest.theDomainKnowsNoSpringAndNoOtherLayer` | Covered |
+
+## 11c. Safe logs, the audit trail, retention and transport (phase 21)
+| Case | Handling | Test | Status |
+|---|---|---|---|
+| A record holding a card token is logged whole | Its `toString()` prints `[redacted]`; every record holding a secret is built and printed by the test | `SensitiveTypesTest.everyRecordThatHoldsASecretAsTextPrintsItRedacted` | Covered |
+| A card token, a signed token, a bearer or basic credential, an API key or a `password=` value slips into a log line | Masked by `LogRedactor` in both formats, exceptions, the log context and the console's lines | `LogRedactorTest` | Covered |
+| A word that only looks like a secret field (`secret,` in a sentence, `key order-1`) | Left readable: a field needs `:` or `=` after its name | `LogRedactorTest.idsKeysAmountsDatesAndStatusesStayReadable` | Covered |
+| The processor or OPERA echoes a card number, a token or a credential in its error code | Redacted before it becomes our message, the stored error or the API reply | `HttpAdapterRepliesTest.aThirdPartyErrorThatEchoesSecretsIsRedactedBeforeItBecomesOurMessage` | Covered |
+| A log call is handed a whole body, request, response or command, or an exception's message | The build fails | `CleanCodeTest.noLogCallIsHandedARawBodyRequestResponseOrCommand`, `CleanCodeTest.exceptionsReachALogOnlyThroughRedacted` | Covered |
+| A field, record component or column for a CVV, PIN or track data | The build fails | `SensitiveTypesTest.noTypeAndNoTableHoldsACardVerificationCodeAPinOrTrackData` | Covered |
+| An unknown API key, or a client refused for its scope | Audited with path, method and origin, never the key | `AuditTrailIntegrationTest.anUnknownApiKeyIsRecordedAsAFailedAuthentication`, `AuditTrailIntegrationTest.aClientRefusedForItsScopeIsRecordedAsAccessDenied` | Covered |
+| An audit value tries to forge a field or a line (`evil outcome=SUCCESS`, a line break) | Stays one value | `AuditLogTest.aValueWithSpacesOrLineBreaksStaysOneValue` | Covered |
+| The audit trail is switched off by a logging setting | The application does not start | `FailClosedStartupTest.withTheAuditTrailSwitchedOffItDoesNotStart` | Covered |
+| A secret or a URL with credentials in the configuration recorded at start-up | Secrets as set or not set; addresses as scheme, host and port | `AuditTrailTest.theStartRecordsTheConfigurationByValueAndEachSecretOnlyAsSetOrNotSet` | Covered |
+| A card unused past its retention period | Its number and key are destroyed; it can no longer be charged | `CardRetentionIntegrationTest.aCardUnusedForLongerThanThePeriodLosesItsNumberAndCanNoLongerBeCharged` | Covered |
+| A card with a payment still pending, however old | Never purged | `CardRetentionIntegrationTest.aCardWithAPaymentStillPendingIsNeverPurged` | Covered |
+| A card opened between the purge's search and its write | Kept: the write checks again | `CardRetentionIntegrationTest.thePurgeChecksTheCardAgainAsItWrites` | Covered |
+| A payment started on a card between the purge's search and its write | Kept: the write checks for a pending payment again | `CardRetentionIntegrationTest.thePurgeChecksForAPaymentPendingAsItWrites` | Covered |
+| A batch full of old cards with payments pending | Skipped by the search, so the cards behind them are still purged | `CardRetentionIntegrationTest.cardsWithAPaymentPendingDoNotHoldUpThePurgeOfOthers` | Covered |
+| More expired cards than one batch | Drained batch by batch | `CardRetentionIntegrationTest.aPurgeTakesOneBatchAtATimeAndDrainsThemAll` | Covered |
+| A card stored at booking for a stay further ahead than the retention period | Purged before the stay: the period must be set longer than the booking window | None (D-44) | Not covered: needs the booking on the card |
+| A charge started on a card in the instant its purge wins | A final refusal: nothing reached the processor, and the payment link goes back to the guest | `ChargeServiceImplTest.aCardGoneBeforeTheFirstAttemptIsAFinalRefusal` | Covered |
+| A payment repeated after its card was purged | Gets its first result: the key is looked up before the card | `CardRetentionIntegrationTest.aPaymentRepeatedAfterItsCardWasPurgedGetsItsFirstResult` | Covered |
+| A database URL that names verify-full but switches the check off, or a signing-key address over plain HTTP | The application does not start | `TransportSecurityGuardTest` | Covered |
+| OPERA or the processor over plain HTTP, PostgreSQL without `verify-full` | The application does not start, unless plaintext is allowed by name for the Compose demo | `TransportSecurityGuardTest`, `FailClosedStartupTest.withARealGatewayOverPlainHttpItDoesNotStart` | Covered |
+| A hotel with a different deposit policy or a slower webhook back-off | Applied as configured | `PaymentRequestPolicyTest.anotherHotelsPolicyIsAppliedAsConfigured`, `WebhookPropertiesTest.theDeliveryBackOffComesFromTheSettings` | Covered |
 
 ## 12. Not covered: be honest about these
 1. **The real OPERA Cloud (OHIP) and OPERA 5.** Only a simulator exists. The four OHIP operations the bridge uses follow Oracle's published contract and every exchange is checked against it (D-42), but what the contract leaves open (the 201's body, a payment's sign, deposits before arrival, a lock's status, rate limits) needs a sandbox; OPERA 5's interfaces (OXI, OWS) are not built.

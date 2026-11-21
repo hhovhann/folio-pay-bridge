@@ -16,23 +16,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * The hotel's business date comes from the PMS. While the PMS is unreachable the last date it gave is used for up to a day, so a captured
- * card payment is still taken and its posting waits in the dead-letter queue instead of the guest's payment failing. If night audit has run
- * in the meantime OPERA will refuse that posting for its date: it is dead-lettered as a rejection (a known gap: no reject-and-repair yet).
+ * The hotel's business date comes from the PMS. While the PMS is unreachable the last date it gave is used for up to
+ * {@code foliopay.opera.business-date-max-staleness}, so a card payment is still taken and its posting waits in the dead-letter queue
+ * instead of the guest's payment failing. The date is the bridge's own record, for reconciliation and reports by business date: OPERA
+ * posts every payment on its own current date, whatever the bridge holds (D-42).
  *
  * <ul>
  *   <li>No lock is held while the PMS is asked, so a slow PMS slows each payment on its own instead of queueing them all.
  *   <li>A reply is stale only if the reply to a later request already arrived: a slow answer from before night audit cannot undo the
  *       audit. The PMS's latest answer always wins otherwise, also a date the hotel corrected backwards.
- *   <li>The PMS is asked for every new charge, also right after an outage: the first answer once it is back is used at once. Skipping
- *       calls for a while after a failure was tried and removed (D-33): it kept yesterday's date after a night audit that ran during the
- *       outage, and OPERA rejects those postings for good.
+ *   <li>The PMS is asked for every new charge, also right after an outage: the first answer once it is back is used at once, so a night
+ *       audit that ran during the outage is not missed (D-33).
  * </ul>
  */
 @Service
 class BusinessDateServiceImpl implements BusinessDateService {
   private static final Logger log = LoggerFactory.getLogger(BusinessDateServiceImpl.class);
-  private static final Duration MAX_STALENESS = Duration.ofHours(24);
   private final OperaClient opera;
   private final OperaProperties settings;
   private final Clock clock;
@@ -56,6 +55,7 @@ class BusinessDateServiceImpl implements BusinessDateService {
 
   @Override
   public LocalDate resolve(LocalDate requested) {
+    log.debug("resolve(requested={})", requested);
     LocalDate pmsDate = current();
     if (requested != null && !requested.equals(pmsDate)) {
       throw new InvalidRequestException("Business date must be the hotel's current business date, " + pmsDate);
@@ -81,7 +81,7 @@ class BusinessDateServiceImpl implements BusinessDateService {
     }
   }
 
-  private static boolean usable(Known known, Instant now) {
-    return known != null && Duration.between(known.at(), now).compareTo(MAX_STALENESS) < 0;
+  private boolean usable(Known known, Instant now) {
+    return known != null && Duration.between(known.at(), now).compareTo(settings.businessDateMaxStaleness()) < 0;
   }
 }

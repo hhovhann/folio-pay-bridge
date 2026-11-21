@@ -23,16 +23,16 @@ class NotificationTest {
   @DisplayName("A failed delivery waits twice as long each time, up to an hour, and the last attempt ends failed, not dropped")
   void aFailureWaitsTwiceAsLongEachTimeUpToAnHourAndTheLastAttemptEndsFailedNotDropped() {
     Notification n = new Notification(Notification.Type.FOLIO_POSTED, "p-1", "{}", NOW);
-    n.recordFailure("The receiver answered 500", NOW, 12);
+    n.recordFailure("The receiver answered 500", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofSeconds(30));
-    n.recordFailure("The receiver answered 500", NOW, 12);
+    n.recordFailure("The receiver answered 500", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofMinutes(1));
-    for (int i = 0; i < 8; i++) n.recordFailure("down", NOW, 12);
+    for (int i = 0; i < 8; i++) n.recordFailure("down", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofHours(1));
     assertThat(n.getStatus()).isEqualTo(Notification.Status.PENDING);
 
-    n.recordFailure("down", NOW, 12);
-    n.recordFailure("down", NOW, 12);
+    n.recordFailure("down", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
+    n.recordFailure("down", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
 
     assertThat(n.getStatus()).isEqualTo(Notification.Status.FAILED);
     assertThat(n.getAttempts()).isEqualTo(12);
@@ -43,7 +43,7 @@ class NotificationTest {
   @DisplayName("A failed event can be sent again from the start, but a delivered one is left alone")
   void aFailedEventCanBeSentAgainFromTheStartButADeliveredOneIsLeftAlone() {
     Notification failed = new Notification(Notification.Type.FOLIO_POSTED, "p-1", "{}", NOW);
-    failed.recordFailure("down", NOW, 1);
+    failed.recordFailure("down", NOW, new DeliverySchedule(1, Duration.ofSeconds(30), Duration.ofHours(1)));
     failed.redeliver(NOW.plusSeconds(60));
     assertThat(failed.getStatus()).isEqualTo(Notification.Status.PENDING);
     assertThat(failed.getAttempts()).isZero();

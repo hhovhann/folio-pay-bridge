@@ -11,9 +11,17 @@ import dev.foliopay.domain.exception.InvalidRequestException;
 import dev.foliopay.gateway.OperaClient;
 import dev.foliopay.gateway.OperaUnavailableException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,7 +29,7 @@ import org.junit.jupiter.api.Test;
 class BusinessDateServiceImplTest {
   private static final LocalDate PMS_DATE = LocalDate.of(2026, 11, 16);
   private final OperaClient opera = mock(OperaClient.class);
-  private final OperaProperties settings = new OperaProperties("H1", 1, "CC", 9001);
+  private final OperaProperties settings = new OperaProperties("H1", 1, "CC", 9001, Duration.ofHours(24));
 
   private BusinessDateServiceImpl service(Clock clock) { return new BusinessDateServiceImpl(opera, settings, clock); }
 
@@ -60,10 +68,10 @@ class BusinessDateServiceImplTest {
   @Test
   @DisplayName("An answer older than a day is not trusted")
   void anAnswerOlderThanADayIsNotTrusted() {
-    java.util.concurrent.atomic.AtomicReference<Instant> now = new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-11-16T10:00:00Z"));
+    AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2026-11-16T10:00:00Z"));
     Clock moving = new Clock() {
-      @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-      @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+      @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+      @Override public Clock withZone(ZoneId zone) { return this; }
       @Override public Instant instant() { return now.get(); }
     };
     BusinessDateServiceImpl service = service(moving);
@@ -78,37 +86,37 @@ class BusinessDateServiceImplTest {
   @Test
   @DisplayName("A slow PMS answer for one request does not hold up another")
   void aSlowPmsAnswerForOneRequestDoesNotHoldUpAnother() throws Exception {
-    java.util.concurrent.CountDownLatch firstIsStuck = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+    CountDownLatch firstIsStuck = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicInteger calls = new AtomicInteger();
     when(opera.businessDate(anyString())).thenAnswer(call -> {
       if (calls.incrementAndGet() == 1) {
         firstIsStuck.countDown();
-        release.await(5, java.util.concurrent.TimeUnit.SECONDS); // a black-holed PMS connection
+        release.await(5, TimeUnit.SECONDS); // a black-holed PMS connection
       }
       return PMS_DATE;
     });
     BusinessDateServiceImpl service = service(Clock.systemUTC());
-    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
     var slow = pool.submit(() -> service.resolve(null));
-    firstIsStuck.await(5, java.util.concurrent.TimeUnit.SECONDS);
+    firstIsStuck.await(5, TimeUnit.SECONDS);
 
     var fast = pool.submit(() -> service.resolve(null));
-    assertThat(fast.get(2, java.util.concurrent.TimeUnit.SECONDS)).as("answered while the first is still waiting").isEqualTo(PMS_DATE);
+    assertThat(fast.get(2, TimeUnit.SECONDS)).as("answered while the first is still waiting").isEqualTo(PMS_DATE);
     assertThat(slow.isDone()).isFalse();
 
     release.countDown();
-    assertThat(slow.get(5, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(PMS_DATE);
+    assertThat(slow.get(5, TimeUnit.SECONDS)).isEqualTo(PMS_DATE);
     pool.shutdown();
   }
 
   /** A clock a test can move. */
   private static final class MovingClock extends Clock {
-    final java.util.concurrent.atomic.AtomicReference<Instant> now = new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-11-16T10:00:00Z"));
-    @Override public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
-    @Override public Clock withZone(java.time.ZoneId zone) { return this; }
+    final AtomicReference<Instant> now = new AtomicReference<>(Instant.parse("2026-11-16T10:00:00Z"));
+    @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+    @Override public Clock withZone(ZoneId zone) { return this; }
     @Override public Instant instant() { return now.get(); }
-    void advance(java.time.Duration by) { now.set(now.get().plus(by)); }
+    void advance(Duration by) { now.set(now.get().plus(by)); }
   }
 
   /** Fails if the last reply to arrive wins: a slow reply from before night audit would put the fallback back to the old date. */
@@ -117,22 +125,22 @@ class BusinessDateServiceImplTest {
   void aSlowReplyFromBeforeNightAuditCannotMoveTheRememberedDateBack() throws Exception {
     MovingClock clock = new MovingClock();
     BusinessDateServiceImpl service = service(clock);
-    java.util.concurrent.CountDownLatch oldAnswerReady = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.CountDownLatch newDateStored = new java.util.concurrent.CountDownLatch(1);
-    java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+    CountDownLatch oldAnswerReady = new CountDownLatch(1);
+    CountDownLatch newDateStored = new CountDownLatch(1);
+    AtomicInteger calls = new AtomicInteger();
     when(opera.businessDate(anyString())).thenAnswer(call -> switch (calls.incrementAndGet()) {
-      case 1 -> { oldAnswerReady.countDown(); newDateStored.await(5, java.util.concurrent.TimeUnit.SECONDS); yield PMS_DATE; } // asked before audit, answers late
+      case 1 -> { oldAnswerReady.countDown(); newDateStored.await(5, TimeUnit.SECONDS); yield PMS_DATE; } // asked before audit, answers late
       case 2 -> PMS_DATE.plusDays(1); // asked after audit
       default -> throw new OperaUnavailableException("503");
     });
-    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+    ExecutorService pool = Executors.newSingleThreadExecutor();
     var slow = pool.submit(() -> service.resolve(null));
-    oldAnswerReady.await(5, java.util.concurrent.TimeUnit.SECONDS);
+    oldAnswerReady.await(5, TimeUnit.SECONDS);
     assertThat(service.resolve(null)).isEqualTo(PMS_DATE.plusDays(1));
     newDateStored.countDown();
 
-    assertThat(slow.get(5, java.util.concurrent.TimeUnit.SECONDS)).as("business dates never go back").isEqualTo(PMS_DATE.plusDays(1));
-    clock.advance(java.time.Duration.ofMinutes(5));
+    assertThat(slow.get(5, TimeUnit.SECONDS)).as("business dates never go back").isEqualTo(PMS_DATE.plusDays(1));
+    clock.advance(Duration.ofMinutes(5));
     assertThat(service.resolve(null)).as("the outage fallback is the newer date").isEqualTo(PMS_DATE.plusDays(1));
     pool.shutdown();
   }

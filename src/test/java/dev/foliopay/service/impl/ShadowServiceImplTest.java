@@ -17,6 +17,8 @@ import dev.foliopay.gateway.OperaClient;
 import dev.foliopay.service.CardVault;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.Outcome;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,10 +28,11 @@ class ShadowServiceImplTest {
   private final PaymentService payments = mock(PaymentService.class);
   private final CardVault vault = mock(CardVault.class);
   private final OperaClient opera = mock(OperaClient.class);
-  private final ShadowServiceImpl service = new ShadowServiceImpl(payments, vault, opera, new OperaProperties("H1", 1, "CC", 9001));
+  private final ShadowServiceImpl service =
+      new ShadowServiceImpl(payments, vault, opera, new OperaProperties("H1", 1, "CC", 9001, Duration.ofHours(24)));
 
   private void tokeniseReturnsAToken() {
-    when(vault.tokenise(any(Pan.class), anyString())).thenReturn(new CardToken("tok_1", new byte[1], new byte[1], "k", new Pan("4111111111111111"), "12/29"));
+    when(vault.tokenise(any(Pan.class), anyString())).thenReturn(new CardToken("tok_1", new byte[1], new byte[1], "k", new Pan("4111111111111111"), "12/29", Instant.EPOCH));
   }
 
   private Posting posted(String key) {

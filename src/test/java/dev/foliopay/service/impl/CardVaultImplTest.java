@@ -12,6 +12,9 @@ import dev.foliopay.domain.model.CardToken;
 import dev.foliopay.domain.model.Pan;
 import dev.foliopay.repository.CardTokenRepository;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -35,8 +38,9 @@ class CardVaultImplTest {
       return token;
     });
     when(repository.findById(any())).thenAnswer(call -> Optional.ofNullable(table.get(call.<String>getArgument(0))));
-    when(repository.existsById(any())).thenAnswer(call -> table.containsKey(call.<String>getArgument(0)));
-    vault = new CardVaultImpl(new LocalKeyService(), repository);
+    when(repository.existsByTokenAndPurgedAtIsNull(any())).thenAnswer(call -> table.containsKey(call.<String>getArgument(0)));
+    when(repository.markUsed(any(), any())).thenAnswer(call -> table.containsKey(call.<String>getArgument(0)) ? 1 : 0);
+    vault = new CardVaultImpl(new LocalKeyService(), repository, Clock.fixed(Instant.parse("2026-11-21T10:00:00Z"), ZoneOffset.UTC));
   }
 
   @Test
@@ -48,6 +52,8 @@ class CardVaultImplTest {
     assertThat(stored.getBin6()).isEqualTo("411111");
     assertThat(stored.getLast4()).isEqualTo("1111");
     assertThat(stored.getToken()).startsWith("tok_");
+    assertThat(stored.getLastUsedAt()).as("storing a card is its first use: retention counts from it")
+        .isEqualTo(Instant.parse("2026-11-21T10:00:00Z"));
   }
 
   @Test
@@ -65,7 +71,7 @@ class CardVaultImplTest {
   void aCiphertextMovedToAnotherTokenCannotBeOpened() {
     CardToken a = vault.tokenise(new Pan(PAN), "12/29");
     CardToken b = vault.tokenise(new Pan("4242424242424242"), "11/28");
-    CardToken forged = new CardToken(b.getToken(), a.getSealedPan(), b.getWrappedKey(), b.getKeyId(), new Pan(PAN), "12/29");
+    CardToken forged = new CardToken(b.getToken(), a.getSealedPan(), b.getWrappedKey(), b.getKeyId(), new Pan(PAN), "12/29", Instant.EPOCH);
     table.put(b.getToken(), forged);
 
     assertThatThrownBy(() -> vault.withCard(b.getToken(), (pan, expiry) -> pan.value())).isInstanceOf(IllegalStateException.class);

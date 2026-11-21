@@ -51,6 +51,7 @@ class ShadowServiceImpl implements ShadowService {
 
   @Override
   public List<ShadowBooking> generate(long seed, int count) {
+    log.debug("generate(seed={}, count={})", seed, count);
     Random random = new Random(seed);
     List<ShadowBooking> bookings = new ArrayList<>();
     for (int i = 0; i < count; i++) {
@@ -69,6 +70,7 @@ class ShadowServiceImpl implements ShadowService {
 
   @Override
   public ShadowReport run(long seed, int count, ShadowConfig config) {
+    log.debug("run(seed={}, count={})", seed, count);
     String runId = UUID.randomUUID().toString().substring(0, 8);
     String token = vault.tokenise(new Pan("4111 1111 1111 1111"), "12/29").getToken(); // public test card
     Map<String, Integer> byField = new LinkedHashMap<>();

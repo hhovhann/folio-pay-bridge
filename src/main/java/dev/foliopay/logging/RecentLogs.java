@@ -38,7 +38,7 @@ public class RecentLogs {
         if (!e.getLoggerName().startsWith("dev.foliopay")) {
           return;
         }
-        add(F.format(Instant.ofEpochMilli(e.getTimeStamp())) + " " + e.getLevel() + " " + shortName(e.getLoggerName()) + " - " + PanMasker.safe(e.getFormattedMessage()));
+        add(F.format(Instant.ofEpochMilli(e.getTimeStamp())) + " " + e.getLevel() + " " + shortName(e.getLoggerName()) + " - " + LogRedactor.safe(e.getFormattedMessage()));
       }
     };
     app.setContext(root.getLoggerContext());

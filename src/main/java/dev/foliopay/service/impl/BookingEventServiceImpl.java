@@ -17,6 +17,7 @@ import dev.foliopay.service.ChargeService;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.PaymentCommand;
 import dev.foliopay.service.support.Fingerprint;
+import dev.foliopay.service.support.Listing;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.function.Supplier;
@@ -24,8 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -43,23 +42,28 @@ class BookingEventServiceImpl implements BookingEventService {
   private final PaymentService payments;
   private final ChargeService charges;
   private final TransactionTemplate tx;
+  private final PaymentRequestPolicy policy;
 
-  BookingEventServiceImpl(PaymentLinkRepository links, PaymentService payments, ChargeService charges, TransactionTemplate tx) {
+  BookingEventServiceImpl(
+      PaymentLinkRepository links, PaymentService payments, ChargeService charges, TransactionTemplate tx, PaymentRequestPolicy policy) {
     this.links = links;
     this.payments = payments;
     this.charges = charges;
     this.tx = tx;
+    this.policy = policy;
   }
 
   @Override
   public Outcome handle(BookingEvent event, LocalDate today) {
-    log.debug("Booking event {} for booking {}: rate plan {} arrival {} total {} {}", event.type(), event.bookingRef(), event.ratePlan(),
-        event.arrival(), event.total().minor(), event.total().currency());
+    log.debug("handle(type={}, booking={}, ratePlan={}, arrival={}, total={} {}, today={})", event.type(), event.bookingRef(), event.ratePlan(),
+        event.arrival(), event.total().minor(), event.total().currency(), today);
     return onceOrAsTheRepeat(() -> apply(event, today));
   }
 
   @Override
   public Outcome request(PaymentRequest request, LocalDate today) {
+    log.debug("request(reference={}, folio={}, amount={} {}, due={}, today={})", request.reference(), request.folioId(), request.amount().minor(),
+        request.amount().currency(), request.dueDate(), today);
     if (request.dueDate().isBefore(today)) {
       throw new InvalidRequestException("The due date is in the past");
     }
@@ -113,6 +117,7 @@ class BookingEventServiceImpl implements BookingEventService {
    */
   @Override
   public PaymentService.Result pay(String linkId, String cardToken, LocalDate businessDate) {
+    log.debug("pay(link={}, card={}, businessDate={})", linkId, Fingerprint.card(cardToken), businessDate);
     PaymentLink link = links.findById(linkId).orElseThrow(() -> new NotFoundException("Unknown payment link"));
     String fingerprint = Fingerprint.of(cardToken);
     log.debug("Link {} ({}) paid by card {}", linkId, link.getStatus(), fingerprint);
@@ -162,7 +167,8 @@ class BookingEventServiceImpl implements BookingEventService {
 
   @Override
   public List<PaymentLink> findAll() {
-    return links.findAll(PageRequest.of(0, 500, Sort.by("id").descending())).getContent();
+    log.debug("findAll(limit={})", Listing.NEWEST);
+    return links.findAll(Listing.newest("id")).getContent();
   }
 
   private Outcome cancel(BookingEvent event, PaymentLink open, boolean paid) {
@@ -178,7 +184,7 @@ class BookingEventServiceImpl implements BookingEventService {
     if (state.paid()) {
       return new Outcome(state.all(), true, "Already paid: a changed total needs a manual balance or refund decision");
     }
-    Decision decision = PaymentRequestPolicy.decide(event.ratePlan(), event.arrival(), event.total().minor(), today);
+    Decision decision = policy.decide(event.ratePlan(), event.arrival(), event.total().minor(), today);
     return offer(event.bookingRef(), event.folioId(), new Money(decision.amountMinor(), event.total().currency()), decision.dueDate(), decision.reason(), state.open());
   }
 

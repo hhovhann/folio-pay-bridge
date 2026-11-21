@@ -1,5 +1,6 @@
 package dev.foliopay.config;
 
+import dev.foliopay.domain.model.DeliverySchedule;
 import java.net.URI;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -21,8 +22,12 @@ public record WebhookProperties(
     @DefaultValue("false") boolean allowPlainHttp,
     @DefaultValue("30d") Duration lookback,
     @DefaultValue("2s") Duration connectTimeout,
-    @DefaultValue("5s") Duration readTimeout) {
+    @DefaultValue("5s") Duration readTimeout,
+    @DefaultValue("30s") Duration firstRetry,
+    @DefaultValue("1h") Duration longestWait,
+    @DefaultValue("100") int batchSize) {
   static final int MIN_SECRET_LENGTH = 32;
+  static final int MAX_BATCH = 1_000;
   private static final Duration MIN_SEND_LEASE = Duration.ofMinutes(1);
 
   /**
@@ -35,13 +40,25 @@ public record WebhookProperties(
   }
 
 
+  /** Twice as long after each failure (30 s, 1 min, 2 min ... at most an hour by default), {@code maxAttempts} in all. */
+  public DeliverySchedule schedule() {
+    return new DeliverySchedule(maxAttempts, firstRetry, longestWait);
+  }
+
   @Override
   public String toString() { return "WebhookProperties[redacted]"; } // holds the signing secret
 
-  /** Called when webhooks are on: refuses to start with a missing or weak secret, or a plain-HTTP address that was not allowed by name. */
+  /**
+   * Called when webhooks are on: refuses to start with a missing or weak secret, a delivery schedule that could never send (a batch of
+   * none, a retry that never waits), or a plain-HTTP address that was not allowed by name.
+   */
   public void requireUsable() {
     if (secret == null || secret.length() < MIN_SECRET_LENGTH) {
       throw new IllegalStateException("foliopay.webhook.secret must be at least " + MIN_SECRET_LENGTH + " characters when foliopay.webhook.url is set");
+    }
+    if (batchSize < 1 || batchSize > MAX_BATCH || firstRetry.isNegative() || firstRetry.isZero() || longestWait.compareTo(firstRetry) < 0) {
+      throw new IllegalStateException(
+          "foliopay.webhook: batch-size is 1 to " + MAX_BATCH + ", first-retry is positive and no longer than longest-wait");
     }
     String scheme = URI.create(url).getScheme();
     if (!"https".equals(scheme) && !("http".equals(scheme) && allowPlainHttp)) {

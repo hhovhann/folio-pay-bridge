@@ -1,6 +1,6 @@
 # Architecture: how Folio Pay Bridge works, and why it is built this way
 
-This page is for an engineer joining the project. It explains what the system does, how one payment travels through it, why it is one service and not many, and what every hotel-payments term means. The decisions behind each choice are numbered in [`specs/decisions.md`](../specs/decisions.md) (D-1 to D-38); this page links to them instead of repeating them.
+This page is for an engineer joining the project. It explains what the system does, how one payment travels through it, why it is one service and not many, and what every hotel-payments term means. The decisions behind each choice are numbered in [`specs/decisions.md`](../specs/decisions.md) (D-1 to D-42); this page links to them instead of repeating them. New to card payments? Read [`who-is-who.md`](who-is-who.md) first: every party, in plain words.
 
 ## 1. The problem in one paragraph
 A hotel has to get paid when the guest is not standing at the desk: a deposit for an advance-purchase booking, a virtual card an online travel agent (OTA) sends with the reservation, a brunch for four, a gala dinner. The money moves through the hotel's own **acquirer** (its bank for cards) via a **payment service provider (PSP)**, and the payment must then appear on the guest's bill in the hotel's **property management system (PMS)**, usually **Oracle OPERA**, so the front desk, night audit and finance all see it. Folio Pay Bridge sits between those systems: it takes the request, charges the card exactly once, posts the payment to the right folio exactly once, tells the integrator what happened, and later checks the acquirer's settlement against what it captured. Card numbers are encrypted with keys held in AWS KMS and never appear in logs.
@@ -20,7 +20,12 @@ flowchart LR
     DB[("PostgreSQL<br/>Flyway schema")]
   end
   KMS["AWS KMS<br/>master key"]
-  PSP["PSP / acquirer<br/>authorise, capture, settle"]
+  PSP["Processor (PSP)<br/>authorise, capture, void, settle"]
+  subgraph Behind["Behind the processor: the bridge never calls them (the processor simulator plays them)"]
+    ACQ["Acquirer<br/>the hotel's card bank"]
+    NET["Card network<br/>Visa, Mastercard"]
+    ISS["Issuer<br/>the guest's bank: yes or no, holds the money"]
+  end
   MW -- "booking events, payment requests" --> API
   Guest -- "card details (tokenise), pay a link" --> API
   API --> Core
@@ -31,7 +36,9 @@ flowchart LR
   Core -- "OHIP REST, on Oracle's published contract:<br/>postBillingPayment, getFolio, getBusinessDate" --> PMS
   Core -- "signed webhooks" --> MW
   PSP -. "settlement statement" .-> Core
+  PSP --- ACQ --- NET --- ISS
 ```
+The processor is the only card-side system the bridge talks to. An authorisation travels on from the processor to the acquirer, the card network and the issuer, and back, in about two seconds; the money follows one to three days later, at settlement. In the demo one simulator answers for all four, and its ledger names the network and the issuer's approval code.
 
 ## 3. One payment, end to end
 The happy path, then what happens when each step fails.
@@ -113,7 +120,10 @@ A single page (`/dashboard/`) for the people who run payments: an overview of mo
 - **Envelope encryption.** KMS keeps a master key that never leaves it. For each card the bridge asks KMS for a fresh 256-bit **data key**: it gets the key in plain and a copy encrypted ("wrapped") by the master key. It encrypts the PAN locally with AES-256-GCM, stores the wrapped copy beside the ciphertext, and throws the plain key away. To read the card it sends the wrapped key back to KMS to unwrap. Why: KMS is only ever asked to handle 32-byte keys, one key compromise exposes one card, and every unwrap is a CloudTrail event.
 - **Encryption context.** Each KMS call carries `{"token": "tok_..."}`. KMS refuses to unwrap with a different context, and the IAM policy can require it, so a stolen wrapped key cannot be opened under another token. The same token id is the AES-GCM associated data, so a ciphertext moved to another row fails to decrypt.
 - **Lent, not handed out.** `CardVault.withCard(token, fn)` decrypts, calls `fn`, then zeroes the buffers. The only production caller is the processor adapter; retries happen outside it, so the card is not in memory while a retry waits (D-6, D-15).
-- **Logs.** Code never logs a PAN; a log converter masks any Luhn-valid number that slips in anyway, including inside stack traces (D-8, D-24).
+- **Logs.** Code never logs a PAN, a card token, a credential, a raw body or an exception's message. A type that holds a secret prints a redacted `toString()`. `LogRedactor` masks what slips through anyway, at every boundary: both log formats, stack traces, the log context, the console's recent lines, and error codes from OPERA and the processor (D-8, D-24, D-41).
+- **Audit trail.** Refused credentials and scopes, every state-changing call, each card stored, opened or purged, each payment outcome and the configuration in force go to the logger `dev.foliopay.audit`, which cannot be switched off. A card is named by a fingerprint, never its token (D-43).
+- **Retention.** A card unused for 90 days (configurable) loses its ciphertext and wrapped key; the row stays so the charges that name it stay valid. A card with a payment pending is never purged (D-44).
+- **Transport.** OPERA and the processor over `https`, PostgreSQL with `sslmode=verify-full`, or the application does not start (D-45).
 - **Key rotation.** KMS automatic rotation keeps old key material, so nothing changes. If ops move the alias to a new key, each token still names the ARN that wrapped it (D-31).
 
 ## 7. Security model

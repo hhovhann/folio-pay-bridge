@@ -1,5 +1,6 @@
 # Full-flow demo: the payment bridge against an OPERA simulator, a card-processor simulator and PostgreSQL, all over real HTTP.
 # Open: bridge console http://127.0.0.1:8081 | OPERA front desk http://127.0.0.1:8090 | processor http://127.0.0.1:8091
+# (other host ports when these are taken: DEMO_BRIDGE_PORT, DEMO_OPERA_PORT, DEMO_PSP_PORT)
 # Everything is synthetic and published on the host's loopback only. This is not a production setup.
 x-simulator: &simulator
   build: .
@@ -15,7 +16,7 @@ services:
 
   opera-sim:
     <<: *simulator
-    ports: ["127.0.0.1:8090:8090"]
+    ports: ["127.0.0.1:${DEMO_OPERA_PORT:-8090}:8090"]
     environment:
       <<: *simulator-env
       SPRING_PROFILES_ACTIVE: opera
@@ -25,7 +26,7 @@ services:
 
   psp-sim:
     <<: *simulator
-    ports: ["127.0.0.1:8091:8091"]
+    ports: ["127.0.0.1:${DEMO_PSP_PORT:-8091}:8091"]
     environment:
       <<: *simulator-env
       SPRING_PROFILES_ACTIVE: psp
@@ -34,7 +35,7 @@ services:
   app:
     build: .
     depends_on: { db: { condition: service_healthy }, opera-sim: { condition: service_started }, psp-sim: { condition: service_started } }
-    ports: ["127.0.0.1:8081:8081"]
+    ports: ["127.0.0.1:${DEMO_BRIDGE_PORT:-8081}:8081"]
     stop_grace_period: 40s
     environment:
       SPRING_PROFILES_ACTIVE: postgres,compose

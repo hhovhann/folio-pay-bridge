@@ -124,6 +124,48 @@ class ArchitectureTest {
     assertThat(publicOnes).isEmpty();
   }
 
+  /**
+   * One encryption service (owner's rule B, 2026-11-21; PCI DSS v4.0.1 3.6, 3.7): a cipher, a key generator and the KMS client are used only
+   * in {@code dev.foliopay.crypto}, so every key is made, wrapped and used in one reviewed place. Signing (an HMAC over a webhook) is not
+   * encryption and stays where it is used.
+   */
+  @Test
+  @DisplayName("Encryption and key management happen only in the crypto package")
+  void encryptionAndKeyManagementHappenOnlyInTheCryptoPackage() {
+    List<String> outside = new ArrayList<>();
+    for (String from : List.of("dev.foliopay.api", "dev.foliopay.config", "dev.foliopay.domain", "dev.foliopay.gateway", "dev.foliopay.logging",
+        "dev.foliopay.repository", "dev.foliopay.service", "dev.foliopaysim")) {
+      outside.addAll(violations(from, List.of("javax.crypto.Cipher", "javax.crypto.KeyGenerator", "javax.crypto.spec.GCMParameterSpec",
+          "javax.crypto.spec.IvParameterSpec", "software.amazon.awssdk.services.kms"), List.of()));
+    }
+    assertThat(outside).isEmpty();
+  }
+
+  /**
+   * {@code @Service} says "application logic" and {@code @Component} says "infrastructure" (filters, adapters, guards, helpers); Spring
+   * treats them alike, so only a rule keeps them meaningful. Services are the implementations in {@code service.impl} and the simulators'
+   * engines; anything else with {@code @Service} is mislabelled, and a service without it is hidden among the plumbing.
+   */
+  @Test
+  @DisplayName("Services are marked @Service and nothing else is")
+  void servicesAreMarkedServiceAndNothingElseIs() {
+    Pattern service = Pattern.compile("(?m)^@(?:org\\.springframework\\.stereotype\\.)?Service\\b");
+    Pattern component = Pattern.compile("(?m)^@(?:org\\.springframework\\.stereotype\\.)?Component\\b");
+    Pattern topClass = Pattern.compile("(?m)^(public |final |abstract )*class \\w+");
+    List<String> wrong = new ArrayList<>();
+    for (Source source : sources()) {
+      boolean isService = source.pkg().equals("dev.foliopay.service.impl") && topClass.matcher(source.text()).find();
+      boolean isEngine = List.of("dev/foliopaysim/opera/OperaSimulator.java", "dev/foliopaysim/psp/PspSimulator.java").contains(source.path());
+      boolean marked = service.matcher(source.text()).find();
+      if ((isService || isEngine) && (!marked || component.matcher(source.text()).find())) {
+        wrong.add(source.path() + ": a service without @Service");
+      } else if (!isService && !isEngine && marked) {
+        wrong.add(source.path() + ": @Service on something that is not a service");
+      }
+    }
+    assertThat(wrong).isEmpty();
+  }
+
   /** Hard rule 2: money is long minor units. A double or BigDecimal anywhere in the main code is a review question, so it fails here first. */
   @Test
   @DisplayName("Money is never floating point or BigDecimal")

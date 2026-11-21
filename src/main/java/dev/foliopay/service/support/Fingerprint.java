@@ -15,6 +15,11 @@ public final class Fingerprint {
     return HexFormat.of().formatHex(sha256(value)).substring(0, HEX_CHARS);
   }
 
+  /** How a card is named in logs and the audit trail: {@code card:fp:} and its fingerprint, never its token. */
+  public static String card(String token) {
+    return "card:fp:" + of(token);
+  }
+
   public static byte[] sha256(String value) {
     try {
       return MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));

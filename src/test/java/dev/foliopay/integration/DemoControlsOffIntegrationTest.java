@@ -10,12 +10,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 /** The production default: the vault view, log tail, fault switches and shadow runs do not exist as endpoints. */
-@SpringBootTest(properties = {
-    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
-    "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
+@SpringBootTest(properties = "foliopay.demo-controls=false")
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @DisplayName("Production default: no demo controls and no API description")
 class DemoControlsOffIntegrationTest {
@@ -42,7 +43,7 @@ class DemoControlsOffIntegrationTest {
   @Test
   @DisplayName("Outside the demo, the front page is the dashboard")
   void outsideTheDemoTheFrontPageIsTheDashboard() throws Exception {
-    mvc.perform(get("/")).andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl("/dashboard/"));
+    mvc.perform(get("/")).andExpect(MockMvcResultMatchers.redirectedUrl("/dashboard/"));
   }
 }
 

@@ -23,4 +23,11 @@ public record PayRequest(
   public PaymentCommand toCommand(String clientId, LocalDate checkedBusinessDate) {
     return new PaymentCommand(clientId, idempotencyKey, bookingRef, folioId, token, new Money(amountMinor, currency), checkedBusinessDate);
   }
+
+  /** The card token can be charged by whoever holds it (D-41): a request logged whole must not carry it. */
+  @Override
+  public String toString() {
+    return "PayRequest[idempotencyKey=" + idempotencyKey + ", bookingRef=" + bookingRef + ", folioId=" + folioId + ", token=[redacted], amountMinor="
+        + amountMinor + ", currency=" + currency + ", businessDate=" + businessDate + "]";
+  }
 }

@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 /**
  * N+1 and its cousins, measured: a list or a batch that reads one more row with one more query is a cost that grows with the hotel, and
  * review misses it. Each request is sent with few rows and with ten times as many, and the SQL statements it costs must be the same
- * (standards section 15).
+ * (standards section 14).
  */
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {"spring.jpa.properties.hibernate.generate_statistics=true",

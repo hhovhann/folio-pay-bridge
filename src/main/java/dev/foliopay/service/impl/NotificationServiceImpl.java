@@ -11,6 +11,7 @@ import dev.foliopay.domain.model.Posting;
 import dev.foliopay.gateway.WebhookSender;
 import dev.foliopay.repository.NotificationRepository;
 import dev.foliopay.service.NotificationService;
+import dev.foliopay.service.support.Listing;
 import dev.foliopay.service.support.WebhookSignature;
 import java.time.Clock;
 import java.time.Instant;
@@ -22,7 +23,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,7 +33,6 @@ import org.springframework.stereotype.Service;
 @Service
 class NotificationServiceImpl implements NotificationService {
   private static final Logger log = LoggerFactory.getLogger(NotificationServiceImpl.class);
-  private static final int BATCH = 100;
   private final NotificationRepository repository;
   private final WebhookSender sender;
   private final WebhookProperties settings;
@@ -50,6 +49,7 @@ class NotificationServiceImpl implements NotificationService {
 
   @Override
   public int collect() {
+    log.debug("collect(batch={})", settings.batchSize());
     int queued = 0;
     queued += queueCharges(Charge.Status.CAPTURED, Type.PAYMENT_CAPTURED);
     queued += queueCharges(Charge.Status.DECLINED, Type.PAYMENT_DECLINED);
@@ -63,7 +63,7 @@ class NotificationServiceImpl implements NotificationService {
 
   private int queueCharges(Charge.Status status, Type type) {
     int queued = 0;
-    for (Charge c : repository.chargesToAnnounce(status, type.eventId(""), since(), PageRequest.of(0, BATCH))) {
+    for (Charge c : repository.chargesToAnnounce(status, type.eventId(""), since(), PageRequest.of(0, settings.batchSize()))) {
       Map<String, Object> data = new LinkedHashMap<>();
       data.put("chargeId", c.getId());
       data.put("idempotencyKey", c.getIdempotencyKey());
@@ -81,7 +81,7 @@ class NotificationServiceImpl implements NotificationService {
 
   private int queuePostings(Posting.Status status, Type type) {
     int queued = 0;
-    for (Posting p : repository.postingsToAnnounce(status, type.eventId(""), since(), PageRequest.of(0, BATCH))) {
+    for (Posting p : repository.postingsToAnnounce(status, type.eventId(""), since(), PageRequest.of(0, settings.batchSize()))) {
       Map<String, Object> data = new LinkedHashMap<>();
       data.put("postingId", p.getId());
       data.put("chargeId", p.getChargeId());
@@ -121,9 +121,10 @@ class NotificationServiceImpl implements NotificationService {
 
   @Override
   public int deliverDue() {
+    log.debug("deliverDue(batch={})", settings.batchSize());
     int delivered = 0;
     Instant now = clock.instant();
-    for (Notification due : repository.due(now, PageRequest.of(0, BATCH))) {
+    for (Notification due : repository.due(now, PageRequest.of(0, settings.batchSize()))) {
       if (repository.claim(due.getId(), now, now.plus(settings.sendLease())) == 1) {
         try {
           delivered += send(repository.findById(due.getId()).orElseThrow()) ? 1 : 0;
@@ -150,7 +151,7 @@ class NotificationServiceImpl implements NotificationService {
       n.markDelivered(clock.instant());
       log.debug("Webhook {} delivered on attempt {}", n.getEventId(), n.getAttempts());
     } else {
-      n.recordFailure(failure, clock.instant(), settings.maxAttempts());
+      n.recordFailure(failure, clock.instant(), settings.schedule());
       if (n.getStatus() == Notification.Status.FAILED) {
         log.error("Webhook {} failed after {} attempts: {}", n.getEventId(), n.getAttempts(), n.getLastError());
       } else {
@@ -163,11 +164,13 @@ class NotificationServiceImpl implements NotificationService {
 
   @Override
   public List<Notification> findAll() {
-    return repository.findAll(PageRequest.of(0, 500, Sort.by("createdAt").descending())).getContent();
+    log.debug("findAll(limit={})", Listing.NEWEST);
+    return repository.findAll(Listing.newest("createdAt")).getContent();
   }
 
   @Override
   public Notification redeliver(String id) {
+    log.debug("redeliver(id={})", id);
     Notification n = repository.findById(id).orElseThrow(() -> new NotFoundException("Unknown notification"));
     log.info("Redelivery requested for webhook {} ({})", n.getEventId(), n.getStatus());
     n.redeliver(clock.instant());

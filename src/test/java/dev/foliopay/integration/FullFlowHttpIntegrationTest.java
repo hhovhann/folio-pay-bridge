@@ -9,8 +9,11 @@ import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
 import dev.foliopay.domain.model.Posting;
 import dev.foliopay.domain.model.ReconReport;
+import dev.foliopay.repository.ChargeRepository;
+import dev.foliopay.repository.PostingRepository;
 import dev.foliopay.service.BusinessDateService;
 import dev.foliopay.service.CardVault;
+import dev.foliopay.service.NotificationService;
 import dev.foliopay.service.PaymentService;
 import dev.foliopay.service.PaymentService.Outcome;
 import dev.foliopay.service.PaymentService.PaymentCommand;
@@ -18,8 +21,15 @@ import dev.foliopay.service.PostingService;
 import dev.foliopay.service.ReconciliationService;
 import dev.foliopaysim.SimulatorApplication;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -30,6 +40,8 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.client.RestClient;
@@ -39,13 +51,14 @@ import org.springframework.web.client.RestClient;
  * against in-memory fakes, this exercises the adapters: OAuth, timeouts, 429, status mapping, the idempotency header, look-before-repost.
  */
 @SpringBootTest(properties = {
-    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
-    "foliopay.keys=local", "foliopay.gateway=http", "foliopay.demo-controls=false",
-    "foliopay.retry.initial-backoff=10ms", "foliopay.http.read-timeout=1s", "foliopay.http.connect-timeout=1s",
+    "foliopay.gateway=http", "foliopay.demo-controls=false",
+    "foliopay.allow-plaintext-transport=true", // the simulators listen on loopback over plain HTTP, as in the Compose stack
+    "foliopay.http.read-timeout=1s", "foliopay.http.connect-timeout=1s",
     "foliopay.http.opera-app-key=demo-app-key", "foliopay.http.opera-client-id=fpbridge", "foliopay.http.opera-client-secret=fpbridge-secret",
     "foliopay.http.opera-enterprise-id=DEMOENT", "foliopay.http.opera-scope=demo-scope",
     "foliopay.http.psp-api-key=demo-psp-key", "spring.datasource.url=jdbc:h2:mem:fullflow;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
     "foliopay.auth.api-keys=tests:0000000000000000000000000000000000000000000000000000000000000000:payments:read"}) // a real gateway needs API keys
+@ActiveProfiles("test")
 @DisplayName("Full flow over real HTTP: the bridge against the OPERA and processor simulators")
 class FullFlowHttpIntegrationTest {
   private static ConfigurableApplicationContext operaSim;
@@ -55,7 +68,7 @@ class FullFlowHttpIntegrationTest {
   private static final RestClient CONTROL = RestClient.create();
   private static final String HOTEL = "DEMO1";
   private static final String WEBHOOK_SECRET = "whsec_fullflow_0123456789abcdef0123";
-  @Autowired private dev.foliopay.service.NotificationService notifications;
+  @Autowired private NotificationService notifications;
 
   @BeforeAll
   static void startTheOutsideWorld() {
@@ -91,8 +104,8 @@ class FullFlowHttpIntegrationTest {
   @Autowired PostingService postings;
   @Autowired ReconciliationService reconciliation;
   @Autowired BusinessDateService businessDates;
-  @Autowired dev.foliopay.repository.ChargeRepository chargeRepository;
-  @Autowired dev.foliopay.repository.PostingRepository postingRepository;
+  @Autowired ChargeRepository chargeRepository;
+  @Autowired PostingRepository postingRepository;
   private String token;
 
   @BeforeEach
@@ -213,9 +226,9 @@ class FullFlowHttpIntegrationTest {
     String postingId = pay("RES-1", 12_000).posting().getId();
     fault(operaUrl, "NONE");
 
-    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
-    java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
-    java.util.List<java.util.concurrent.Future<Posting>> running = new java.util.ArrayList<>();
+    ExecutorService pool = Executors.newFixedThreadPool(8);
+    CountDownLatch start = new CountDownLatch(1);
+    List<Future<Posting>> running = new ArrayList<>();
     for (int i = 0; i < 8; i++) {
       running.add(pool.submit(() -> {
         start.await();
@@ -245,7 +258,7 @@ class FullFlowHttpIntegrationTest {
   @DisplayName("OPERA refuses a call without the application key or the hotel header")
   void operaRefusesACallWithoutTheApplicationKeyOrTheHotelHeader() {
     String token = CONTROL.post().uri(operaUrl + "/oauth/v1/tokens").header("x-app-key", "demo-app-key").header("enterpriseId", "DEMOENT")
-        .headers(h -> h.setBasicAuth("fpbridge", "fpbridge-secret")).contentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED)
+        .headers(h -> h.setBasicAuth("fpbridge", "fpbridge-secret")).contentType(MediaType.APPLICATION_FORM_URLENCODED)
         .body("grant_type=client_credentials&scope=demo-scope").retrieve().body(JsonNode.class).path("access_token").asText();
     var business = operaUrl + "/bof/v1/hotels/" + HOTEL + "/businessDate";
     assertThat(statusOf(business, token, null, HOTEL)).as("no x-app-key").isEqualTo(401);
@@ -312,8 +325,8 @@ class FullFlowHttpIntegrationTest {
     assertThat(pay("RES-1", 4_000).outcome()).isEqualTo(Outcome.DECLINED);
     var ledger = state(pspUrl).path("ledger");
     assertThat(ledger).extracting(e -> e.path("kind").asText()).contains("AUTH", "VOID");
-    String authorised = java.util.stream.StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("AUTH")).reduce((a, b) -> b).orElseThrow().path("ref").asText();
-    String released = java.util.stream.StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("VOID")).findFirst().orElseThrow().path("authRef").asText();
+    String authorised = StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("AUTH")).reduce((a, b) -> b).orElseThrow().path("ref").asText();
+    String released = StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("VOID")).findFirst().orElseThrow().path("authRef").asText();
     assertThat(released).as("the hold released is the one that was authorised").isEqualTo(authorised);
   }
 
@@ -323,7 +336,7 @@ class FullFlowHttpIntegrationTest {
     pay("RES-1", 1_000);
     pay("RES-2", 2_500);
 
-    ReconReport report = reconciliation.reconcileAcquirerStatement(false, ReconciliationService.Period.ALL);
+    ReconReport report = reconciliation.reconcileAcquirerStatement(ReconciliationService.Period.ALL);
 
     assertThat(report.exceptions()).isEmpty();
     assertThat(report.matched()).isEqualTo(2);

@@ -11,6 +11,10 @@ This is a payments codebase in miniature. Treat every change as one that touches
 
 ## Hard rules
 1. **Never log, return, store or print a card number.** The only way to read one is `CardVault.withCard`. No CVV, ever.
+   - Nothing sensitive reaches a log: no card number, CVV, card token, password, access token or key, no raw request or response body, no exception message (`Redacted.of(e)`).
+   - A type that holds a secret prints a redacted `toString()`.
+   - Security-relevant events still go to the audit trail (`AuditLog`).
+   - Standards sections 5 and 9; `SensitiveTypesTest`, `CleanCodeTest` and `PciIntegrationTest` enforce it.
 2. **Money is `long` minor units.** No `double`, no `BigDecimal` for amounts.
 3. **Every call that moves money carries an idempotency key,** and a retry reuses it. A change to the flow needs a test that repeats, races or loses a response.
 4. **A failure never loses a captured payment.** It must end up posted, or dead-lettered with a reason, never dropped.
@@ -24,15 +28,29 @@ This is a payments codebase in miniature. Treat every change as one that touches
 - Every test and test class has a `@DisplayName`: a sentence that says what it proves. The method name stays the id that specs cite.
 - Run `python3 tools/check_specs.py` before you finish.
 - Add to `docs/agent-log.md` anything an agent got wrong and how it was caught. Do not invent entries, and do not write "now fixed" unless the entry names the test or command that proves it.
+- **Configuration, not hardcoded policy** (standards section 6):
+  - A value that can differ per deployment or that an operator tunes is a property.
+  - Business policy has no default in code.
+  - A fact of a standard or protocol is a named constant.
+  - A demo value lives in the demo, never in a production class.
+- **Code shape** (`CleanCodeTest`, `ArchitectureTest`):
+  - Every public service method opens with `log.debug("method(name=value, ...)")`, safe values only.
+  - `@Service` on services, `@Component` on infrastructure.
+  - At most 4 parameters and 30 lines per method, 300 lines per class.
+  - Comments say why, never what.
+- **Tests:**
+  - Success, refusal and edge cases.
+  - Spring settings from the `test` profile (`src/test/resources/application-test.properties`); test data inline. Never `.env`.
+  - A configured value is proved by a test that sets another.
 - Close the loop: every agent-log entry is cited, as `(log N)`, by the rule in `docs/engineering-standards.md` or the test that now prevents it; `tools/check_specs.py` fails otherwise. Prefer a test or a tool over a written rule: the mistakes that stopped repeating are the ones a build catches.
 
 ## Structure (see D-14)
-`api` (controllers, DTOs, error handler) -> `service` (interfaces) + `service.impl` -> `domain` (entities, `Money`, rules, exceptions), `repository`, `gateway` (ports; HTTP adapters in `gateway.http`, fakes in `gateway.fake`), `crypto`; `config` (filters, retries, the webhook relay) and `config.security` (who may call what). The operator dashboard lives in `dashboard/` (React + TypeScript) and calls only the public API. A schema change is a new Flyway migration in `src/main/resources/db/migration`, never an edit of an applied one. A controller never touches a repository; a service never touches HTTP (`ArchitectureTest` fails the build otherwise, and `CodeConventionsTest` checks imports, braces, injection, console output, a display name on every test, the count of lines over 150 characters and inline versions in the pom). The public API is versioned in the path (`ApiPaths.V1` = `/api/v1`, D-39): inside a version only additive changes; a breaking change is a new version, and the old endpoint gets `@ApiDeprecation`. Errors are RFC 9457 problem details with a stable `code` (D-29). New behaviour: interface first, impl package-private, a unit test with test doubles, and an integration test only for what needs the real database.
+`api` (controllers, DTOs, error handler) -> `service` (interfaces) + `service.impl` -> `domain` (entities, `Money`, rules, exceptions), `repository`, `gateway` (ports; HTTP adapters in `gateway.http`, fakes in `gateway.fake`), `crypto`; `config` (filters, retries, the webhook relay) and `config.security` (who may call what). The operator dashboard lives in `dashboard/` (React + TypeScript) and calls only the public API. A schema change is a new Flyway migration in `src/main/resources/db/migration`, never an edit of an applied one. A controller never touches a repository; a service never touches HTTP (`ArchitectureTest` fails the build otherwise, also for encryption outside `crypto` and a mislabelled stereotype). `CodeConventionsTest` checks imports, braces, injection, console output, a display name on every test, the count of lines over 150 characters and inline versions in the pom. `CleanCodeTest` checks entry logs, safe log arguments and size limits. `SensitiveTypesTest` checks that no type prints a secret and nothing holds a CVV. The public API is versioned in the path (`ApiPaths.V1` = `/api/v1`, D-39): inside a version only additive changes; a breaking change is a new version, and the old endpoint gets `@ApiDeprecation`. Errors are RFC 9457 problem details with a stable `code` (D-29). New behaviour: interface first, impl package-private, a unit test with test doubles, and an integration test only for what needs the real database.
 
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 458 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 557 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)
@@ -40,6 +58,7 @@ python3 tools/guard_commands.py --self-test   # the hook that blocks force-push,
 (cd dashboard && npm run dev)    # the operator dashboard with hot reload, against a bridge on :8081
 uv run --project demo python demo/check_dashboard.py   # the dashboard in a real browser against the running app
 uv run --project demo python demo/check_frontdesk.py   # the OPERA simulator's front desk in a real browser (a stay, an OHIP payment, check-out)
+uv run --project demo python demo/make_who_gif.py   # the who-is-who page stepped through in a real browser, checked scene by scene, into demo/out/who-is-who.gif
 python3 tools/ohip_specs.py <commit>   # refresh Oracle's OHIP contract (src/test/resources/ohip) that OhipContractTest checks against
 DEMO_FAST=1 uv run --project demo python demo/make_fullflow_demo.py   # dry run on the Docker stack: drives every scene, asserts the narration
 uv run --project demo python demo/make_fullflow_demo.py   # re-record the one narrated video (demo/out, the .mp4 is not committed)

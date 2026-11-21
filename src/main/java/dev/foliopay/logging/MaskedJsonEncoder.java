@@ -41,11 +41,11 @@ public class MaskedJsonEncoder extends EncoderBase<ILoggingEvent> {
     line.put("thread", event.getThreadName());
     Map<String, String> context = event.getMDCPropertyMap();
     if (context != null) {
-      context.forEach((key, value) -> line.put(key, value)); // requestId, client: set by our filters from validated values
+      context.forEach((key, value) -> line.put(key, LogRedactor.redact(value))); // requestId, client: validated by our filters, redacted anyway
     }
-    line.put("message", PanMasker.mask(event.getFormattedMessage()));
+    line.put("message", LogRedactor.redact(event.getFormattedMessage()));
     if (event.getThrowableProxy() != null) {
-      line.put("exception", PanMasker.mask(stackTrace.convert(event)));
+      line.put("exception", LogRedactor.redact(stackTrace.convert(event)));
     }
     return (JSON.writeToString(line) + "\n").getBytes(StandardCharsets.UTF_8);
   }

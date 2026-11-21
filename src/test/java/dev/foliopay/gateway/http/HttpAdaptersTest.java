@@ -3,6 +3,7 @@ package dev.foliopay.gateway.http;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
 import dev.foliopay.gateway.OperaClient.OperaPayment;
@@ -13,6 +14,7 @@ import dev.foliopay.gateway.PspTransientException;
 import dev.foliopay.integration.SimulatorHarness;
 import dev.foliopay.integration.SimulatorHarness.Reply;
 import dev.foliopay.integration.SimulatorHarness.Sim;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Map;
@@ -21,12 +23,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /** The HTTP adapters against the simulators and against stubs that answer with exactly one awkward status. */
 @DisplayName("HTTP adapters: against the simulators and against one awkward status at a time")
 class HttpAdaptersTest {
-  private static final RestClient CONTROL = RestClient.builder().requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory()).build(); // HTTP/1.1, like the real adapters: the JDK client may retry a cleartext POST over h2c
+  private static final RestClient CONTROL = RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory()).build(); // HTTP/1.1, like the real adapters: the JDK client may retry a cleartext POST over h2c
   private static Sim opera;
   private static Sim psp;
   /** The simulator's own business date, read after each reset: a date computed once at class load breaks across Dubai midnight. */
@@ -48,7 +51,7 @@ class HttpAdaptersTest {
   void reset() {
     CONTROL.post().uri(opera.url() + "/sim/reset").retrieve().toBodilessEntity();
     CONTROL.post().uri(psp.url() + "/sim/reset").retrieve().toBodilessEntity();
-    day = LocalDate.parse(CONTROL.get().uri(opera.url() + "/sim/state").retrieve().body(com.fasterxml.jackson.databind.JsonNode.class).path("businessDate").asText());
+    day = LocalDate.parse(CONTROL.get().uri(opera.url() + "/sim/state").retrieve().body(JsonNode.class).path("businessDate").asText());
   }
 
   private HttpGatewayProperties props(String operaUrl, String pspUrl, String clientSecret, String pspKey) {
@@ -56,7 +59,7 @@ class HttpAdaptersTest {
         Duration.ofSeconds(1), Duration.ofSeconds(1));
   }
 
-  private HttpOperaClient operaClient(String url) { return new HttpOperaClient(props(url, psp.url(), "fpbridge-secret", "demo-psp-key"), RestClient.builder(), java.time.Clock.systemUTC()); }
+  private HttpOperaClient operaClient(String url) { return new HttpOperaClient(props(url, psp.url(), "fpbridge-secret", "demo-psp-key"), RestClient.builder(), Clock.systemUTC()); }
 
   private HttpPspClient pspClient(String url, String key) { return new HttpPspClient(props(opera.url(), url, "fpbridge-secret", key), RestClient.builder()); }
 
@@ -75,7 +78,7 @@ class HttpAdaptersTest {
   @Test
   @DisplayName("Wrong OPERA credentials are ours to fix and replayable, not a rejection of the folio")
   void wrongCredentialsAreOursToFixAndReplayableNotARejectionOfTheFolio() {
-    HttpOperaClient client = new HttpOperaClient(props(opera.url(), psp.url(), "wrong-secret", "k"), RestClient.builder(), java.time.Clock.systemUTC());
+    HttpOperaClient client = new HttpOperaClient(props(opera.url(), psp.url(), "wrong-secret", "k"), RestClient.builder(), Clock.systemUTC());
     assertThatThrownBy(() -> client.businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class).isNotInstanceOf(OperaRejectedException.class)
         .hasMessageContaining("refused our credentials");
   }

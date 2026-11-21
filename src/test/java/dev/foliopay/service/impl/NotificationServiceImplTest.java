@@ -16,6 +16,7 @@ import dev.foliopay.Fixtures;
 import dev.foliopay.config.WebhookProperties;
 import dev.foliopay.domain.exception.NotFoundException;
 import dev.foliopay.domain.model.Charge;
+import dev.foliopay.domain.model.DeliverySchedule;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Notification;
 import dev.foliopay.domain.model.Posting;
@@ -54,8 +55,7 @@ class NotificationServiceImplTest {
   }
 
   private NotificationServiceImpl service(int maxAttempts) {
-    WebhookProperties settings = new WebhookProperties("https://hooks.example.test/x", "s".repeat(32), maxAttempts,
-        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5));
+    WebhookProperties settings = Fixtures.webhook("https://hooks.example.test/x", "s".repeat(32), maxAttempts);
     return new NotificationServiceImpl(repository, sender, settings, new ObjectMapper(), Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
@@ -154,7 +154,7 @@ class NotificationServiceImplTest {
   @DisplayName("A failed event can be redelivered, and an unknown one is not found")
   void aFailedEventCanBeRedeliveredAndAnUnknownOneIsNotFound() {
     Notification n = due();
-    n.recordFailure("down", NOW, 1);
+    n.recordFailure("down", NOW, new DeliverySchedule(1, Duration.ofSeconds(30), Duration.ofHours(1)));
 
     assertThat(service.redeliver(n.getId()).getStatus()).isEqualTo(Notification.Status.PENDING);
     when(repository.findById("nope")).thenReturn(Optional.empty());

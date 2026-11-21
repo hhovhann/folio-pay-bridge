@@ -1,0 +1,24 @@
+# Known vulnerabilities in the dependencies we ship (PCI DSS v4.0.1 6.3.1 and 6.3.3; D-46): the Maven dependencies, transitive ones
+# included, and the operator dashboard's npm lock file. Runs on every push and pull request and weekly, so an advisory published after a
+# merge is found without a code change. Fails on any advisory not written down in osv-scanner.toml with the reason it is not reachable.
+# Pinned to a commit, not a tag: a tag can be moved to other code (owner-approved 2026-11-21).
+name: osv-scanner
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '17 5 * * 1'
+permissions:
+  contents: read
+jobs:
+  scan:
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@32d3cd482bdadfb38b186c0ad1b031902d55d932 # v2.7.1
+    with:
+      scan-args: |-
+        --config=osv-scanner.toml
+        --lockfile=pom.xml
+        --lockfile=dashboard/package-lock.json

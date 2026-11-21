@@ -34,12 +34,16 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -47,7 +51,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PostingServiceImplTest {
   private static final Money AMOUNT = new Money(5_000, "USD");
   private static final LocalDate DAY = Fixtures.DAY;
-  private static final OperaProperties SETTINGS = new OperaProperties("HOTEL9", 2, "VCC", 7001);
+  private static final OperaProperties SETTINGS = new OperaProperties("HOTEL9", 2, "VCC", 7001, Duration.ofHours(24));
 
   private final PostingRepository repository = mock(PostingRepository.class);
   private final OperaClient opera = mock(OperaClient.class);
@@ -264,9 +268,9 @@ class PostingServiceImplTest {
   @Test
   @DisplayName("The list of postings is bounded and newest first")
   void theListOfPostingsIsBoundedAndNewestFirst() {
-    when(repository.findAll(any(org.springframework.data.domain.Pageable.class))).thenReturn(new org.springframework.data.domain.PageImpl<>(java.util.List.of(Fixtures.posting("p", "c", "F", AMOUNT, DAY))));
+    when(repository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(Fixtures.posting("p", "c", "F", AMOUNT, DAY))));
     assertThat(service.findAll()).hasSize(1);
-    ArgumentCaptor<org.springframework.data.domain.Pageable> page = ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+    ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
     verify(repository).findAll(page.capture());
     assertThat(page.getValue().getPageSize()).isEqualTo(500);
   }
@@ -277,7 +281,7 @@ class PostingServiceImplTest {
     newPosting();
     when(opera.postPayment(any())).thenReturn("OP-1");
     Posting storedPending = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
-    when(repository.save(any(Posting.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Posting.class, "id")).thenAnswer(call -> call.getArgument(0));
+    when(repository.save(any(Posting.class))).thenThrow(new ObjectOptimisticLockingFailureException(Posting.class, "id")).thenAnswer(call -> call.getArgument(0));
     // Our attempt works on its own copy; the reload after the lost race sees the row another request saved meanwhile.
     when(repository.findById(anyString())).thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPending));
 
@@ -295,7 +299,7 @@ class PostingServiceImplTest {
     when(opera.postPayment(any())).thenThrow(new OperaUnavailableException("503"));
     Posting storedPosted = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
     storedPosted.markPosted("OP-OTHER");
-    when(repository.save(any(Posting.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Posting.class, "id"));
+    when(repository.save(any(Posting.class))).thenThrow(new ObjectOptimisticLockingFailureException(Posting.class, "id"));
     when(repository.findById(anyString())).thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPosted));
 
     Posting result = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");

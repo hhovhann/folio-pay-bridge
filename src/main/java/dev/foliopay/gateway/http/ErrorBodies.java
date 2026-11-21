@@ -3,6 +3,7 @@ package dev.foliopay.gateway.http;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.foliopay.domain.rule.SafeText;
+import dev.foliopay.logging.LogRedactor;
 
 /**
  * Reads the error code out of a downstream error body. OHIP answers with a problem detail whose application code is {@code o:errorCode}
@@ -15,7 +16,10 @@ final class ErrorBodies {
 
   private ErrorBodies() {}
 
-  /** The {@code o:errorCode} or {@code code} field, cleaned to one bounded line (it came from outside), or {@link #NO_REASON}. */
+  /**
+   * The {@code o:errorCode} or {@code code} field, or {@link #NO_REASON}. It came from outside and ends up in logs, the database and API
+   * replies, so it is cut to one bounded line and redacted: a processor that echoes a card number or a credential in its error stops here.
+   */
   static String code(String body) {
     if (body == null || body.isBlank()) {
       return NO_REASON;
@@ -25,7 +29,7 @@ final class ErrorBodies {
       for (String field : new String[] {"o:errorCode", "code"}) {
         JsonNode code = reply.path(field);
         if (code.isTextual() && !code.asText().isBlank()) {
-          return SafeText.clean(code.asText());
+          return LogRedactor.redact(SafeText.clean(code.asText()));
         }
       }
       return NO_REASON;

@@ -16,6 +16,12 @@ import dev.foliopay.repository.PaymentLinkRepository;
 import dev.foliopay.service.BookingEventService;
 import dev.foliopay.service.PaymentService.Outcome;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -78,9 +84,9 @@ class LinkPaymentIntegrationTest extends TestBase {
   @DisplayName("Parallel deliveries of one booking event leave one live link")
   void parallelDeliveriesOfOneBookingEventLeaveOneLiveLink() throws Exception {
     var event = new BookingEvent(BookingEvent.Type.NEW, "B9", "F-B9", RatePlan.FLEXIBLE, TODAY.plusDays(30), new Money(100_000, "USD"));
-    java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(8);
-    java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
-    java.util.List<java.util.concurrent.Future<?>> running = new java.util.ArrayList<>();
+    ExecutorService pool = Executors.newFixedThreadPool(8);
+    CountDownLatch start = new CountDownLatch(1);
+    List<Future<?>> running = new ArrayList<>();
     for (int i = 0; i < 8; i++) {
       running.add(pool.submit(() -> {
         start.await();

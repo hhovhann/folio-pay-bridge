@@ -13,6 +13,7 @@ import dev.foliopay.logging.Redacted;
 import dev.foliopay.repository.PostingRepository;
 import dev.foliopay.service.PostingService;
 import dev.foliopay.service.support.IdempotentStore;
+import dev.foliopay.service.support.Listing;
 import io.github.resilience4j.retry.Retry;
 import java.time.Clock;
 import java.time.Duration;
@@ -23,8 +24,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -53,8 +52,9 @@ class PostingServiceImpl implements PostingService {
 
   @Override
   public Posting post(String chargeId, String folioId, Money amount, LocalDate businessDate, String pspRef) {
+    log.debug("post(charge={}, folio={}, amount={} {}, businessDate={}, pspRef={})", chargeId, folioId, amount.minor(), amount.currency(),
+        businessDate, pspRef);
     String key = "post:" + chargeId;
-    log.debug("Posting requested for charge {}: folio {} amount {} {} business date {}", chargeId, folioId, amount.minor(), amount.currency(), businessDate);
     Posting posting =
         store.findOrCreate(
             () -> repository.findByIdempotencyKey(key),
@@ -64,13 +64,15 @@ class PostingServiceImpl implements PostingService {
 
   @Override
   public Posting replay(String postingId) {
+    log.debug("replay(posting={})", postingId);
     log.info("Replay requested for posting {}", postingId);
     return resume(repository.findById(postingId).orElseThrow(() -> new NotFoundException("Unknown posting")));
   }
 
   @Override
   public List<Posting> findAll() {
-    return repository.findAll(PageRequest.of(0, 500, Sort.by("createdAt").descending())).getContent();
+    log.debug("findAll(limit={})", Listing.NEWEST);
+    return repository.findAll(Listing.newest("createdAt")).getContent();
   }
 
   /**

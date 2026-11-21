@@ -1,302 +1,355 @@
 1
-00:00:00,909 --> 00:00:09,055
+00:00:00,907 --> 00:00:09,053
 This is the full flow, not a mock-up, and it is explained step
 by step. Four containers talk over real network calls: the
 
 2
-00:00:09,055 --> 00:00:17,336
+00:00:09,053 --> 00:00:17,334
 payment bridge I built, a database, a simulator of a hotel PMS
 in the style of the Oracle Hospitality Integration Platform,
 
 3
-00:00:17,336 --> 00:00:23,462
+00:00:17,334 --> 00:00:23,460
 and a simulator of a card processor. Everything is synthetic.
 First, the problem it solves.
 
 4
-00:00:24,132 --> 00:00:31,094
+00:00:24,096 --> 00:00:31,058
 Why it exists. One hotel payment has to agree across three
 systems: the PMS, the card processor and the guest's card.
 
 5
-00:00:31,094 --> 00:00:38,295
+00:00:31,058 --> 00:00:38,259
 Things go wrong in five ways. A retry can charge a card twice.
 A reply that arrives too late can post a payment twice. An
 
 6
-00:00:38,295 --> 00:00:45,435
+00:00:38,259 --> 00:00:45,399
 outage can leave money charged but never on the folio. Card
 numbers can leak into logs. And the books may not match what
 
 7
-00:00:45,435 --> 00:00:50,969
+00:00:45,399 --> 00:00:50,933
 the processor settles. The bridge answers each one, and the
 video shows every answer working.
 
 8
-00:00:53,114 --> 00:01:00,924
+00:00:53,092 --> 00:01:00,270
+Who is who. Before the code, the people and systems in one
+hotel card payment. The guest pays. The hotel's front desk
+
+9
+00:01:00,270 --> 00:01:07,877
+runs a property management system, here OPERA, which holds the
+guest's bill, the folio. In the middle is the payment bridge,
+
+10
+00:01:07,877 --> 00:01:15,361
+the part I built. It sends the card to a payment processor.
+Behind the processor are three parties the bridge never calls:
+
+11
+00:01:15,361 --> 00:01:22,662
+the acquirer, the hotel's bank for cards; the card network,
+such as Visa or Mastercard; and the issuer, the guest's own
+
+12
+00:01:22,662 --> 00:01:29,840
+bank, which says yes or no. When the guest pays, the question
+travels all the way to the issuer and back in about two
+
+13
+00:01:29,840 --> 00:01:37,079
+seconds, and the guest's bank holds the money. The money
+itself moves one to three days later, at settlement: from the
+
+14
+00:01:37,079 --> 00:01:44,379
+issuer, through the network, to the acquirer, which pays the
+hotel less the fees. In this demo, one simulator plays the
+
+15
+00:01:44,379 --> 00:01:46,956
+processor and the three parties behind it.
+
+16
+00:01:48,469 --> 00:01:56,279
 Here is the picture. A booking reaches the bridge as an event.
 The bridge applies a payment rule and creates a payment link.
 
-9
-00:01:00,924 --> 00:01:07,979
+17
+00:01:56,279 --> 00:02:03,334
 The guest pays, and the card is tokenised the moment it
 arrives: only a token comes back, and only ciphertext is
 
-10
-00:01:07,979 --> 00:01:15,159
+18
+00:02:03,334 --> 00:02:10,514
 stored. The bridge asks the processor to authorise and
 capture, then posts the payment to the guest's folio in the
 
-11
-00:01:15,159 --> 00:01:22,906
+19
+00:02:10,514 --> 00:02:18,261
 PMS, and tells the hotel's own systems with a signed webhook.
 Every step carries an idempotency key, and every failure ends
 
-12
-00:01:22,906 --> 00:01:30,338
+20
+00:02:18,261 --> 00:02:25,693
 in one of two places: posted, or kept in a dead letter queue
 with the reason. Now let me show it, and then break it on
 
-13
-00:01:30,338 --> 00:01:30,842
+21
+00:02:25,693 --> 00:02:26,197
 purpose.
 
-14
-00:01:32,348 --> 00:01:39,607
+22
+00:02:27,751 --> 00:02:35,010
 First, the happy path. The PMS front desk takes a new
 reservation and announces it to the bridge. Here the simulator
 
-15
-00:01:39,607 --> 00:01:47,179
+23
+00:02:35,010 --> 00:02:42,582
 posts the event over HTTP; real OPERA Cloud would deliver it
 on OHIP's streaming API. The bridge answers with the payment
 
-16
-00:01:47,179 --> 00:01:54,626
+24
+00:02:42,582 --> 00:02:50,029
 rule: advance purchase, the full amount within twenty four
 hours. Note the business date at the top. In a real property
 
-17
-00:01:54,626 --> 00:01:57,505
+25
+00:02:50,029 --> 00:02:52,908
 it moves only at night audit, not at midnight.
 
-18
-00:01:59,061 --> 00:02:06,529
+26
+00:02:54,483 --> 00:03:01,951
 In the bridge, a payment request now exists. The guest
 tokenises a test card and pays. The card number is encrypted
 
-19
-00:02:06,529 --> 00:02:09,386
+27
+00:03:01,951 --> 00:03:04,808
 on arrival, and the guest sees only a token.
 
-20
-00:02:10,877 --> 00:02:18,336
+28
+00:03:06,400 --> 00:03:13,575
 On the processor side there is an authorisation and a capture,
-and only the last four digits of the card. The processor
+and only the last four digits of the card. Behind the
 
-21
-00:02:18,336 --> 00:02:22,787
-deduplicates on an idempotency key, so a repeat can never
-charge twice.
+29
+00:03:13,575 --> 00:03:20,873
+processor, the simulator also plays the card network, here
+Visa, and the guest's bank, which approved with a code. The
 
-22
-00:02:24,341 --> 00:02:31,757
+30
+00:03:20,873 --> 00:03:25,883
+processor deduplicates on an idempotency key, so a repeat can
+never charge twice.
+
+31
+00:03:27,407 --> 00:03:34,823
 And at the front desk, the payment is on the guest's folio. I
 open the reservation: folio window one, a payment code, a
 
-23
-00:02:31,757 --> 00:02:38,798
+32
+00:03:34,823 --> 00:03:41,864
 cashier, eight hundred dollars, our reference and the
 processor's reference. It is a credit, posted as a payment,
 
-24
-00:02:38,798 --> 00:02:42,599
+33
+00:03:41,864 --> 00:03:45,665
 not as a charge, so the folio shows the stay paid in advance.
 
-25
-00:02:43,223 --> 00:02:51,109
+34
+00:03:46,293 --> 00:03:54,179
 The bridge also tells the hotel's own systems what happened.
 Payment captured, and payment posted, each arrive as a signed
 
-26
-00:02:51,109 --> 00:02:58,866
+35
+00:03:54,179 --> 00:04:01,936
 webhook. The receiving side checks the signature before it
 trusts the message, and every event has an id, so a repeat is
 
-27
-00:02:58,866 --> 00:03:01,451
+36
+00:04:01,936 --> 00:04:04,522
 ignored. The card number is never in it.
 
-28
-00:03:02,141 --> 00:03:10,003
+37
+00:04:05,189 --> 00:04:13,050
 Edge case one: the same booking event arrives again after the
 guest has paid. The bridge does not create a new request, and
 
-29
-00:03:10,003 --> 00:03:17,161
+38
+00:04:13,050 --> 00:04:20,209
 does not ask for money twice. It flags the booking for a
 refund or balance review, because a changed total after
 
-30
-00:03:17,161 --> 00:03:18,567
+39
+00:04:20,209 --> 00:04:21,615
 payment needs a human.
 
-31
-00:03:19,268 --> 00:03:26,829
+40
+00:04:22,318 --> 00:04:29,878
 Edge case two: a lost reply. This PMS does not deduplicate,
 like the real world. I make it record the next payment and
 
-32
-00:03:26,829 --> 00:03:34,517
+41
+00:04:29,878 --> 00:04:37,567
 then answer too late. The bridge times out, but before it
 retries it looks for its own reference, finds the payment, and
 
-33
-00:03:34,517 --> 00:03:38,105
+42
+00:04:37,567 --> 00:04:41,155
 does not post twice. One new line on the folio, not two.
 
-34
-00:03:38,746 --> 00:03:46,656
+43
+00:04:41,851 --> 00:04:49,760
 Edge case three: the PMS goes down after the card is charged.
 The bridge says so plainly and keeps the payment in a dead
 
-35
-00:03:46,656 --> 00:03:54,894
+44
+00:04:49,760 --> 00:04:57,999
 letter queue with the reason. The money is not lost, and it is
 not hidden. When the PMS is back, one click replays it, and it
 
-36
-00:03:54,894 --> 00:03:56,410
+45
+00:04:57,999 --> 00:04:59,515
 is posted exactly once.
 
-37
-00:03:57,609 --> 00:04:04,913
+46
+00:05:00,765 --> 00:05:08,069
 Edge case four: the processor approves the authorisation, then
 declines the capture. The bridge does not leave the hold on
 
-38
-00:04:04,913 --> 00:04:11,978
+47
+00:05:08,069 --> 00:05:15,134
 the card. It releases it, and you can see the void in the
 processor ledger. The payment link goes back to open, so the
 
-39
-00:04:11,978 --> 00:04:14,612
+48
+00:05:15,134 --> 00:05:17,768
 guest can try again, and this time it works.
 
-40
-00:04:15,259 --> 00:04:23,431
+49
+00:05:18,391 --> 00:05:26,563
 Edge case five: night audit runs and the business date moves,
 and I also expire the access token. The next payment makes the
 
-41
-00:04:23,431 --> 00:04:31,339
+50
+00:05:26,563 --> 00:05:34,471
 processor capture the money and then go quiet. The bridge
 fetches a new token, reads the new business date from the PMS,
 
-42
-00:04:31,339 --> 00:04:35,162
+51
+00:05:34,471 --> 00:05:38,293
 retries with the same key, and the processor charges once.
 
-43
-00:04:39,216 --> 00:04:46,349
+52
+00:05:42,301 --> 00:05:49,660
 At the end of the day, finance reconciles. The bridge
-downloads the processor's own settlement file and matches
+downloads the settlement file, what the acquirer paid out, and
 
-44
-00:04:46,349 --> 00:04:53,738
-every capture against what was posted. Five captures, five
-matches. Now a messy statement: one capture missing, one
+53
+00:05:49,660 --> 00:05:57,463
+matches every capture against what was posted. Five captures,
+five matches. Now a messy statement: one capture missing, one
 
-45
-00:04:53,738 --> 00:04:58,814
+54
+00:05:57,463 --> 00:06:02,475
 settled short, one we never made. Each exception has a name
 finance can act on.
 
-46
-00:04:59,502 --> 00:05:06,385
+55
+00:06:03,180 --> 00:06:10,368
 The operator log shows all of this with the card number
 masked. A mask catches mistakes, but the code never logs the
 
-47
-00:05:06,385 --> 00:05:11,191
+56
+00:06:10,368 --> 00:06:16,875
 number in the first place, and the vault view shows
-ciphertext, never the number.
+ciphertext, never the number. Every call that changes
 
-48
-00:05:12,697 --> 00:05:19,803
-How do I know the other cases hold? Over four hundred and
-fifty automated tests, and a coverage report above ninety nine
+57
+00:06:16,875 --> 00:06:24,374
+something, every refusal, and every time a card is opened also
+go to an audit trail, which the application refuses to run
 
-49
-00:05:19,803 --> 00:05:26,909
+58
+00:06:24,374 --> 00:06:24,870
+without.
+
+59
+00:06:26,449 --> 00:06:32,902
+How do I know the other cases hold? Over five hundred
+automated tests, and a coverage report above ninety nine
+
+60
+00:06:32,902 --> 00:06:39,942
 percent of lines. The important tests were checked the hard
-way: I put each bug back on purpose, over sixty of them, and
+way: I put each bug back on purpose, over a hundred of them,
 
-50
-00:05:26,909 --> 00:05:34,192
-every one made its test fail. A page in the repository lists
-every edge case and the test that fails if it breaks, and also
+61
+00:06:39,942 --> 00:06:46,864
+and every one made its test fail. A page in the repository
+lists every edge case and the test that fails if it breaks,
 
-51
-00:05:34,192 --> 00:05:35,377
-what is not covered.
+62
+00:06:46,864 --> 00:06:48,566
+and also what is not covered.
 
-52
-00:05:36,918 --> 00:05:44,951
+63
+00:06:50,133 --> 00:06:58,166
 How it should work in production. On AWS, the bridge runs as
 two or more tasks in private subnets, behind a load balancer
 
-53
-00:05:44,951 --> 00:05:52,984
+64
+00:06:58,166 --> 00:07:06,199
 and a web application firewall, with PostgreSQL on RDS, keys
 in KMS, and fixed outbound addresses for OPERA Cloud and the
 
-54
-00:05:52,984 --> 00:06:00,752
+65
+00:07:06,199 --> 00:07:13,967
 acquirer. The runbook is written, but not yet run in an
 account. Booking events would come from OHIP's streaming API,
 
-55
-00:06:00,752 --> 00:06:08,719
+66
+00:07:13,967 --> 00:07:21,934
 which delivers at least once, with no acknowledgement and no
 dead letter queue, so the bridge would store its offset and
 
-56
-00:06:08,719 --> 00:06:16,885
+67
+00:07:21,934 --> 00:07:30,100
 skip an event it has already seen. The processor becomes the
 acquirer's checkout, with 3-D Secure and hosted card entry, so
 
-57
-00:06:16,885 --> 00:06:25,117
+68
+00:07:30,100 --> 00:07:38,332
 a guest's number never reaches this service. Authentication is
 already in: OAuth2 tokens or hashed API keys, each limited by
 
-58
-00:06:25,117 --> 00:06:32,022
+69
+00:07:38,332 --> 00:07:45,237
 scope. Still to add: tenants for many operators and
 properties, a sweeper for crashes between steps, and
 
-59
-00:06:32,022 --> 00:06:34,611
+70
+00:07:45,237 --> 00:07:47,826
 chargeback cases with scheme deadlines.
 
-60
-00:06:35,293 --> 00:06:43,549
+71
+00:07:48,502 --> 00:07:56,758
 That is the full flow: idempotent charges, a repeated event, a
 lost reply, an outage and a replay, a released hold, a token
 
-61
-00:06:43,549 --> 00:06:51,403
+72
+00:07:56,758 --> 00:08:04,611
 refresh, and reconciliation, against separate systems. The PMS
 here is a simulator I wrote in the shape of the Oracle
 
-62
-00:06:51,403 --> 00:06:59,458
+73
+00:08:04,611 --> 00:08:12,666
 Hospitality Integration Platform. It is not Oracle software,
 and the real thing needs Oracle's own sandbox, which is the
 
-63
-00:06:59,458 --> 00:07:06,237
+74
+00:08:12,666 --> 00:08:19,446
 next step. The code, the tests and the log of what the agents
 got wrong are in the public repository.

@@ -8,18 +8,28 @@ Built as a work sample for an **AI-first Senior Java Engineer (payments)** role,
 
 ---
 
-## Start here (5 minutes)
+## Start here: pick your path
+| You are | Start with | Time |
+|---|---|---|
+| **New to card payments, or to software** | [Who is who: how a hotel gets paid](docs/who-is-who.md): the eleven parties, one payment in nine steps, what is real here and what is played. Then the [video](../../releases/latest) | 15 minutes, nothing to install |
+| **An engineer joining** | [Onboarding](docs/onboarding.md): run it in the first hour, then five sessions that read, run and break each part on purpose | 1 hour, then 5 sessions |
+| **A reviewer** | [What is proven, and by which test](#what-is-proven-and-by-which-test), then [Honest limits](#honest-limits-read-before-you-trust-it) | 10 minutes |
+
+![Who is who: every party in one card payment, step by step](demo/out/who-is-who.gif)
+
+## Run it (5 minutes)
 You need a JDK 17 and Docker.
 
 ```bash
 git clone https://github.com/hhovhann/folio-pay-bridge && cd folio-pay-bridge
 export JAVA_HOME=<path to a JDK 17>
 
-# 1. Prove it: 458 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
+# 1. Prove it: 557 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
 ./mvnw clean verify && python3 tools/check_specs.py
 
 # 2. See the whole flow over real HTTP: bridge + PostgreSQL (Flyway) + OPERA simulator + processor simulator
 docker compose up --build
+#   who is who         http://127.0.0.1:8081/who-is-who.html   every party in one card payment, step by step (start here)
 #   operator dashboard http://127.0.0.1:8081/dashboard/   overview, payments, links, webhooks, reconciliation
 #   classic console   http://127.0.0.1:8081   the guest and fault switches used in the demo video
 #   OPERA front desk  http://127.0.0.1:8090   reservations, folios, check-in and check-out, night audit, faults; received webhooks
@@ -29,7 +39,7 @@ docker compose up --build
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo
 ```
 
-New to the project? [`docs/onboarding.md`](docs/onboarding.md) is a five-session plan: read, run, and break each part on purpose. Then read, in this order: [`docs/architecture.md`](docs/architecture.md) (how it works, why, and a glossary of every hotel-payments term) → [`specs/decisions.md`](specs/decisions.md) (D-1 to D-41) → [`SECURITY.md`](SECURITY.md) → [`docs/product-map.md`](docs/product-map.md) (what is built, simulated, missing). Before changing code: [`docs/engineering-standards.md`](docs/engineering-standards.md), how code is written here and the mistake behind each rule.
+Then read, in this order: [`docs/who-is-who.md`](docs/who-is-who.md) (every party, in plain words) → [`docs/architecture.md`](docs/architecture.md) (how it works, why, and a glossary of every hotel-payments term) → [`specs/decisions.md`](specs/decisions.md) (D-1 to D-42) → [`SECURITY.md`](SECURITY.md) → [`docs/product-map.md`](docs/product-map.md) (what is built, simulated, missing). Before changing code: [`docs/engineering-standards.md`](docs/engineering-standards.md), how code is written here and the mistake behind each rule.
 
 ### Call the API like an integrator
 Outside the demo profiles every `/api` call needs credentials (the app refuses to start with a real gateway and none configured).
@@ -83,12 +93,18 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | The schema is the reviewed migrations, and the entities match it | Flyway `V1__baseline.sql`, `V2__...sql` (per-client keys, change times, foreign keys) + `ddl-auto=validate`, run on PostgreSQL 16 in Compose |
 | The layers stay layers: no controller reaches a repository, no service reaches HTTP, the domain knows no Spring, money is never floating point | `ArchitectureTest` |
 | Logs at DEBUG carry no card number and no card token; production JSON logs are masked | `PciIntegrationTest`, `JsonLogConfigTest` |
+| No type prints a secret, nothing holds a CVV, no log call gets a raw body or an exception's message, and card tokens, credentials and secret fields are masked at every boundary | `SensitiveTypesTest`, `CleanCodeTest`, `LogRedactorTest`, `HttpAdapterRepliesTest` |
+| Refused credentials and scopes, every state-changing call, every card stored, opened or purged and every payment outcome are audited, and the trail cannot be switched off (PCI DSS 10.2) | `AuditTrailIntegrationTest`, `FailClosedStartupTest` |
+| A card number unused for 90 days is destroyed, never one with a payment pending (PCI DSS 3.2.1) | `CardRetentionIntegrationTest` |
+| OPERA, the processor and PostgreSQL are reached over verified TLS, or the app does not start (PCI DSS 4.2.1) | `TransportSecurityGuardTest` |
+| Policy is configuration (a different deposit rule or back-off is applied); services log their entry; methods and classes stay small; services are `@Service`; only `crypto` encrypts | `PaymentRequestPolicyTest`, `WebhookPropertiesTest`, `CleanCodeTest`, `ArchitectureTest` |
 
-**458 backend tests**, each named by a sentence that says what it proves, and 15 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.6% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes, 11 of 11 in its cleanup). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
+**557 backend tests**, each named by a sentence that says what it proves, and 16 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.8% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes, 11 of 11 in its cleanup, 14 of 14 in the final review, 26 of 26 in the safe-logs phase and its review). Every API operation is tested both succeeding and refused, counted from the requests the tests really send (`tools/check_specs.py`). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
 
 ## Honest limits (read before you trust it)
 - **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer. OPERA cannot be run locally by anyone (OPERA Cloud is Oracle's hosted service; OPERA 5 is licensed to hotels), so the OPERA side follows Oracle's published contract and a test holds the adapter and the simulator to it; what the contract leaves open is a list of questions for the first sandbox session (`specs/roadmap.md`). Running for real needs OHIP partner access, which comes with the employer, and an acquirer's test environment.
 - **One property per deployment.** Multi-tenancy (operators, properties, per-tenant credentials and webhooks, data residency) is designed in `docs/architecture.md`, not built.
+- **PCI DSS v4.0.1 is mapped, not certified.** `SECURITY.md` lists each requirement the code can hold with its control and test, and says which belong to the deployment or the organisation. The bridge receives card numbers, so it is in card-data scope until card entry moves to the acquirer's hosted fields.
 - **Not built:** 3-D Secure and a hosted payment page, guest messaging, chargeback handling, a sweeper for payments stranded by a crash between two steps. See `docs/product-map.md`.
 - **Not yet run against real AWS:** KMS (stubbed client), Cognito and the deployment runbook. Steps to close: `docs/aws-deployment.md` section 5.
 - **Tests run on H2, not PostgreSQL.** The migrations, foreign keys and PostgreSQL's locking are exercised in the Compose stack, not in `./mvnw verify`; Testcontainers would close that (a test dependency, proposed, not added).
@@ -115,6 +131,6 @@ Specs first (`specs/`), one phase at a time, test before code, a box ticked only
 [`docs/aws-deployment.md`](docs/aws-deployment.md): VPC, KMS, RDS PostgreSQL, Secrets Manager, ECS on Amazon Linux 2023, OAuth2 with Cognito, the midnight-to-3am deployment window, and a going-live checklist. OPERA Cloud is Oracle's SaaS, called over HTTPS, not something you run in AWS. Not yet executed in a real account.
 
 ## Demo video
-One narrated full-flow video (about seven minutes, captions burned in, 18 chapters): the problem the bridge solves, the architecture with each step of the flow lit as the voice explains it, the four containers over real HTTP, the happy path with signed webhooks, then a lost reply, an outage and replay, a declined capture, night audit with an expired token, reconciliation, masked logs, the measured proof, and the production target on AWS, including how OPERA Cloud's events would arrive on OHIP's Streaming API (not built here). Re-recorded from the running app with `demo/make_fullflow_demo.py`, which first asserts every narrated claim against the screen; the numbers on its proof card are read from the build's own reports. The overlay (top bar, chapter titles, cards) is `demo/overlay.js`; `DEMO_FAST=1 DEMO_SHOTS=<dir>` saves a still per scene without recording. Captions are in [`demo/out`](demo/out); the video is attached to the [GitHub release](../../releases/latest), not committed.
+One narrated full-flow video (about eight minutes, captions burned in, 19 chapters): the problem the bridge solves, who is who in a card payment (each party, the acquirer, the card network and the issuer included, lit as the voice names it), the architecture with each step of the flow lit as the voice explains it, the four containers over real HTTP, the happy path with signed webhooks, then a lost reply, an outage and replay, a declined capture, night audit with an expired token, reconciliation, masked logs, the measured proof, and the production target on AWS, including how OPERA Cloud's events would arrive on OHIP's Streaming API (not built here). Re-recorded from the running app with `demo/make_fullflow_demo.py`, which first asserts every narrated claim against the screen; the numbers on its proof card are read from the build's own reports. The overlay (top bar, chapter titles, cards) is `demo/overlay.js`; `DEMO_FAST=1 DEMO_SHOTS=<dir>` saves a still per scene without recording. The GIF at the top is the who-is-who page itself, made and checked scene by scene by `demo/make_who_gif.py`. Captions are in [`demo/out`](demo/out); the video is attached to the [GitHub release](../../releases/latest), not committed.
 
 ![How it works: each step of the flow lit as the narration explains it](demo/out/how-it-works.gif)

@@ -23,7 +23,10 @@ A pilot with synthetic data, built to production habits. It holds no real card d
 |---|---|---|
 | Anonymous or over-privileged callers | OAuth2 JWT (signature, issuer, audience or scope prefix, expiry, access token only) or hashed API key; scopes per endpoint; asking for money separate from taking it; refuses to start open with a real gateway | `SecurityIntegrationTest` (a real RSA key and a JWKS server), `SecurityConfigTest` (Cognito-shaped tokens), `ApiKeysTest`, `FailClosedStartupTest` |
 | Card number at rest | AES-256-GCM per card, data key wrapped by KMS (local key only in demos), token id as associated data; the wrapping key's ARN stored per token, so moving the alias never orphans a card | `CardVaultImplTest`, `CryptoTest`, `KmsKeyServiceTest`, `PciIntegrationTest` (every column of every table) |
-| Card number in logs | Code never logs it (checked on the raw log events of a full flow, before masking); the converter also masks Luhn-valid 13-19 digit numbers with up to four separator characters, in messages and stack traces, any Unicode digits (including outside the Basic Multilingual Plane) | `PciIntegrationTest`, `PanMaskerTest`, `ProductionLogConfigTest` |
+| Secrets in logs | Code never logs a card number, CVV, card token, password, access token, key, raw body or exception message, and every public service method logs only safe values on entry. Every type that holds a secret prints a redacted `toString()`. `LogRedactor` masks what slips through at every boundary: both log formats, exceptions, the log context, the console's recent lines and error codes read from OPERA and the processor. It covers card numbers (Luhn, any separators and Unicode digits), card tokens, signed tokens, bearer and basic credentials, API keys, and the value of any field named like a secret or a card verification code. | `PciIntegrationTest` (raw events of a full flow at DEBUG, before masking), `SensitiveTypesTest`, `CleanCodeTest`, `LogRedactorTest`, `PanMaskerTest`, `JsonLogConfigTest` |
+| Audit trail | Refused credentials and scopes, every state-changing call, each card stored, opened or purged, each payment captured, declined or refused, and the configuration in force, on the logger `dev.foliopay.audit`. It cannot be switched off (D-43). | `AuditTrailIntegrationTest`, `AuditTrailTest`, `AuditLogTest`, `FailClosedStartupTest.withTheAuditTrailSwitchedOffItDoesNotStart` |
+| Card data kept too long | A card number unused for 90 days (configurable) is destroyed, never one with a payment pending (D-44) | `CardRetentionIntegrationTest` |
+| Data in transit | OPERA and the processor over `https`, PostgreSQL with `sslmode=verify-full`, or the application does not start (D-45) | `TransportSecurityGuardTest`, `FailClosedStartupTest.withARealGatewayOverPlainHttpItDoesNotStart` |
 | Card number in memory | Lent per call, never held while a retry waits; zeroed best effort | `ChargeServiceImplTest.theCardNumberIsNotHeldWhileARetryWaitsOrDuringCapture` |
 | Card number in a response, webhook or API description | DTOs only, no card token in any response, key or webhook payload | `OpenApiContractTest`, `NotificationServiceImplTest.theCardTokenIsNeverInAPayload`, `WebhookIntegrationTest` |
 | Double charge | Idempotency key unique per client and bound to the whole request; the processor's key is the charge's own id, so two clients' keys never collide there either; atomic claim on a payment link; optimistic locking with a monotone merge; a processor refusal is final and releases the hold; an unclassified error keeps the charge PENDING and saved | `ChargeServiceImplTest`, `IdempotentStoreTest`, `BookingEventServiceImplTest`, `ReviewFindingsIntegrationTest`, `LinkPaymentIntegrationTest` |
@@ -37,6 +40,47 @@ A pilot with synthetic data, built to production habits. It holds no real card d
 | Resource exhaustion | 1 MB body limit for declared, chunked, HTTP/2 and multipart bodies (multipart parsing is off), after authentication; URL-encoded forms capped by Tomcat; `IN` lists in slices; timeouts on every outbound call | `RequestSizeFilterTest`, `HttpAdaptersTest` |
 | Exposure | Loopback bind by default, `Host` allowlist (only the normalised health probe path exempt), demo endpoints and the API description absent by default | `HostAllowlistFilterTest`, `DemoControlsOffIntegrationTest` |
 | Misconfiguration | No key mode, no gateway, HTTP mode without its addresses or credentials, KMS keys on an in-memory database, OAuth2 without an issuer or without an audience or scope prefix, a weak webhook secret: each stops start-up | `FailClosedStartupTest`, `KeyModeGuardTest`, `HttpAdapterRepliesTest`, `WebhookIntegrationTest` |
+
+## PCI DSS v4.0.1, requirement by requirement
+No certification is claimed: scoping, the assessment and the report (SAQ or ROC) are for a Qualified Security Assessor and the acquirer. What this table does is make each requirement the code can hold visible, with its control and its test, so a requirement without one is a gap anyone can see (agent log 63).
+
+**Scope.** The bridge receives card numbers (`POST /api/v1/cards`) and keeps them in its vault, so it is in the cardholder data environment.
+- The way to shrink that scope is hosted card entry: the guest types the card into the acquirer's own fields (a hosted checkout such as Visa Acceptance Solutions' Unified Checkout, with its pay-by-link and 3-D Secure), and the bridge receives only the acquirer's token.
+- The vault would then hold no card numbers at all. That is roadmap "Next 2", an architecture change for the owner.
+
+| Requirement | Here | Proof | Status |
+|---|---|---|---|
+| 1, 2 Network and secure configuration | Loopback bind and a host allowlist by default; no default credential; a start without its security settings fails | `FailClosedStartupTest`, `HostAllowlistFilterTest` | Code done; network controls (security groups, private subnets) are the deployment's (`docs/aws-deployment.md`) |
+| 3.2.1 Keep account data only as long as needed | Card numbers destroyed 90 days after last use (D-44) | `CardRetentionIntegrationTest` | Done; the period is the owner's choice |
+| 3.3.1 No sensitive authentication data after authorisation | No CVV, PIN or track data is accepted, held or stored | `SensitiveTypesTest.noTypeAndNoTableHoldsACardVerificationCodeAPinOrTrackData` | Done |
+| 3.4.1 Card number masked when displayed | Replies carry the first six and last four at most; logs the last four | `ApiIntegrationTest`, `PciIntegrationTest` | Done |
+| 3.5.1 Card number unreadable wherever stored, logs included | AES-256-GCM per card under a KMS data key; logs redacted | `CryptoTest`, `CardVaultImplTest`, `PciIntegrationTest`, `LogRedactorTest` | Done; KMS not yet run against real AWS |
+| 3.6, 3.7 Key management | The master key never leaves KMS; one data key per card, bound to its token; one encryption service | `KmsKeyServiceTest`, `KmsWireTest`, `ArchitectureTest` | Code done; rotation schedule and key custodians are the organisation's |
+| 4.2.1 Strong cryptography in transit | Verified TLS to OPERA, the processor and PostgreSQL (D-45) | `TransportSecurityGuardTest` | Done; TLS for callers ends at the load balancer (deployment) |
+| 5 Anti-malware | None in the code | None | The hosts' (deployment) |
+| 6.2.4 Software built against common attacks | OWASP API Top 10, risk by risk (above); validation at the edge | `SecurityIntegrationTest` and the tables above | Done |
+| 6.3.1, 6.3.3 Vulnerabilities found and patched | OSV-Scanner in CI, Dependabot, patched releases pinned (D-46) | `.github/workflows/osv-scanner.yml` | Done; first CI run pending |
+| 6.4 Public web applications protected | None in the code | None | A WAF in front (deployment) |
+| 7 Access by need to know | A scope per operation, least access by default (D-37) | `SecurityIntegrationTest.everyOperationTheApiDescribesIsRefusedWithoutCredentialsAndToEveryScopeButItsOwn` | Done |
+| 8 Identify and authenticate | OAuth2 client credentials or hashed API keys; a client per integrator; people through the identity provider | `SecurityIntegrationTest` | Done; multi-factor for people is the identity provider's |
+| 9 Physical access | None in the code | None | Inherited from AWS |
+| 10.2 Audit logs | `AuditLog` (D-43) | `AuditTrailIntegrationTest` | Done |
+| 10.3, 10.5 Audit logs protected and kept a year | The trail has its own logger, to route to its own log group | None | Deployment: retention 1 year, 3 months searchable, write-protected |
+| 10.6 Time synchronised | One injected clock, UTC | None | Deployment (Amazon Time Sync) |
+| 11 Security testing | Unit, integration and full-flow tests; mutation checks | The test suite | Penetration tests and ASV scans are the organisation's |
+| 12 Policy | `docs/engineering-standards.md`, `CLAUDE.md`, the agent log | `tools/check_specs.py` | The organisation's |
+
+**The owner's rules C1-C8 (2026-11-21):**
+- C1, no card numbers in entities: **partly**. Entities hold only the sealed number with the first six and last four; strict C1 needs hosted card entry.
+- C2, no CVV: done.
+- C3, nothing sensitive in logs: done.
+- C4, no secrets in configuration files: done (`tools/guard_secrets.py --repo` in CI; secrets come from the environment).
+- C5, TLS: done.
+- C6, authorisation: done.
+- C7, dependencies scanned: done, first CI run pending.
+- C8, events audited: done.
+
+Each rule's check is in `docs/engineering-standards.md` section 5.
 
 ## AI guardrails (D-36)
 Agents write much of this code, so the rules are enforced by tooling, not only stated:
@@ -54,7 +98,7 @@ Agents write much of this code, so the rules are enforced by tooling, not only s
 - **No circuit breaker or bulkhead**; a payment chains several calls, each with timeouts and up to three tries, so during an outage each payment waits for the timeouts (D-33 explains why the business date is not short-circuited).
 - **The simulators' control endpoints** (`/sim/*`) have no authentication or CSRF protection; they are local demo tools, never deployed.
 - **Card number copies in memory:** the vault zeroes its byte buffers, but the number also exists as a Java `String` while the processor request is built.
-- **Supply chain:** actions and base images pinned by tag, not digest; the Maven wrapper has no checksum; Dependabot groups version updates and the Maven enforcer refuses version conflicts, but no dependency scanner runs in CI and GitHub's Dependabot security alerts are off for this repository. The resolved dependencies were checked against the OSV database on 2026-11-19. Spring Boot 3.5.16 is the last release of its line and manages versions with published advisories, so `pom.xml` pins the patched releases of the same lines: Tomcat 10.1.62, Jackson 2.21.8, the PostgreSQL driver 42.7.14, log4j-api 2.25.5. Two advisories remain, in Spring MVC 6.2.19, fixed only in Spring Framework 7: GHSA-j9f9-w8pj-32f8 (server-sent events rendering view fragments) and GHSA-pc63-qcmh-9cmg (`XsltView`). This service renders no views and sends no server-sent events, so neither is reachable; the move to Spring Boot 4 removes them and the pins. `npm audit` on the dashboard, build and test tools included, reports no advisory (2026-11-19).
+- **Supply chain:** actions and base images pinned by tag, not digest; the Maven wrapper has no checksum; Dependabot groups version updates and the Maven enforcer refuses version conflicts, and OSV-Scanner checks the Maven dependencies (transitive included) and the dashboard's lock file on every push and weekly (D-46; `.github/workflows/osv-scanner.yml`, accepted advisories with their reasons in `osv-scanner.toml`; its first run on GitHub is still to come). GitHub's Dependabot security alerts are off for this repository. The resolved dependencies (160) were checked against the OSV database on 2026-11-19 and again on 2026-11-20. Spring Boot 3.5.16 is the last release of its line and manages versions with published advisories, so `pom.xml` pins the patched releases of the same lines: Tomcat 10.1.62, Jackson 2.21.8, the PostgreSQL driver 42.7.14, log4j-api 2.25.5. Two advisories remain, in Spring MVC 6.2.19, fixed only in Spring Framework 7: GHSA-j9f9-w8pj-32f8 (server-sent events rendering view fragments) and GHSA-pc63-qcmh-9cmg (`XsltView`). This service renders no views and sends no server-sent events, so neither is reachable; the move to Spring Boot 4 removes them and the pins. `npm audit` on the dashboard, build and test tools included, reports no advisory (2026-11-19, again on 2026-11-20).
 - Short card numbers (13 digits) leave few unknown digits in the stored first six and last four.
 
 ## Untrusted text is data, never instructions

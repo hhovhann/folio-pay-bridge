@@ -9,7 +9,6 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -38,9 +37,6 @@ public class Notification {
 
     public String eventId(String subjectId) { return wireName + ":" + subjectId; }
   }
-
-  private static final Duration FIRST_RETRY = Duration.ofSeconds(30);
-  private static final Duration LONGEST_WAIT = Duration.ofHours(1);
 
   @Id private String id = UUID.randomUUID().toString();
 
@@ -100,17 +96,16 @@ public class Notification {
     attempts++;
   }
 
-  /** Waits twice as long after each failure (30 s, 1 min, 2 min ... at most an hour); after the last attempt it is FAILED, for a person. */
-  public void recordFailure(String reason, Instant now, int maxAttempts) {
+  /** Waits as the schedule says after each failure; after the last attempt it is FAILED, for a person. */
+  public void recordFailure(String reason, Instant now, DeliverySchedule schedule) {
     attempts++;
     lastError = SafeText.clean(reason);
     leaseUntil = null;
-    if (attempts >= maxAttempts) {
+    if (attempts >= schedule.maxAttempts()) {
       status = Status.FAILED;
       return;
     }
-    Duration wait = FIRST_RETRY.multipliedBy(1L << Math.min(attempts - 1, 20));
-    nextAttemptAt = now.plus(wait.compareTo(LONGEST_WAIT) > 0 ? LONGEST_WAIT : wait);
+    nextAttemptAt = now.plus(schedule.waitAfter(attempts));
   }
 
   /** An operator asks for a FAILED event to be sent again (the receiver was fixed): it starts a fresh round of attempts. */

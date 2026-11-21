@@ -6,6 +6,7 @@ const money = (minor, cur) => { const d = ['KWD','BHD','OMR'].includes(cur) ? 3 
 let selected = null; // the reservation whose folio is open
 // Rows that arrived since the last refresh are highlighted for a moment; on the first draw only the newest row is.
 const seen = {};
+let lastAuth; // the newest authorisation drawn on the processor page's route
 function fresh(table, keys) {
   const first = !seen[table];
   const before = seen[table] || new Set();
@@ -69,9 +70,18 @@ async function refresh() {
     $('#n-auth').textContent = count('AUTH');
     $('#n-capture').textContent = count('CAPTURE');
     $('#n-void').textContent = count('VOID');
+    // the chain behind the processor: the newest authorisation's network and the issuer's answer, replayed when a new one arrives
+    const auth = s.ledger.filter(e => e.kind === 'AUTH').pop();
+    if (auth) {
+      $('[data-testid=route-network]').textContent = auth.network + ', from the first digits';
+      $('[data-testid=route-answer]').textContent = 'approved · code ' + auth.approval;
+      if (lastAuth !== undefined && lastAuth !== auth.ref) { const r = $('[data-testid=route]'); r.classList.remove('go'); void r.offsetWidth; r.classList.add('go'); }
+      lastAuth = auth.ref;
+    }
     const newRows = fresh('ledger', s.ledger.map(e => e.ref));
     $('[data-testid=ledger] tbody').innerHTML = s.ledger.map((e, i) => `<tr class="${newRows[i] ? 'fresh' : ''}"><td class="ref">${esc(e.ref)}</td><td><span class="kind ${esc(e.kind)}">${esc(e.kind)}</span></td>`
-      + `<td>${e.last4 ? `<span class="pan"><svg class="ic"><use href="/icons.svg#i-card"/></svg>**** ${esc(e.last4)}</span>` : ''}</td><td>${e.amountMinor ? esc(e.currency) + ' ' + money(e.amountMinor, e.currency) : ''}</td>`
+      + `<td>${e.last4 ? `<span class="pan"><svg class="ic"><use href="/icons.svg#i-card"/></svg>**** ${esc(e.last4)}</span>` : ''}</td>`
+      + `<td><span class="net">${esc(e.network)}</span></td><td class="code">${esc(e.approval)}</td><td>${e.amountMinor ? esc(e.currency) + ' ' + money(e.amountMinor, e.currency) : ''}</td>`
       + `<td>${esc(e.state)}</td><td class="ref">${esc(e.authRef)}</td><td class="mut">${esc(hhmmss(e.at))}</td></tr>`).join('');
   }
 }
@@ -100,5 +110,7 @@ document.addEventListener('click', e => {
   const el = e.target.closest('[data-action]');
   if (el && !el.disabled && ACTIONS[el.dataset.action]) ACTIONS[el.dataset.action](...JSON.parse(el.dataset.args || '[]'));
 });
+const who = $('[data-testid=who-link]'); // the bridge serves the who-is-who page, on the same host as this simulator
+if (who) who.href = `${location.protocol}//${location.hostname}:8081/who-is-who.html`;
 refresh();
 setInterval(refresh, 1500);

@@ -12,10 +12,13 @@ import dev.foliopay.service.OverviewService;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 class OverviewServiceImpl implements OverviewService {
+  private static final Logger log = LoggerFactory.getLogger(OverviewServiceImpl.class);
   private final ChargeRepository charges;
   private final PostingRepository postings;
   private final NotificationRepository notifications;
@@ -33,6 +36,7 @@ class OverviewServiceImpl implements OverviewService {
   /** "Today" starts at midnight in the hotel's zone (the clock's zone, D-18), not at midnight UTC. */
   @Override
   public Overview overview() {
+    log.debug("overview()");
     var startOfDay = LocalDate.now(clock).atStartOfDay(clock.getZone()).toInstant();
     List<Captured> captured = charges.capturedSince(startOfDay).stream()
         .map(row -> new Captured((String) row[0], ((Number) row[1]).longValue(), ((Number) row[2]).longValue())).toList();

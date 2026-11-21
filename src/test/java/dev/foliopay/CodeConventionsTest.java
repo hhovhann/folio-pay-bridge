@@ -28,7 +28,7 @@ class CodeConventionsTest {
   private static final Path MAIN = Path.of("src/main/java");
   private static final Path TEST = Path.of("src/test/java");
   /** Lines over 150 characters in src/main and src/test today. New code stays under 150 (section 3), so this may only go down. */
-  private static final int LINES_OVER_150_TODAY = 216;
+  private static final int LINES_OVER_150_TODAY = 184;
   private static final Pattern TEST_ANNOTATION = Pattern.compile("@(?:[\\w.]+\\.)?(?:Test|ParameterizedTest|RepeatedTest|TestFactory)(?![\\w.])");
   private static final Pattern DISPLAY_NAME = Pattern.compile("@(?:[\\w.]+\\.)?DisplayName\\(\"((?:\\\\.|[^\"\\\\])*)\"\\)");
   private static final Pattern MEMBER_NAME = Pattern.compile("(?<![@\\w.])(\\w+)\\s*\\(");
@@ -44,8 +44,9 @@ class CodeConventionsTest {
     }
   }
 
+  /** The code the style rules hold for: the tests as well as the production code (a test read by the next engineer is code too). */
   private static List<Source> sources() {
-    return sources(MAIN);
+    return Stream.concat(sources(MAIN).stream(), sources(TEST).stream()).toList();
   }
 
   private static List<Source> sources(Path root) {
@@ -61,8 +62,12 @@ class CodeConventionsTest {
   }
 
   private static List<String> matching(Pattern pattern, boolean inCodeOnly) {
+    return matching(pattern, inCodeOnly, sources());
+  }
+
+  private static List<String> matching(Pattern pattern, boolean inCodeOnly, List<Source> in) {
     List<String> found = new ArrayList<>();
-    for (Source source : sources()) {
+    for (Source source : in) {
       Matcher m = pattern.matcher(inCodeOnly ? source.code() : source.text());
       while (m.find()) {
         found.add(source.path() + ": " + m.group().strip());
@@ -110,14 +115,16 @@ class CodeConventionsTest {
   @DisplayName("Dependencies are injected through the constructor, never into fields")
   void dependenciesAreInjectedThroughTheConstructor() {
     // Any spelling: a fully qualified @org.springframework...Autowired once slipped past a check for the short name (agent log 49).
-    assertThat(matching(Pattern.compile("@([\\w.]+\\.)?(Autowired|Inject)\\b"), true)).isEmpty();
+    // Production code only: JUnit, not Spring, constructs a test class, so a Spring test receives its beans in fields.
+    assertThat(matching(Pattern.compile("@([\\w.]+\\.)?(Autowired|Inject)\\b"), true, sources(MAIN))).isEmpty();
   }
 
   /** Output goes through the logger, where the request id is attached and card numbers are masked, never straight to the console. */
   @Test
   @DisplayName("Nothing prints to the console directly")
   void nothingPrintsToTheConsoleDirectly() {
-    assertThat(matching(Pattern.compile("System\\.(out|err)\\.|\\.printStackTrace\\("), true)).isEmpty();
+    // Production code only: a test prints a stack trace into a string to check what a log would show (RedactedTest).
+    assertThat(matching(Pattern.compile("System\\.(out|err)\\.|\\.printStackTrace\\("), true, sources(MAIN))).isEmpty();
   }
 
   /**

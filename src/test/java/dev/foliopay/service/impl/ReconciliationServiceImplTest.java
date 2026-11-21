@@ -25,10 +25,12 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @DisplayName("Reconciliation: captures and postings against the acquirer statement")
 class ReconciliationServiceImplTest {
@@ -199,17 +201,18 @@ class ReconciliationServiceImplTest {
     assertThat(usd(report).settledMinor()).isEqualTo(1_000);
   }
 
+  /** The demo's messy statement moved to DemoServiceImplTest in phase 21: production code reconciles what the processor reports, as is. */
   @Test
-  @DisplayName("A distorted acquirer statement produces one of each simulated problem")
-  void aDistortedAcquirerStatementProducesOneOfEachSimulatedProblem() {
+  @DisplayName("The acquirer's own statement is reconciled exactly as the processor reports it")
+  void theAcquirersOwnStatementIsReconciledExactlyAsTheProcessorReportsIt() {
     capture("cap_a", 1_000, true);
     capture("cap_b", 2_000, true);
-    capture("cap_c", 3_000, true);
-    when(psp.settlementStatement()).thenReturn(List.of(new SettlementLine("cap_a", 1_000, "USD"), new SettlementLine("cap_b", 2_000, "USD"), new SettlementLine("cap_c", 3_000, "USD")));
+    when(psp.settlementStatement()).thenReturn(List.of(new SettlementLine("cap_a", 1_000, "USD"), new SettlementLine("cap_b", 1_900, "USD")));
 
-    ReconReport report = service.reconcileAcquirerStatement(true, Period.ALL);
+    ReconReport report = service.reconcileAcquirerStatement(Period.ALL);
 
-    assertThat(report.exceptions()).containsOnlyKeys("MISSING_IN_SETTLEMENT", "AMOUNT_DIFFERENCE", "UNKNOWN_IN_SETTLEMENT");
+    assertThat(report.matched()).isEqualTo(1);
+    assertThat(report.exceptions()).containsOnlyKeys("AMOUNT_DIFFERENCE");
   }
 
   /** Fails if the whole history is expected in every file: from the second day on, every earlier capture would be reported missing. */
@@ -260,7 +263,7 @@ class ReconciliationServiceImplTest {
   @DisplayName("An unknown reference in two currencies is reported per currency")
   void anUnknownReferenceInTwoCurrenciesIsReportedPerCurrency() {
     ReconReport report = reconcile(new SettlementLine("cap_x", 500, "USD"), new SettlementLine("cap_x", 700, "EUR"));
-    assertThat(report.items()).extracting(ReconReport.Item::settledCurrency, ReconReport.Item::settledMinor).containsExactly(org.assertj.core.groups.Tuple.tuple("EUR", 700L), org.assertj.core.groups.Tuple.tuple("USD", 500L));
+    assertThat(report.items()).extracting(ReconReport.Item::settledCurrency, ReconReport.Item::settledMinor).containsExactly(Tuple.tuple("EUR", 700L), Tuple.tuple("USD", 500L));
   }
 
   @Test
@@ -270,7 +273,7 @@ class ReconciliationServiceImplTest {
   }
 
   private static void setBusinessDate(Charge charge, LocalDate day) {
-    org.springframework.test.util.ReflectionTestUtils.setField(charge, "businessDate", day);
+    ReflectionTestUtils.setField(charge, "businessDate", day);
   }
 
   /** Fails if one IN list holds every id: PostgreSQL's driver refuses more than 65,535 bind parameters in one statement. */

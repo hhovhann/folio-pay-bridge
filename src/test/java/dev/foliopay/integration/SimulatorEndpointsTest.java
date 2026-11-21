@@ -10,6 +10,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Base64;
@@ -20,12 +21,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 /** Every endpoint of both simulators, including the ways each refuses a bad call, so the demo's outside world is itself tested. */
 @DisplayName("Simulators: every endpoint of the OPERA and processor simulators")
 class SimulatorEndpointsTest {
-  private static final RestClient HTTP = RestClient.builder().requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory()).build(); // HTTP/1.1, like the real adapters: the JDK client may retry a cleartext POST over h2c
+  private static final RestClient HTTP = RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory()).build(); // HTTP/1.1, like the real adapters: the JDK client may retry a cleartext POST over h2c
   private static final HttpClient RAW = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
   private static final String TODAY = LocalDate.now(ZoneId.of("Asia/Dubai")).toString();
   private static Sim opera;
@@ -73,7 +75,7 @@ class SimulatorEndpointsTest {
   }
 
   private static RestClient.RequestBodySpec operaPost(String path, String bearer) {
-    return HTTP.post().uri(opera.url() + path).header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1").contentType(org.springframework.http.MediaType.APPLICATION_JSON);
+    return HTTP.post().uri(opera.url() + path).header("Authorization", "Bearer " + bearer).header("x-app-key", "demo-app-key").header("x-hotelid", "DEMO1").contentType(MediaType.APPLICATION_JSON);
   }
 
   /** A postBillingPayment body, as Oracle's billingPayment definition shapes it. */
@@ -111,7 +113,7 @@ class SimulatorEndpointsTest {
     assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", BASIC).body("grant_type=password&scope=s"))).as("not client credentials")
         .isEqualTo(400);
     assertThat(json(tokenRequest("demo-app-key", "DEMOENT", BASIC).body(form)).path("token_type").asText()).isEqualTo("Bearer");
-    HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "DOWN")).retrieve().toBodilessEntity();
+    HTTP.post().uri(opera.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "DOWN")).retrieve().toBodilessEntity();
     assertThat(statusOf(tokenRequest("demo-app-key", "DEMOENT", BASIC).body(form))).isEqualTo(503);
   }
 
@@ -155,10 +157,10 @@ class SimulatorEndpointsTest {
   void aThrottleAndALockConflictEachHitOnlyTheNextPaymentThenClear() {
     String bearer = token();
     String path = "/csh/v1/hotels/DEMO1/reservations/RES-1/payments";
-    HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "THROTTLE_NEXT")).retrieve().toBodilessEntity();
+    HTTP.post().uri(opera.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "THROTTLE_NEXT")).retrieve().toBodilessEntity();
     assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(429);
     assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(201);
-    HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "LOCK_CONFLICT_NEXT")).retrieve().toBodilessEntity();
+    HTTP.post().uri(opera.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "LOCK_CONFLICT_NEXT")).retrieve().toBodilessEntity();
     assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(409);
     assertThat(statusOf(operaPost(path, bearer).body(payment("RES-1", "CC", 9001, 10.00)))).isEqualTo(201);
   }
@@ -212,17 +214,17 @@ class SimulatorEndpointsTest {
   @Test
   @DisplayName("The PMS can push a booking event to the bridge, and says so when it cannot")
   void thePmsCanPushABookingEventToTheBridgeAndSaysSoWhenItCannot() {
-    assertThat(json(HTTP.post().uri(opera.url() + "/sim/booking-events").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+    assertThat(json(HTTP.post().uri(opera.url() + "/sim/booking-events").contentType(MediaType.APPLICATION_JSON)
         .body(Map.of("bookingRef", "B1", "ratePlan", "FLEXIBLE", "arrivalInDays", 30, "totalMinor", 100000))).path("error").asText()).contains("No bridge configured");
 
     try (var bridge = SimulatorHarness.stub((m, path) -> new Reply(200, "{\"note\":\"Flexible: 20% deposit\"}"));
          Sim wired = SimulatorHarness.start("opera", "--sim.opera.bridge-url=" + bridgeUrl(bridge))) {
-      assertThat(json(HTTP.post().uri(wired.url() + "/sim/booking-events").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+      assertThat(json(HTTP.post().uri(wired.url() + "/sim/booking-events").contentType(MediaType.APPLICATION_JSON)
           .body(Map.of("bookingRef", "B1", "ratePlan", "FLEXIBLE", "arrivalInDays", 30, "totalMinor", 100000))).path("note").asText()).contains("Flexible: 20% deposit");
     }
     try (var broken = SimulatorHarness.stub((m, path) -> new Reply(500, "{}"));
          Sim wired = SimulatorHarness.start("opera", "--sim.opera.bridge-url=" + bridgeUrl(broken))) {
-      assertThat(json(HTTP.post().uri(wired.url() + "/sim/booking-events").contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+      assertThat(json(HTTP.post().uri(wired.url() + "/sim/booking-events").contentType(MediaType.APPLICATION_JSON)
           .body(Map.of("bookingRef", "B1", "ratePlan", "FLEXIBLE", "arrivalInDays", 30, "totalMinor", 100000))).path("error").asText()).contains("did not accept");
     }
   }
@@ -231,7 +233,7 @@ class SimulatorEndpointsTest {
 
   // ---- processor
   private static RestClient.RequestBodySpec pspPost(String path, String key, String idempotencyKey) {
-    RestClient.RequestBodySpec spec = HTTP.post().uri(psp.url() + path).contentType(org.springframework.http.MediaType.APPLICATION_JSON);
+    RestClient.RequestBodySpec spec = HTTP.post().uri(psp.url() + path).contentType(MediaType.APPLICATION_JSON);
     if (key != null) spec.header("Authorization", "Bearer " + key);
     if (idempotencyKey != null) spec.header("Idempotency-Key", idempotencyKey);
     return spec;
@@ -261,11 +263,32 @@ class SimulatorEndpointsTest {
     assertThat(ledger.toString()).contains("1111").doesNotContain("4111111111111111");
   }
 
+  /**
+   * The simulator stands for the processor and the three parties behind it (the acquirer, the card network, the issuer), and its ledger
+   * shows them: fails if the network is not named from the card's first digits, if an authorisation has no approval code from the
+   * issuer, or if the capture does not carry its authorisation's network. The card number itself is still not kept.
+   */
+  @Test
+  @DisplayName("The processor's ledger names the card network and the issuer's approval code, and keeps no card number")
+  void theLedgerNamesTheCardNetworkAndTheIssuersApprovalCode() {
+    String visa = authorise("n1", 100);
+    Map<String, Object> mastercard = Map.of("pan", "5555555555554444", "expiry", "12/29", "amountMinor", 200, "currency", "USD");
+    pspPost("/v1/authorizations", "demo-psp-key", "n2").body(mastercard).retrieve().toBodilessEntity();
+    pspPost("/v1/captures", "demo-psp-key", "n3").body(Map.of("authRef", visa, "amountMinor", 100, "currency", "USD")).retrieve().toBodilessEntity();
+
+    JsonNode ledger = json(HTTP.get().uri(psp.url() + "/sim/state")).path("ledger");
+    assertThat(ledger).extracting(e -> e.path("kind").asText() + " " + e.path("network").asText())
+        .containsExactly("AUTH VISA", "AUTH MASTERCARD", "CAPTURE VISA");
+    assertThat(ledger.get(0).path("approval").asText()).as("the issuer's approval code").matches("[A-Z0-9]{6}");
+    assertThat(ledger.get(2).path("approval").asText()).as("a capture carries the approval it acts on").isEqualTo(ledger.get(0).path("approval").asText());
+    assertThat(ledger.toString()).doesNotContain("4111111111111111").doesNotContain("5555555555554444");
+  }
+
   @Test
   @DisplayName("A capture decline and a lost capture reply each hit only the next call")
   void aCaptureDeclineAndALostCaptureReplyEachHitOnlyTheNextCall() {
     String authRef = authorise("a1", 100);
-    HTTP.post().uri(psp.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "DECLINE_CAPTURE_NEXT")).retrieve().toBodilessEntity();
+    HTTP.post().uri(psp.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "DECLINE_CAPTURE_NEXT")).retrieve().toBodilessEntity();
     Map<String, Object> capture = Map.of("authRef", authRef, "amountMinor", 100, "currency", "USD");
     assertThat(statusOf(pspPost("/v1/captures", "demo-psp-key", "c1").body(capture))).isEqualTo(402);
     assertThat(statusOf(pspPost("/v1/captures", "demo-psp-key", "c1").body(capture))).isEqualTo(201);
@@ -288,7 +311,7 @@ class SimulatorEndpointsTest {
   @DisplayName("A repeat of an approved key gets its first answer even while a decline is armed")
   void aRepeatOfAnApprovedKeyGetsItsFirstAnswerEvenWhileADeclineIsArmed() {
     String first = authorise("a3", 100);
-    HTTP.post().uri(psp.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "DECLINE_NEXT")).retrieve().toBodilessEntity();
+    HTTP.post().uri(psp.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "DECLINE_NEXT")).retrieve().toBodilessEntity();
     assertThat(authorise("a3", 100)).as("a processor answers a repeat from its record, not with a fresh decision").isEqualTo(first);
     assertThat(json(HTTP.get().uri(psp.url() + "/sim/state")).path("fault").asText()).as("the decline is still waiting for a new request").isEqualTo("DECLINE_NEXT");
   }
@@ -296,8 +319,8 @@ class SimulatorEndpointsTest {
   @Test
   @DisplayName("An unknown fault is a bad request, not a crash")
   void anUnknownFaultIsABadRequestNotACrash() {
-    assertThat(statusOf(HTTP.post().uri(psp.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "NOPE")))).isEqualTo(400);
-    assertThat(statusOf(HTTP.post().uri(opera.url() + "/sim/faults").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body(Map.of("fault", "NOPE")))).isEqualTo(400);
+    assertThat(statusOf(HTTP.post().uri(psp.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "NOPE")))).isEqualTo(400);
+    assertThat(statusOf(HTTP.post().uri(opera.url() + "/sim/faults").contentType(MediaType.APPLICATION_JSON).body(Map.of("fault", "NOPE")))).isEqualTo(400);
   }
 
   private String authorise(String key, long amount) {
@@ -317,8 +340,8 @@ class SimulatorEndpointsTest {
   @Test
   @DisplayName("The hotel's webhook receiver refuses an unsigned event")
   void theHotelsWebhookReceiverRefusesAnUnsignedEvent() {
-    int status = statusOf(HTTP.post().uri(opera.url() + "/sim/webhooks").header("Webhook-Id", "x").header("Webhook-Timestamp", String.valueOf(java.time.Instant.now().getEpochSecond()))
-        .header("Webhook-Signature", "v1=00").contentType(org.springframework.http.MediaType.APPLICATION_JSON).body("{}"));
+    int status = statusOf(HTTP.post().uri(opera.url() + "/sim/webhooks").header("Webhook-Id", "x").header("Webhook-Timestamp", String.valueOf(Instant.now().getEpochSecond()))
+        .header("Webhook-Signature", "v1=00").contentType(MediaType.APPLICATION_JSON).body("{}"));
     assertThat(status).isEqualTo(401);
   }
 }

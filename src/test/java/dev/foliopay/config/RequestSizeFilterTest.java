@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -132,7 +133,7 @@ class RequestSizeFilterTest {
         assertThat(in.read()).isEqualTo('a');
         assertThat(in.read()).isEqualTo('b');
         assertThat(in.isFinished()).isTrue();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> in.setReadListener(null)).isInstanceOf(UnsupportedOperationException.class);
+        Assertions.assertThatThrownBy(() -> in.setReadListener(null)).isInstanceOf(UnsupportedOperationException.class);
       } catch (IOException e) {
         throw new IllegalStateException(e);
       }

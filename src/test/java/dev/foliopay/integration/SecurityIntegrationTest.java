@@ -3,10 +3,13 @@ package dev.foliopay.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -19,17 +22,25 @@ import com.sun.net.httpserver.HttpServer;
 import dev.foliopay.service.support.Fingerprint;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -39,9 +50,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * Authentication and authorisation end to end (D-30), with nothing mocked in between: a real RSA key signs the tokens, a local HTTP server
  * publishes its JWKS the way Cognito or Okta would, and Spring Security fetches it and checks signature, issuer, audience, expiry and scope.
  */
-@SpringBootTest(properties = {
-    "foliopay.opera.hotel-id=DEMO1", "foliopay.opera.payment-method=CC", "foliopay.opera.cashier-id=9001", // the simulated hotel
-    "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.demo-controls=false"})
+// The test's own signing-key server listens on loopback over plain HTTP, so plaintext is allowed by name, as in the Compose stack (D-45).
+@SpringBootTest(properties = {"foliopay.demo-controls=false", "foliopay.allow-plaintext-transport=true"})
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @DisplayName("Authentication and authorisation end to end (D-30)")
 class SecurityIntegrationTest {
@@ -53,6 +64,19 @@ class SecurityIntegrationTest {
   private static final RSAKey SIGNING = generate("k1");
   private static final RSAKey STRANGER = generate("k1"); // same key id, different key: a forged token
   private static final HttpServer JWKS = jwks();
+  /** The scope each operation needs, as SecurityConfig grants it (D-37), written out so that a change to either shows up here. */
+  private static final Map<String, String> SCOPE_OF = Map.ofEntries(
+      Map.entry("POST /api/v1/cards", "cards:write"),
+      Map.entry("POST /api/v1/payments", "payments:write"), Map.entry("POST /api/v1/links/{id}/pay", "payments:write"),
+      Map.entry("POST /api/v1/links", "links:write"),
+      Map.entry("POST /api/v1/booking-events", "bookings:write"),
+      Map.entry("GET /api/v1/charges", "payments:read"), Map.entry("GET /api/v1/postings", "payments:read"),
+      Map.entry("GET /api/v1/links", "payments:read"), Map.entry("GET /api/v1/notifications", "payments:read"),
+      Map.entry("GET /api/v1/overview", "payments:read"),
+      Map.entry("POST /api/v1/postings/{id}/replay", "operations"), Map.entry("POST /api/v1/notifications/{id}/redeliver", "operations"),
+      Map.entry("POST /api/v1/reconcile", "operations"), Map.entry("POST /api/v1/shadow", "operations"),
+      Map.entry("GET /api/v1/logs", "operations"), Map.entry("GET /api/v1/vault", "operations"),
+      Map.entry("GET /api/v1/sim", "operations"), Map.entry("POST /api/v1/sim", "operations"));
 
   @Autowired private MockMvc mvc;
 
@@ -153,6 +177,42 @@ class SecurityIntegrationTest {
     mvc.perform(bearer(post("/api/v1/reconcile"), valid(PREFIX + "payments:read")).contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isForbidden());
     mvc.perform(bearer(post("/api/v1/postings/p-1/replay"), valid(PREFIX + "operations"))).andExpect(status().isNotFound()); // allowed: the posting is unknown
+  }
+
+  /**
+   * Fails if an operation the published API description lists is open without credentials, or to a scope that is not its own: an endpoint
+   * that fell through to permitAll, a matcher that lets a reading client write (API5). Fails too if the description has an operation the
+   * table above does not name, so no endpoint ships before its scope is chosen. Only refusals are sent: nothing reaches a controller.
+   */
+  @Test
+  @DisplayName("Every operation the API describes is refused without credentials and to every scope but its own")
+  void everyOperationTheApiDescribesIsRefusedWithoutCredentialsAndToEveryScopeButItsOwn() throws Exception {
+    Set<String> described = new TreeSet<>();
+    JsonNode paths = new ObjectMapper().readTree(Path.of("docs/openapi.json").toFile()).path("paths");
+    paths.fields().forEachRemaining(path -> path.getValue().fieldNames()
+        .forEachRemaining(method -> described.add(method.toUpperCase(Locale.ROOT) + " " + path.getKey())));
+    described.removeIf(operation -> operation.startsWith("GET /api/v1/public/")); // how to sign in, open by design (test below)
+    assertThat(described).as("the operations whose scope this test states").isEqualTo(new TreeSet<>(SCOPE_OF.keySet()));
+
+    List<String> wrong = new ArrayList<>();
+    for (String operation : described) {
+      HttpMethod method = HttpMethod.valueOf(operation.substring(0, operation.indexOf(' ')));
+      String uri = operation.substring(operation.indexOf(' ') + 1).replaceAll("\\{[^}]+}", "x-1");
+      int anonymous = mvc.perform(request(method, uri)).andReturn().getResponse().getStatus();
+      if (anonymous != 401) {
+        wrong.add(operation + " without credentials: " + anonymous);
+      }
+      for (String scope : List.of("cards:write", "payments:write", "links:write", "bookings:write", "payments:read", "operations")) {
+        if (scope.equals(SCOPE_OF.get(operation))) {
+          continue;
+        }
+        int status = mvc.perform(bearer(request(method, uri), valid(PREFIX + scope))).andReturn().getResponse().getStatus();
+        if (status != 403) {
+          wrong.add(operation + " with " + scope + ": " + status);
+        }
+      }
+    }
+    assertThat(wrong).as("operations let in without their own scope").isEmpty();
   }
 
   @Test

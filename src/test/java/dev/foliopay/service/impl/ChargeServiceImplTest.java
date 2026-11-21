@@ -16,6 +16,8 @@ import static org.mockito.Mockito.when;
 import dev.foliopay.Fixtures;
 import dev.foliopay.domain.exception.ConflictException;
 import dev.foliopay.domain.exception.InvalidRequestException;
+import dev.foliopay.domain.exception.NotFoundException;
+import dev.foliopay.domain.model.CardToken;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Pan;
@@ -39,6 +41,8 @@ import java.util.function.BiFunction;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -59,13 +63,18 @@ class ChargeServiceImplTest {
     final AtomicInteger lent = new AtomicInteger();
     final AtomicInteger opened = new AtomicInteger();
 
-    @Override public dev.foliopay.domain.model.CardToken tokenise(Pan pan, String expiry) { throw new UnsupportedOperationException(); }
+    @Override public CardToken tokenise(Pan pan, String expiry) { throw new UnsupportedOperationException(); }
     boolean known = true;
+    /** The card was purged after {@link #exists} answered (D-44): opening it finds nothing. */
+    boolean goneWhenOpened;
 
     @Override public boolean exists(String token) { return known; }
 
     @Override
     public <T> T withCard(String token, BiFunction<Pan, String, T> use) {
+      if (goneWhenOpened) {
+        throw new NotFoundException("Unknown card token");
+      }
       opened.incrementAndGet();
       lent.incrementAndGet();
       try {
@@ -158,13 +167,46 @@ class ChargeServiceImplTest {
     verify(repository, never()).saveAndFlush(any(Charge.class));
   }
 
+  /** Fails if the card is checked before the key: a payment repeated after its card was purged (D-44) would get 400, not its result. */
+  @Test
+  @DisplayName("A repeat of a finished charge gets its first result even after its card is gone")
+  void aRepeatOfAFinishedChargeGetsItsFirstResultEvenAfterItsCardIsGone() {
+    Charge captured = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
+    captured.markCaptured("cap_1");
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(captured));
+    vault.known = false;
+
+    Charge repeat = service.charge(command());
+
+    assertThat(repeat.getStatus()).isEqualTo(Charge.Status.CAPTURED);
+    assertThat(repeat.getPspRef()).isEqualTo("cap_1");
+    verifyNoInteractions(psp);
+  }
+
+  /**
+   * Fails if a card purged between the check and the first attempt leaves the charge pending for ever: nothing was sent to the processor,
+   * so the honest answer is a final refusal, which also gives a payment link back to the guest.
+   */
+  @Test
+  @DisplayName("A card gone before the first attempt is a final refusal, never a charge pending for ever")
+  void aCardGoneBeforeTheFirstAttemptIsAFinalRefusal() {
+    noExistingCharge();
+    vault.goneWhenOpened = true;
+
+    Charge charge = service.charge(command());
+
+    assertThat(charge.getStatus()).isEqualTo(Charge.Status.DECLINED);
+    assertThat(charge.getLastError()).contains("card is no longer stored");
+    verifyNoInteractions(psp);
+  }
+
   @Test
   @DisplayName("A hold that cannot be released does not hide the decline")
   void aHoldThatCannotBeReleasedDoesNotHideTheDecline() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
     when(psp.capture(anyString(), anyString(), any())).thenThrow(new PspDeclinedException("Capture declined"));
-    org.mockito.Mockito.doThrow(new RuntimeException("processor down")).when(psp).voidAuthorization(anyString(), anyString());
+    Mockito.doThrow(new RuntimeException("processor down")).when(psp).voidAuthorization(anyString(), anyString());
 
     assertThat(service.charge(command()).getStatus()).isEqualTo(Charge.Status.DECLINED);
   }
@@ -176,7 +218,7 @@ class ChargeServiceImplTest {
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
     when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
     Charge storedPending = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
-    when(repository.save(any(Charge.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "id")).thenAnswer(call -> call.getArgument(0));
+    when(repository.save(any(Charge.class))).thenThrow(new ObjectOptimisticLockingFailureException(Charge.class, "id")).thenAnswer(call -> call.getArgument(0));
     when(repository.findById(anyString())).thenReturn(Optional.of(storedPending));
 
     Charge result = service.charge(command());
@@ -194,7 +236,7 @@ class ChargeServiceImplTest {
     when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
     Charge storedCaptured = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
     storedCaptured.markCaptured("cap_other");
-    when(repository.save(any(Charge.class))).thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(Charge.class, "id"));
+    when(repository.save(any(Charge.class))).thenThrow(new ObjectOptimisticLockingFailureException(Charge.class, "id"));
     when(repository.findById(anyString())).thenReturn(Optional.of(storedCaptured));
 
     assertThat(service.charge(command()).getPspRef()).isEqualTo("cap_other");

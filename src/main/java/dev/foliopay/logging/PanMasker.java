@@ -30,12 +30,6 @@ public final class PanMasker {
     return out.toString();
   }
 
-  /** Masks, then makes the text one line: a value with a line break cannot forge a second log entry. */
-  public static String safe(String text) {
-    String masked = mask(text);
-    return masked == null ? null : masked.replace("\r", "\\r").replace("\n", "\\n");
-  }
-
   private static String maskRun(String run) {
     // Code points, not chars: a digit outside the Basic Multilingual Plane (mathematical or other script digits) is two chars.
     int[] points = run.codePoints().toArray();

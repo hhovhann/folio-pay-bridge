@@ -2,6 +2,7 @@ package dev.foliopay.service.impl;
 
 import dev.foliopay.domain.exception.IdempotencyKeyReusedException;
 import dev.foliopay.domain.exception.InvalidRequestException;
+import dev.foliopay.domain.exception.NotFoundException;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.gateway.PspClient;
@@ -10,12 +11,15 @@ import dev.foliopay.gateway.PspDeclinedException;
 import dev.foliopay.gateway.PspRejectedException;
 import dev.foliopay.gateway.PspTransientException;
 import dev.foliopay.gateway.PspUnreadableReplyException;
+import dev.foliopay.logging.AuditLog;
+import dev.foliopay.logging.AuditLog.Event;
 import dev.foliopay.logging.Redacted;
 import dev.foliopay.repository.ChargeRepository;
 import dev.foliopay.service.BusinessDateService;
 import dev.foliopay.service.CardVault;
 import dev.foliopay.service.ChargeService;
 import dev.foliopay.service.support.IdempotentStore;
+import dev.foliopay.service.support.Listing;
 import io.github.resilience4j.retry.Retry;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,21 +27,15 @@ import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 /**
  * The safety rests on three things: a unique idempotency key per client in the database, the same key sent to the processor on every
  * retry, and the card number existing in memory only inside one short call (never while a retry waits).
- *
- * <p>Logging: INFO and above for every change of a charge's state; DEBUG for the decisions in between. Only ids, keys, amounts and
- * statuses are logged, never the card token (it can be charged) and never a card number.
  */
 @Service
 class ChargeServiceImpl implements ChargeService {
   private static final Logger log = LoggerFactory.getLogger(ChargeServiceImpl.class);
-  private static final int MAX_LISTED = 500;
   private final ChargeRepository repository;
   private final CardVault vault;
   private final PspClient psp;
@@ -58,13 +56,15 @@ class ChargeServiceImpl implements ChargeService {
 
   @Override
   public Charge charge(ChargeCommand command) {
-    log.debug("Charge requested: key {} booking {} folio {} amount {} {}", command.idempotencyKey(), command.bookingRef(), command.folioId(),
-        command.amount().minor(), command.amount().currency());
+    log.debug("charge(client={}, key={}, booking={}, folio={}, amount={} {})", command.clientId(), command.idempotencyKey(), command.bookingRef(),
+        command.folioId(), command.amount().minor(), command.amount().currency());
     Money amount = command.amount().requirePositive();
-    if (!vault.exists(command.cardToken())) {
+    // The key first: a repeat gets its first result whatever has changed since, its card purged included (D-44). Only a new charge needs it.
+    Optional<Charge> stored = repository.findByClientIdAndIdempotencyKey(command.clientId(), command.idempotencyKey());
+    if (stored.isEmpty() && !vault.exists(command.cardToken())) {
       throw new InvalidRequestException("Unknown card token");
     }
-    Charge charge = repository.findByClientIdAndIdempotencyKey(command.clientId(), command.idempotencyKey()).orElseGet(() -> create(command, amount));
+    Charge charge = stored.orElseGet(() -> create(command, amount));
     if (!charge.matches(command.bookingRef(), command.folioId(), command.businessDate(), command.cardToken(), amount)) {
       log.info("Charge {} refused a repeat of key {} with different parameters", charge.getId(), command.idempotencyKey());
       throw new IdempotencyKeyReusedException();
@@ -84,20 +84,22 @@ class ChargeServiceImpl implements ChargeService {
     LocalDate businessDate = command.businessDate() != null ? command.businessDate() : businessDates.resolve(null);
     Charge created = store.insertOrFind(
         () -> repository.findByClientIdAndIdempotencyKey(command.clientId(), command.idempotencyKey()),
-        () -> repository.saveAndFlush(
-            new Charge(command.clientId(), command.idempotencyKey(), command.bookingRef(), command.folioId(), businessDate, command.cardToken(), amount)));
+        () -> repository.saveAndFlush(new Charge(
+            command.clientId(), command.idempotencyKey(), command.bookingRef(), command.folioId(), businessDate, command.cardToken(), amount)));
     log.debug("Charge {} stored for key {} on business date {}", created.getId(), command.idempotencyKey(), created.getBusinessDate());
     return created;
   }
 
   @Override
   public Optional<Charge> find(String clientId, String idempotencyKey) {
+    log.debug("find(client={}, key={})", clientId, idempotencyKey);
     return repository.findByClientIdAndIdempotencyKey(clientId, idempotencyKey);
   }
 
   @Override
   public List<Charge> findAll() {
-    return repository.findAll(PageRequest.of(0, MAX_LISTED, Sort.by("createdAt").descending())).getContent();
+    log.debug("findAll(limit={})", Listing.NEWEST);
+    return repository.findAll(Listing.newest("createdAt")).getContent();
   }
 
   private Charge execute(Charge charge) {
@@ -105,35 +107,76 @@ class ChargeServiceImpl implements ChargeService {
     PspResult auth = null;
     log.debug("Charge {} attempt {}: authorising {} {}", charge.getId(), charge.getAttempts() + 1, amount.minor(), amount.currency());
     try {
-      // The card is lent for each attempt on its own, so it is not held in memory while a retry waits.
-      auth = pspRetry.executeSupplier(
-          () -> vault.withCard(charge.getCardToken(), (pan, expiry) -> psp.authorize(charge.processorKey("auth"), pan, expiry, amount)));
-      PspResult authorised = auth;
-      log.debug("Charge {} authorised as {}: capturing", charge.getId(), authorised.ref());
-      PspResult capture = pspRetry.executeSupplier(() -> psp.capture(charge.processorKey("cap"), authorised.ref(), amount));
-      charge.markCaptured(capture.ref());
-      log.info("Charge {} captured {} {} as {}", charge.getId(), amount.minor(), amount.currency(), capture.ref());
+      auth = authorise(charge, amount);
+      capture(charge, auth, amount);
     } catch (PspRejectedException e) {
-      charge.markDeclined(e.getMessage()); // final: the same key gets the same refusal, and a payment link is given back
-      log.error("Charge {} refused by the processor, check our side: {}", charge.getId(), charge.getLastError());
-      releaseHold(charge, auth);
+      refused(charge, e.getMessage(), auth);
     } catch (PspDeclinedException e) {
-      charge.markDeclined(e.getMessage());
-      log.warn("Charge {} declined: {}", charge.getId(), charge.getLastError());
-      releaseHold(charge, auth);
+      declined(charge, e.getMessage(), auth);
     } catch (PspTransientException e) {
       charge.recordFailedAttempt(e.getMessage()); // stays PENDING: the caller retries with the same key
       log.warn("Charge {} still pending after retries: {}", charge.getId(), charge.getLastError());
+    } catch (NotFoundException e) {
+      cardGone(charge);
     } catch (PspUnreadableReplyException e) {
       // The processor said yes but we cannot read what to: the step may have happened, so the charge stays PENDING and the hold stays.
       charge.recordFailedAttempt(e.getMessage());
       log.error("Charge {} left pending: {}", charge.getId(), charge.getLastError());
     } catch (RuntimeException e) {
-      // A reply we could not read, or a bug. The capture may have happened, so the hold is NOT released and the charge stays PENDING:
-      // a retry with the same key asks the processor again, which answers with the first result. What we know is saved, never lost.
+      // A bug, or a reply we could not read: the capture may have happened, so the hold stays and the charge stays PENDING. A retry with
+      // the same key asks the processor again, which answers with the first result.
       charge.recordFailedAttempt("Unexpected error: " + e.getClass().getSimpleName());
       log.error("Charge {} left pending after an unexpected error", charge.getId(), Redacted.of(e));
     }
+    return save(charge);
+  }
+
+  /** The card is lent for each attempt on its own, so it is not held in memory while a retry waits. */
+  private PspResult authorise(Charge charge, Money amount) {
+    PspResult auth = pspRetry.executeSupplier(
+        () -> vault.withCard(charge.getCardToken(), (pan, expiry) -> psp.authorize(charge.processorKey("auth"), pan, expiry, amount)));
+    log.debug("Charge {} authorised as {}: capturing", charge.getId(), auth.ref());
+    return auth;
+  }
+
+  private void capture(Charge charge, PspResult auth, Money amount) {
+    PspResult capture = pspRetry.executeSupplier(() -> psp.capture(charge.processorKey("cap"), auth.ref(), amount));
+    charge.markCaptured(capture.ref());
+    log.info("Charge {} captured {} {} as {}", charge.getId(), amount.minor(), amount.currency(), capture.ref());
+    audit(Event.PAYMENT_CAPTURED, charge).success();
+  }
+
+  /** Final: the same key gets the same refusal, and a payment link is given back. Ours to fix, not the guest's card. */
+  private void refused(Charge charge, String reason, PspResult auth) {
+    charge.markDeclined(reason);
+    log.error("Charge {} refused by the processor, check our side: {}", charge.getId(), charge.getLastError());
+    audit(Event.PAYMENT_REFUSED, charge).detail("reason", charge.getLastError()).failure();
+    releaseHold(charge, auth);
+  }
+
+  private void declined(Charge charge, String reason, PspResult auth) {
+    charge.markDeclined(reason);
+    log.warn("Charge {} declined: {}", charge.getId(), charge.getLastError());
+    audit(Event.PAYMENT_DECLINED, charge).detail("reason", charge.getLastError()).failure();
+    releaseHold(charge, auth);
+  }
+
+  /**
+   * The card was purged after the charge was checked and before its first attempt (D-44). Nothing reached the processor, and a card
+   * with a payment pending is never purged, so no earlier attempt did either: refusing for good is safe, and gives a link back.
+   */
+  private void cardGone(Charge charge) {
+    charge.markDeclined("The card is no longer stored: its retention period ended");
+    log.warn("Charge {} refused: its card was purged before the first attempt", charge.getId());
+    audit(Event.PAYMENT_DECLINED, charge).detail("reason", "card-purged").failure();
+  }
+
+  private static AuditLog.Entry audit(Event event, Charge charge) {
+    return AuditLog.event(event).resource("charge:" + charge.getId()).detail("key", charge.getIdempotencyKey())
+        .detail("amount", charge.getAmountMinor()).detail("currency", charge.getCurrency());
+  }
+
+  private Charge save(Charge charge) {
     return store.saveMerging(
         charge,
         repository::save,

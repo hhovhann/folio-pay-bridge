@@ -6,6 +6,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.foliopay.Fixtures;
 import dev.foliopay.service.NotificationService;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
@@ -14,8 +15,7 @@ import org.mockito.InOrder;
 
 @DisplayName("Webhook relay: the schedule, its failures and a weak secret")
 class WebhookRelayTest {
-  private static final WebhookProperties SETTINGS = new WebhookProperties("https://hooks.example.test/x", "s".repeat(32), 12,
-      Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5));
+  private static final WebhookProperties SETTINGS = Fixtures.webhook("https://hooks.example.test/x", "s".repeat(32), 12);
   private final NotificationService notifications = mock(NotificationService.class);
 
   @Test
@@ -38,8 +38,7 @@ class WebhookRelayTest {
   @Test
   @DisplayName("The relay refuses to start with a weak secret")
   void theRelayRefusesToStartWithAWeakSecret() {
-    WebhookProperties weak = new WebhookProperties("https://hooks.example.test/x", "short", 12,
-        Duration.ofSeconds(5), false, Duration.ofDays(30), Duration.ofSeconds(2), Duration.ofSeconds(5));
+    WebhookProperties weak = Fixtures.webhook("https://hooks.example.test/x", "short", 12);
     assertThatThrownBy(() -> new WebhookRelay(notifications, weak)).isInstanceOf(IllegalStateException.class);
   }
 }

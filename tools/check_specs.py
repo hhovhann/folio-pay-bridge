@@ -7,13 +7,20 @@
    target/surefire-reports. Run ./mvnw test first; with --no-reports this third check is skipped.
 4. Every entry in docs/agent-log.md is cited, as "(log N)", by a rule in docs/engineering-standards.md: a mistake is
    not finished until it has become a rule or a test, so the next agent does not make it again.
+5. Every operation in docs/openapi.json was sent by the tests at least once with success (2xx) and at least once refused (4xx),
+   counted from the requests the tests really sent (target/endpoint-calls.tsv, written by EndpointCallsRecorder): the positive
+   and the negative case of each endpoint measured, not listed by hand. An operation that takes input (a path or query parameter,
+   or a body) must be refused for its input (400, 404, 409, ...): SecurityIntegrationTest sends every operation without
+   credentials, so a 401 or 403 alone would pass for every one. Skipped with --no-reports, like check 3.
 """
-import pathlib, re, sys
+import json, pathlib, re, sys
 import xml.etree.ElementTree as ET
 
 root = pathlib.Path(__file__).resolve().parent.parent
 specs = root / "specs"
 errors = []
+# An operation with nothing a caller could get wrong: no credentials, no parameters, no body. Each entry says why.
+NO_REFUSAL = {"GET /api/v1/public/dashboard-config": "public by design (how to sign in) and takes no input: there is nothing to refuse"}
 
 
 def ran_tests():
@@ -32,6 +39,30 @@ def ran_tests():
             key = f"{simple}.{case.get('name').split('(')[0]}"
             results[key] = results.get(key, True) and not bad
     return results
+
+
+def endpoint_gaps():
+    """Check 5: the operations the tests never sent with success, or never sent and saw refused. Needs a run of the whole suite."""
+    recorded = root / "target" / "endpoint-calls.tsv"
+    if not recorded.is_file():
+        return ["target/endpoint-calls.tsv not found: run the whole suite (./mvnw test) first, or pass --no-reports"]
+    calls = [line.split("\t") for line in recorded.read_text(encoding="utf-8").splitlines() if line]
+    gaps = []
+    for path, operations in json.loads((root / "docs" / "openapi.json").read_text(encoding="utf-8"))["paths"].items():
+        shape = re.compile("^" + re.sub(r"\\\{[^}]+\\\}", "[^/]+", re.escape(path)) + "$")  # /links/{id}/pay matches /links/lnk_1/pay
+        for method, operation in operations.items():
+            name = f"{method.upper()} {path}"
+            statuses = {int(status) for sent, uri, status in calls if sent == method.upper() and shape.match(uri)}
+            takes_input = bool(operation.get("parameters")) or "requestBody" in operation
+            if not any(200 <= s < 300 for s in statuses):
+                gaps.append(f"{name}: no test sends it and sees it succeed (the last run of the whole suite)")
+            if name in NO_REFUSAL:
+                continue
+            if not any(400 <= s < 500 for s in statuses):
+                gaps.append(f"{name}: no test sends it and sees it refused (the last run of the whole suite)")
+            elif takes_input and not any(400 <= s < 500 and s not in (401, 403) for s in statuses):
+                gaps.append(f"{name}: takes input, but no test sends it a wrong one and sees it refused (only 401 or 403 seen)")
+    return gaps
 
 
 roadmap = (specs / "roadmap.md").read_text(encoding="utf-8")
@@ -92,6 +123,7 @@ if "--no-reports" not in sys.argv:
                 errors.append(f"docs/edge-cases.md: test {ref} was not found in the test reports")
             elif not reports[ref]:
                 errors.append(f"docs/edge-cases.md: test {ref} did not pass")
+    errors.extend(endpoint_gaps())
 # Every lesson in the agent log has become a rule in the engineering standards (and every citation points at a real entry).
 standards, log = root / "docs" / "engineering-standards.md", root / "docs" / "agent-log.md"
 if standards.is_file() and log.is_file():

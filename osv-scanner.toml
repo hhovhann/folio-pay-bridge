@@ -1,0 +1,12 @@
+# Advisories known and accepted, each with why it is not reachable here (SECURITY.md, supply chain). The scan in CI fails on any other.
+# Remove an entry when the dependency moves past it; ignoreUntil makes each one come back for review.
+
+[[IgnoredVulns]]
+id = "GHSA-j9f9-w8pj-32f8"
+ignoreUntil = 2027-03-31
+reason = "Spring MVC 6.2.x: server-sent events rendering view fragments. Fixed only in Spring Framework 7. This service renders no views and sends no server-sent events. Removed by the move to Spring Boot 4."
+
+[[IgnoredVulns]]
+id = "GHSA-pc63-qcmh-9cmg"
+ignoreUntil = 2027-03-31
+reason = "Spring MVC 6.2.x: XsltView. Fixed only in Spring Framework 7. This service has no XSLT view. Removed by the move to Spring Boot 4."
