@@ -41,6 +41,7 @@ class DashboardAuthTest {
   @Test
   @DisplayName("An authority that is not an HTTP URL is refused at start")
   void anAuthorityThatIsNotAnHttpUrlIsRefusedAtStart() {
-    assertThatThrownBy(() -> auth("https://idp.example.test/jwks", "", "javascript:alert(1)", "dashboard", "")).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> auth("https://idp.example.test/jwks", "", "javascript:alert(1)", "dashboard", ""))
+        .isInstanceOf(IllegalStateException.class);
   }
 }

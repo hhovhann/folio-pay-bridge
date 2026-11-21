@@ -111,9 +111,11 @@ class FailClosedStartupTest {
   @Test
   @DisplayName("An OAuth2 set-up without issuer or audience does not start")
   void anOAuth2SetUpWithoutIssuerOrAudienceDoesNotStart() {
-    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.auth.jwt.jwk-set-uri=https://127.0.0.1:1/jwks"))
+    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake",
+        "foliopay.auth.jwt.jwk-set-uri=https://127.0.0.1:1/jwks"))
         .hasStackTraceContaining("foliopay.auth.jwt.issuer is required");
-    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake", "foliopay.auth.jwt.jwk-set-uri=https://127.0.0.1:1/jwks",
+    assertThatThrownBy(() -> startWeb("server.port=0", "foliopay.keys=local", "foliopay.gateway=fake",
+        "foliopay.auth.jwt.jwk-set-uri=https://127.0.0.1:1/jwks",
         "foliopay.auth.jwt.issuer=https://auth.example.test")).hasStackTraceContaining("foliopay.auth.jwt.audience");
   }
 }

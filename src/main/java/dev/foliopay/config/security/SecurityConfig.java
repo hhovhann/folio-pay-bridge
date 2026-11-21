@@ -82,7 +82,8 @@ public class SecurityConfig {
     }
     if (audience.isBlank() && scopePrefix.isBlank()) {
       throw new IllegalStateException(
-          "foliopay.auth.jwt.audience (or, for an authorization server that sets no audience such as Cognito, foliopay.auth.jwt.scope-prefix) is required");
+          "foliopay.auth.jwt.audience (or, for an authorization server that sets no audience such as Cognito, "
+              + "foliopay.auth.jwt.scope-prefix) is required");
     }
     List<OAuth2TokenValidator<Jwt>> checks = new ArrayList<>();
     checks.add(JwtValidators.createDefaultWithIssuer(issuer));
@@ -100,6 +101,7 @@ public class SecurityConfig {
   }
 
   @Bean
+  @SuppressWarnings({"checkstyle:MethodLength", "checkstyle:ParameterNumber"})
   SecurityFilterChain api(
       HttpSecurity http, ApiKeys apiKeys,
       @Value("${foliopay.auth.jwt.jwk-set-uri:}") String jwkSetUri, @Value("${foliopay.auth.jwt.issuer:}") String issuer,
@@ -110,7 +112,8 @@ public class SecurityConfig {
     boolean realMoney = !gateway.isBlank() && !"fake".equals(gateway);
     if (!enforced && realMoney && !disabled) {
       throw new IllegalStateException(
-          "No authentication configured: set foliopay.auth.jwt.* (OAuth2) or foliopay.auth.api-keys. foliopay.auth.disabled=true is for a local demo only.");
+          "No authentication configured: set foliopay.auth.jwt.* (OAuth2) or foliopay.auth.api-keys. foliopay.auth.disabled=true is for a "
+              + "local demo only.");
     }
     AuthenticationEntryPoint refuse = SecurityConfig::unauthorized;
     http.csrf(AbstractHttpConfigurer::disable) // no session, no cookie: a forged cross-site request carries no credentials
@@ -128,7 +131,8 @@ public class SecurityConfig {
     http.addFilterBefore(new ApiKeyAuthenticationFilter(apiKeys, refuse), BearerTokenAuthenticationFilter.class);
     if (oauth2) {
       JwtDecoder decoder = jwtDecoder(jwkSetUri, issuer, audience, scopePrefix);
-      http.oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder).jwtAuthenticationConverter(jwt -> new JwtAuthenticationToken(jwt, scopes(jwt, scopePrefix), clientName(jwt))))
+      http.oauth2ResourceServer(o -> o.jwt(j -> j.decoder(decoder)
+          .jwtAuthenticationConverter(jwt -> new JwtAuthenticationToken(jwt, scopes(jwt, scopePrefix), clientName(jwt))))
           .authenticationEntryPoint(refuse));
     }
     return http.authorizeHttpRequests(a -> a

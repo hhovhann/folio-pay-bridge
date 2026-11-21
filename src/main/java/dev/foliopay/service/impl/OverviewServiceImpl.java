@@ -25,7 +25,8 @@ class OverviewServiceImpl implements OverviewService {
   private final PaymentLinkRepository links;
   private final Clock clock;
 
-  OverviewServiceImpl(ChargeRepository charges, PostingRepository postings, NotificationRepository notifications, PaymentLinkRepository links, Clock clock) {
+  OverviewServiceImpl(ChargeRepository charges, PostingRepository postings, NotificationRepository notifications, PaymentLinkRepository links,
+      Clock clock) {
     this.charges = charges;
     this.postings = postings;
     this.notifications = notifications;

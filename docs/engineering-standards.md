@@ -13,11 +13,12 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - Verify a claim against the primary source before repeating it, a reviewer's included; a review finding is confirmed by a failing test or by reading the code before it is fixed, and its suggested fix is checked against the system's own documentation as well (log 47, 55).
 - "Fixed" is a claim: name the test or command that proves it, in the commit, the validation box and the agent log (log 43, 44).
 - Prefer the reviewed standard (Spring Security, Flyway, Resilience4j) to a hand-written version, and ask before adding it (CLAUDE.md rule 7) (log 38).
+- The rules live in this file and in `CLAUDE.md`; a build check is how they hold, because a written rule and a careful review have both missed what a check caught. A standard tool holds a standard rule: Checkstyle for style and size, ArchUnit for architecture (both phase 22). A custom test is written only for a rule no tool can check, and goes in `ProjectRulesTest`; a security property of this system (a type that prints a secret, a card number left anywhere after a flow) is a real test, `SensitiveTypesTest` and `PciIntegrationTest`. Three hand-written checkers had grown to about 920 lines before this rule (log 68).
 - Before choosing a dependency's version, read its POM: what it pulls in (Jackson, Netty) must converge with what Spring Boot manages, and a test-only library is still in the build (log 53).
 
 ## 2. Architecture and design
 - Layers (D-14): `api` -> `service` interfaces -> `service.impl` -> `domain`, `repository`, `gateway` ports, `crypto`. A controller never touches a repository, an adapter or a fake; a service never touches HTTP; the domain knows no Spring. **Enforced** by `ArchitectureTest` (log 14).
-- Interface first, implementation package-private, constructor injection only (no field `@Autowired`: **enforced** by `CodeConventionsTest`).
+- Interface first, implementation package-private, constructor injection only (no field `@Autowired`: **enforced** by `ArchitectureTest`).
 - Ports and adapters: the core depends on `OperaClient` and `PspClient`; each outside system is an adapter that maps every reply to the port's vocabulary: done, declined (final), rejected (final, ours to fix), transient (retry with the same key), unreadable (unknown: keep what may have happened) (D-27, D-34) (log 32, 45).
 - The domain owns its rules: entities change state through verbs that enforce them (`markCaptured`, `moveToDeadLetter`), never setters; entities refer to each other by id, not JPA associations, so no lazy loading hides in a payment path (D-12).
 - Correctness lives in the database, not in process memory: unique keys decide who creates, conditional updates decide who claims, `@Version` decides who overwrites, and the further-along state wins a race (D-2, D-16, D-19, D-22, D-28) (log 15, 19).
@@ -33,16 +34,16 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - State a rule exactly: "an answer is stale if a later request's answer already arrived", not "the date never goes back" (log 41).
 
 ## 3. Java conventions (Google Java Style)
-- Two-space indentation; imports sorted, static first, no wildcards; braces on every `if`; no fully qualified class names in code (imports instead; JPQL strings excepted): **enforced** by `CodeConventionsTest` in `src/main` and `src/test` alike. A rule said to be enforced names what the check reads: this one read only `src/main` while the tests held about 140 full names (log 60).
-- Line length: Google's limit is 100. 896 lines of `src/main` exceed it (counted 2026-11-20); wrapping is left to a formatter (Spotless with google-java-format, a build plugin awaiting the owner's approval) rather than done by hand. New code stays under 150: **enforced** by `CodeConventionsTest`, which counts the lines over 150 in `src/main` and `src/test` (182 today, from 202 before phase 21) and fails when the count changes, so it can only go down (log 55).
+- Two-space indentation; imports sorted, static first, no wildcards, none unused; braces on every `if`, `else`, `for` and `while`; no fully qualified class names in code (imports instead; JPQL strings excepted): **enforced** by Checkstyle (`config/checkstyle/checkstyle.xml`) over `src/main` and `src/test`, in `validate`, before anything compiles. A rule said to be enforced names what the check reads: an earlier hand-written check read only `src/main` while the tests held about 140 full names (log 60), and missed some thirty bodies without braces that Checkstyle found at once (log 68).
+- Line length: at most 150 characters, **enforced** by Checkstyle everywhere; the 182 longer lines were wrapped in phase 22. Google's limit is 100; reaching it is left to a formatter (Spotless with google-java-format, awaiting the owner's approval, roadmap Next 6) rather than done by hand (log 55).
 - Names: classes are nouns, methods verbs; state changes `markX`, `recordX`, `moveToX`; booleans `isX`, `hasX`; constants `UPPER_SNAKE`; tests are sentences that say the behaviour (`aDeclineIsFinalAndNotRetried`), with a Javadoc line "Fails if ..." when the reason is not obvious.
 - Records for DTOs, commands and value objects; `final` fields; no `System.out`, no `printStackTrace` in `src/main` (**enforced**).
-- Size limits, **enforced** by `CleanCodeTest` from the JDK's own syntax tree (no regular expression guessing where a method ends) (log 64):
+- Size limits, **enforced** by Checkstyle (`MethodLength`, `ParameterNumber`, `FileLength`) on production code (log 64):
   - A method takes at most four parameters; beyond that, a parameter object. Constructors are exempt: they list collaborators.
   - A method body is at most thirty lines; beyond that, extract a named step.
-  - A class is at most three hundred lines.
+  - A file is at most 350 lines.
 
-  The code that broke a limit before it was checked is named in the test, which also fails when one is fixed, so each list only shrinks.
+  Code that broke a limit before it was checked says so where it is, `@SuppressWarnings("checkstyle:MethodLength")` or `("checkstyle:ParameterNumber")` on the method, or a line in `config/checkstyle/suppressions.xml` for a file. Such an exception is only ever removed, never added: a new one is a change a reviewer must agree to.
 - Money is `long` minor units with a currency (`Money`), never `double` or `BigDecimal` (**enforced** by `ArchitectureTest`, D-1). Time comes from the injected `Clock`; timestamps are `Instant`, stored in UTC; the hotel's day comes from the PMS (D-18, D-33).
 
 ## 4. API design
@@ -74,7 +75,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 |---|---|
 | No card number in an entity: only the sealed number, the first six and the last four | `PciIntegrationTest` |
 | No CVV, PIN or track data anywhere: no field, record component or column | `SensitiveTypesTest.noTypeAndNoTableHoldsACardVerificationCodeAPinOrTrackData` |
-| Nothing sensitive in a log: no card number, CVV, card token, password, access token or key, no raw body, no exception message (section 9) | `PciIntegrationTest`, `SensitiveTypesTest`, `CleanCodeTest`, `LogRedactorTest` |
+| Nothing sensitive in a log: no card number, CVV, card token, password, access token or key, no raw body, no exception message (section 9) | `PciIntegrationTest`, `SensitiveTypesTest`, `ProjectRulesTest`, `LogRedactorTest` |
 | Exception messages and third-party errors sanitised before they are logged, stored or returned | `Redacted`, `ErrorBodies`, `HttpAdapterRepliesTest` |
 | Redaction at every logging and observability boundary | `LogRedactor`: text and JSON logs, exceptions, the log context, the console's lines |
 | No secret in a configuration file | `tools/guard_secrets.py --repo`, in CI and as a hook |
@@ -125,12 +126,12 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - Amounts on the wire are read as exact decimals with their trailing zeros kept, never as binary floating point; a test round-trips a whole amount (800.00) and a currency with three decimals (log 52).
 
 ## 9. Logging, audit and observability
-- **Entry.** Every public service method begins with `log.debug("method(name=value, ...)", ...)`: its name and its safe parameters (ids, keys, amounts, statuses, a card's fingerprint). A DEBUG log of one request then shows every service call it made, in order. **Enforced** by `CleanCodeTest` (log 62).
+- **Entry.** Every public service method begins with `log.debug("method(name=value, ...)", ...)`: its name and its safe parameters (ids, keys, amounts, statuses, a card's fingerprint). A DEBUG log of one request then shows every service call it made, in order. **Enforced** by `ProjectRulesTest` (log 62).
 - **Levels.** INFO for every state change. WARN for a failure the system handles (a decline, a retry). ERROR for one a person must look at. Each line carries ids, keys, amounts and statuses; the request id and the client come from the log context. JSON in production (D-41).
 - **Never logged**: a card number, a CVV, a card token, a password, an access token, an API key, an encryption key, a raw request or response body, an exception's message.
   - Log the facts taken from a message by name, never the whole message, so a field added later cannot ride along.
   - An exception goes to a log as `Redacted.of(e)`: its class and stack, no message.
-  - **Enforced** by `CleanCodeTest`, `SensitiveTypesTest` and `PciIntegrationTest`, which runs a full flow at DEBUG (log 62).
+  - **Enforced** by `ProjectRulesTest`, `SensitiveTypesTest` and `PciIntegrationTest`, which runs a full flow at DEBUG (log 62).
 - **Types.** A type that holds a secret prints a redacted `toString()`, so logging it whole is safe. **Enforced** by `SensitiveTypesTest`, which runs each one (log 62).
 - **Redaction** happens at every boundary where text leaves the process, in one place, `LogRedactor`: both log formats, exceptions, the log context, the console's recent lines, and error codes read from OPERA and the processor. It is defence in depth, never the reason a value is safe (log 18, 30).
 - **Audit.** Security-relevant events go to the audit trail (`AuditLog`, logger `dev.foliopay.audit`, D-43). The application does not start with the trail off (log 63). It records:
@@ -145,7 +146,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 
 ## 10. Testing
 - The pyramid: unit tests with doubles for rules and services; `@WebMvcTest` for HTTP contracts; integration tests only for what needs the database; the full-flow suite for the HTTP adapters against the simulators.
-- Several inputs for one behaviour are a `@ParameterizedTest`, never a loop inside one test: each input is reported on its own and fails on its own, where a loop stops at the first failing input and hides which it was. Name each run after its input (`@ParameterizedTest(name = "HTTP {0}")`), and take the inputs from `@ValueSource`, `@CsvSource` or `@MethodSource`. An input that expects a different outcome is a test of its own, not a branch in the parameterized one. A loop that checks every element of one outcome (each row a query returned, each log event of one flow) is one case and stays a loop. **Enforced** by `CleanCodeTest.aTestWithSeveralWrittenOutInputsIsParameterized`, which refuses a plain test that loops over an array or a `List.of` it writes out (log 67).
+- Several inputs for one behaviour are a `@ParameterizedTest`, never a loop inside one test: each input is reported on its own and fails on its own, where a loop stops at the first failing input and hides which it was. Name each run after its input (`@ParameterizedTest(name = "HTTP {0}")`), and take the inputs from `@ValueSource`, `@CsvSource` or `@MethodSource`. An input that expects a different outcome is a test of its own, not a branch in the parameterized one. A loop that checks every element of one outcome (each row a query returned, each log event of one flow) is one case and stays a loop. **Enforced** by `ProjectRulesTest.aTestWithSeveralWrittenOutInputsIsParameterized`, which refuses a plain test that loops over an array or a `List.of` it writes out (log 67).
 - Every operation is tested both ways: at least one request that succeeds and one that is refused. Measured, not listed by hand: `EndpointCallsRecorder` writes every request the tests send through MockMvc, and `tools/check_specs.py` fails on an operation in `docs/openapi.json` without both; an exemption names its reason. An operation that takes input must be refused for its input (400, 404, 409), not only for missing credentials: a test that sends every operation without credentials would otherwise satisfy the check alone. Six operations had only their success tested (log 60).
 - A test asserts the cause happened, not only the outcome: the simulator consumed the fault, the race really ran (log 24). It asserts on what the system really receives (log 36), and checks that the check is not vacuous ("something was logged") (log 11): a unit test that reads state a mocked database never wrote proves nothing (log 58).
 - A double must not have the property under test that the real system lacks: a fake that deduplicates cannot prove "posted once" (log 8, 29).
@@ -157,10 +158,10 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - After a refactor, check the coverage of the lines a test claims to cover: a test can go on passing after it stops testing anything (log 34).
 - A check written as a pattern (a regex over source, a guard over commands) is mutation-checked like any test, with every spelling of what it forbids: a fully qualified annotation, a reordered command (log 43, 49).
 - The gate is 99% lines and 90% branches, measured on the CI runner; it is never lowered, and a margin of a few lines is not a margin (CI uploads the JaCoCo report) (log 48).
-- Every test and every test class has a `@DisplayName`: a sentence in the domain's words that says what it proves ("A long folio is read page by page, so its guest can be paid"), at least three words, unique within its class. Reports and the IDE show it. The method name stays the stable id that `validation.md`, `docs/edge-cases.md` and `tools/check_specs.py` cite, so renaming a method means updating those. **Enforced** by `CodeConventionsTest`, for every spelling of the test annotations (log 49, 56).
+- Every test and every test class has a `@DisplayName`: a sentence in the domain's words that says what it proves ("A long folio is read page by page, so its guest can be paid"), at least three words, unique within its class. Reports and the IDE show it. The method name stays the stable id that `validation.md`, `docs/edge-cases.md` and `tools/check_specs.py` cite, so renaming a method means updating those. **Enforced** by `ProjectRulesTest`, which reads the compiled tests, so every spelling of the annotations counts (log 49, 56).
 - A test that a review shows pinned the wrong behaviour is rewritten to the right behaviour and renamed, never quietly deleted, and the phase that ticked it says so (log 54).
 - A test whose code could hang if it regressed (a loop with no end) runs under `assertTimeoutPreemptively`, so the deliberate bug fails the test instead of stalling the build.
-- `ArchitectureTest`, `CodeConventionsTest`, `PciIntegrationTest`, `OpenApiContractTest` and `FailClosedStartupTest` are never weakened to make a change pass.
+- The Checkstyle configuration, `ArchitectureTest`, `ProjectRulesTest`, `SensitiveTypesTest`, `PciIntegrationTest`, `OpenApiContractTest` and `FailClosedStartupTest` are never weakened to make a change pass.
 
 ## 11. Documentation and specs
 - One phase at a time under `specs/`; a box in `validation.md` names the test or command that proves it, and is ticked only after running it; `tools/check_specs.py` checks every ticked test ran (log 13).
@@ -176,7 +177,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 - Commits and pushes need a person's approval; an agent never rewrites shared history.
 
 ## 13. Dependencies (no jar hell)
-- Spring Boot's dependency management is the source of versions; a version is declared only for what it does not manage, as a property (**enforced** by `CodeConventionsTest`) (log 55). A managed version is raised only to what a library using it was built against, with a comment saying when to remove the line (log 50).
+- Spring Boot's dependency management is the source of versions; a version is declared only for what it does not manage, as a property (**enforced** by `ProjectRulesTest`) (log 55). A managed version is raised only to what a library using it was built against, with a comment saying when to remove the line (log 50).
 - The enforcer runs on every build: one version per library (`dependencyConvergence`), never older than a dependency asked for (`requireUpperBoundDeps`), no duplicate declarations, the expected Java and Maven. A conflict fails at `validate`, before anything compiles (log 50).
 - Exclude what is not used (the AWS SDK's async Netty client): fewer jars, fewer advisories, fewer conflicts (log 50).
 - A library that talks to the outside world through its own HTTP stack gets one test with the real client against a local endpoint (`KmsWireTest`): a stubbed client cannot see a classpath problem (log 50).
@@ -198,7 +199,7 @@ How code is written here, by people and by AI agents. Every rule exists because 
 | OWASP API Security Top 10 | Section 5, risk by risk; card data opened only by `CardVault.withCard` | `SecurityIntegrationTest` (every operation, every scope), `PciIntegrationTest`, `tools/guard_secrets.py` in CI, OSV before a release |
 | YAGNI | No dead code (unused accessors are removed, not covered); no dependency without the owner's approval; no option nobody sets | The coverage gate (code nothing runs fails it), the enforcer, review (log 48, 58) |
 | KISS | The reviewed standard over a hand-written version (Spring Security, Flyway, Resilience4j); small classes and methods; one plain loop over a clever expression | Review (log 38) |
-| Clean Code | Names that say the behaviour, imports, braces, no console output, display names as sentences, no long lines added | `CodeConventionsTest` over `src/main` and `src/test` (log 49, 55, 60) |
+| Clean Code | Names that say the behaviour, imports, braces, no console output, display names as sentences, lines of 150 at most, small methods | Checkstyle, `ArchitectureTest`, `ProjectRulesTest` (log 49, 55, 60, 68) |
 | Clean Architecture | Layers point inward; ports and adapters; the domain knows no Spring; money as `long` minor units | `ArchitectureTest` (log 14) |
 | Clean deployment | Twelve-factor (section 6); one image built by CI; schema only through Flyway; fail closed at startup; health probes | `FailClosedStartupTest`, the CI image job, the Compose dry run (log 9, 17, 32) |
 | PCI DSS v4.0.1 | Section 5's rules; each requirement mapped to its control and test in `SECURITY.md` | `AuditTrailIntegrationTest`, `CardRetentionIntegrationTest`, `TransportSecurityGuardTest`, `SensitiveTypesTest`, OSV-Scanner in CI (log 62, 63) |

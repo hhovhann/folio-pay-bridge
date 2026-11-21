@@ -22,13 +22,15 @@ public interface NotificationRepository extends JpaRepository<Notification, Stri
    */
   @Query("select c from Charge c where c.status = :status and c.updatedAt >= :since and c.idempotencyKey not like 'shadow-%' "
       + "and not exists (select n.id from Notification n where n.eventId = concat(:prefix, c.id)) order by c.updatedAt")
-  List<Charge> chargesToAnnounce(@Param("status") Charge.Status status, @Param("prefix") String eventIdPrefix, @Param("since") Instant since, Pageable page);
+  List<Charge> chargesToAnnounce(@Param("status") Charge.Status status, @Param("prefix") String eventIdPrefix, @Param("since") Instant since,
+      Pageable page);
 
   /** Postings in {@code status} that changed since {@code since}, with no event of {@code type} yet, leaving out shadow runs. Oldest first. */
   @Query("select p from Posting p where p.status = :status and p.updatedAt >= :since "
       + "and not exists (select c.id from Charge c where c.id = p.chargeId and c.idempotencyKey like 'shadow-%') "
       + "and not exists (select n.id from Notification n where n.eventId = concat(:prefix, p.id)) order by p.updatedAt")
-  List<Posting> postingsToAnnounce(@Param("status") Posting.Status status, @Param("prefix") String eventIdPrefix, @Param("since") Instant since, Pageable page);
+  List<Posting> postingsToAnnounce(@Param("status") Posting.Status status, @Param("prefix") String eventIdPrefix, @Param("since") Instant since,
+      Pageable page);
 
   @Query("select n from Notification n where n.status = dev.foliopay.domain.model.Notification.Status.PENDING "
       + "and n.nextAttemptAt <= :now and (n.leaseUntil is null or n.leaseUntil < :now) order by n.nextAttemptAt")

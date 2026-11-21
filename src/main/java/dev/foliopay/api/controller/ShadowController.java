@@ -28,7 +28,8 @@ class ShadowController {
 
   ShadowController(ObjectProvider<ShadowService> shadow) { this.shadow = shadow; }
 
-  @Operation(summary = "Run shadow mode", description = "Replays synthetic bookings through the payment flow and compares each with the legacy stand-in.")
+  @Operation(summary = "Run shadow mode",
+      description = "Replays synthetic bookings through the payment flow and compares each with the legacy stand-in.")
   @PostMapping
   ShadowReport run(@Valid @RequestBody ShadowRequest request) {
     ShadowConfig config = "compat".equals(request.mode()) ? ShadowConfig.legacyCompatible() : ShadowConfig.strictNew();
@@ -36,6 +37,7 @@ class ShadowController {
     if (service == null) {
       throw new NotFoundException("Shadow runs use the in-memory fakes and are not available against external systems");
     }
-    return service.run(request.seed() == null ? DEFAULT_SEED : request.seed(), request.bookings() == null ? DEFAULT_BOOKINGS : request.bookings(), config);
+    return service.run(request.seed() == null ? DEFAULT_SEED : request.seed(), request.bookings() == null ? DEFAULT_BOOKINGS : request.bookings(),
+        config);
   }
 }

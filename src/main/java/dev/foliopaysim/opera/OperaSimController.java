@@ -58,6 +58,7 @@ class OperaSimController {
   // ---- OHIP: authentication (getToken)
   /** Client credentials: the client id and secret as HTTP Basic, the application key and enterprise id as headers, a scope in the form. */
   @PostMapping(value = "/oauth/v1/tokens", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+  @SuppressWarnings("checkstyle:ParameterNumber")
   ResponseEntity<Object> token(@RequestHeader(value = "x-app-key", required = false) String appKey,
                                @RequestHeader(value = "enterpriseId", required = false) String enterpriseId,
                                @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
@@ -104,6 +105,7 @@ class OperaSimController {
 
   // ---- OHIP: cashiering (postBillingPayment, getFolio)
   @PostMapping("/csh/v1/hotels/{hotelId}/reservations/{reservationId}/payments")
+  @SuppressWarnings({"checkstyle:MethodLength", "checkstyle:ParameterNumber"})
   ResponseEntity<Object> postPayment(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
                                      @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
                                      @RequestHeader(value = "x-app-key", required = false) String appKeyHeader,
@@ -165,6 +167,7 @@ class OperaSimController {
    * size, are sandbox questions.
    */
   @GetMapping("/csh/v1/hotels/{hotelId}/reservations/{reservationId}/folios")
+  @SuppressWarnings({"checkstyle:MethodLength", "checkstyle:ParameterNumber"})
   ResponseEntity<Object> folio(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
                                @RequestHeader(value = "x-hotelid", required = false) String hotelHeader,
                                @RequestHeader(value = "x-app-key", required = false) String appKeyHeader,

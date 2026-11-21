@@ -22,7 +22,8 @@ class SettlementParserTest {
   @Test
   @DisplayName("A wrong header fails loudly")
   void aWrongHeaderFailsLoudly() {
-    assertThatThrownBy(() -> SettlementParser.parse("ref,amount\ncap_1,1000")).isInstanceOf(InvalidRequestException.class).hasMessageContaining("Header");
+    assertThatThrownBy(() -> SettlementParser.parse("ref,amount\ncap_1,1000")).isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("Header");
   }
 
   @Test

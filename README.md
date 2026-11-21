@@ -24,7 +24,7 @@ You need a JDK 17 and Docker.
 git clone https://github.com/hhovhann/folio-pay-bridge && cd folio-pay-bridge
 export JAVA_HOME=<path to a JDK 17>
 
-# 1. Prove it: 619 backend test runs + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
+# 1. Prove it: 612 backend test runs + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
 ./mvnw clean verify && python3 tools/check_specs.py
 
 # 2. See the whole flow over real HTTP: bridge + PostgreSQL (Flyway) + OPERA simulator + processor simulator
@@ -93,13 +93,13 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | The schema is the reviewed migrations, and the entities match it | Flyway `V1__baseline.sql`, `V2__...sql` (per-client keys, change times, foreign keys) + `ddl-auto=validate`, run on PostgreSQL 16 in Compose |
 | The layers stay layers: no controller reaches a repository, no service reaches HTTP, the domain knows no Spring, money is never floating point | `ArchitectureTest` |
 | Logs at DEBUG carry no card number and no card token; production JSON logs are masked | `PciIntegrationTest`, `JsonLogConfigTest` |
-| No type prints a secret, nothing holds a CVV, no log call gets a raw body or an exception's message, and card tokens, credentials and secret fields are masked at every boundary | `SensitiveTypesTest`, `CleanCodeTest`, `LogRedactorTest`, `HttpAdapterRepliesTest` |
+| No type prints a secret, nothing holds a CVV, no log call gets a raw body or an exception's message, and card tokens, credentials and secret fields are masked at every boundary | `SensitiveTypesTest`, `ProjectRulesTest`, `LogRedactorTest`, `HttpAdapterRepliesTest` |
 | Refused credentials and scopes, every state-changing call, every card stored, opened or purged and every payment outcome are audited, and the trail cannot be switched off (PCI DSS 10.2) | `AuditTrailIntegrationTest`, `FailClosedStartupTest` |
 | A card number unused for 90 days is destroyed, never one with a payment pending (PCI DSS 3.2.1) | `CardRetentionIntegrationTest` |
 | OPERA, the processor and PostgreSQL are reached over verified TLS, or the app does not start (PCI DSS 4.2.1) | `TransportSecurityGuardTest` |
-| Policy is configuration (a different deposit rule or back-off is applied); services log their entry; methods and classes stay small; services are `@Service`; only `crypto` encrypts | `PaymentRequestPolicyTest`, `WebhookPropertiesTest`, `CleanCodeTest`, `ArchitectureTest` |
+| Policy is configuration (a different deposit rule or back-off is applied); services log their entry; methods and classes stay small; services are `@Service`; only `crypto` encrypts | `PaymentRequestPolicyTest`, `WebhookPropertiesTest`, `ProjectRulesTest`, `ArchitectureTest` |
 
-**619 backend test runs** (each input of a parameterized test counted on its own), each named by a sentence that says what it proves, and 16 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.8% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes, 11 of 11 in its cleanup, 14 of 14 in the final review, 28 of 28 in the safe-logs phase and its review). Every API operation is tested both succeeding and refused, counted from the requests the tests really send (`tools/check_specs.py`). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
+**612 backend test runs** (each input of a parameterized test counted on its own), each named by a sentence that says what it proves, and 16 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.8% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes, 11 of 11 in its cleanup, 14 of 14 in the final review, 28 of 28 in the safe-logs phase and its review, 22 of 22 rule violations refused once standard tools held the rules). Every API operation is tested both succeeding and refused, counted from the requests the tests really send (`tools/check_specs.py`). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
 
 ## Honest limits (read before you trust it)
 - **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer. OPERA cannot be run locally by anyone (OPERA Cloud is Oracle's hosted service; OPERA 5 is licensed to hotels), so the OPERA side follows Oracle's published contract and a test holds the adapter and the simulator to it; what the contract leaves open is a list of questions for the first sandbox session (`specs/roadmap.md`). Running for real needs OHIP partner access, which comes with the employer, and an acquirer's test environment.

@@ -32,7 +32,8 @@ class BookingController {
   private final BusinessDateService businessDates;
   private final boolean demoControls;
 
-  BookingController(BookingEventService bookings, Clock clock, BusinessDateService businessDates, @Value("${foliopay.demo-controls:false}") boolean demoControls) {
+  BookingController(BookingEventService bookings, Clock clock, BusinessDateService businessDates,
+      @Value("${foliopay.demo-controls:false}") boolean demoControls) {
     this.bookings = bookings;
     this.clock = clock;
     this.businessDates = businessDates;

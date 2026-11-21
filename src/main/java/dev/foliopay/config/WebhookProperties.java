@@ -54,7 +54,8 @@ public record WebhookProperties(
    */
   public void requireUsable() {
     if (secret == null || secret.length() < MIN_SECRET_LENGTH) {
-      throw new IllegalStateException("foliopay.webhook.secret must be at least " + MIN_SECRET_LENGTH + " characters when foliopay.webhook.url is set");
+      throw new IllegalStateException("foliopay.webhook.secret must be at least " + MIN_SECRET_LENGTH
+          + " characters when foliopay.webhook.url is set");
     }
     if (batchSize < 1 || batchSize > MAX_BATCH || firstRetry.isNegative() || firstRetry.isZero() || longestWait.compareTo(firstRetry) < 0) {
       throw new IllegalStateException(

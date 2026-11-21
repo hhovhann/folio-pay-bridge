@@ -5,7 +5,10 @@ import dev.foliopay.domain.model.Pan;
 import dev.foliopay.domain.model.SettlementLine;
 import java.util.List;
 
-/** Card processor port, so the acquirer can be swapped. Every call takes an idempotency key: the same key returns the same result and never charges twice. */
+/**
+ * Card processor port, so the acquirer can be swapped. Every call takes an idempotency key: the same key returns the same result and never charges
+ * twice.
+ */
 public interface PspClient {
   PspResult authorize(String idempotencyKey, Pan pan, String expiry, Money amount);
 

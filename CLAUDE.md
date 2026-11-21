@@ -14,7 +14,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
    - Nothing sensitive reaches a log: no card number, CVV, card token, password, access token or key, no raw request or response body, no exception message (`Redacted.of(e)`).
    - A type that holds a secret prints a redacted `toString()`.
    - Security-relevant events still go to the audit trail (`AuditLog`).
-   - Standards sections 5 and 9; `SensitiveTypesTest`, `CleanCodeTest` and `PciIntegrationTest` enforce it.
+   - Standards sections 5 and 9; `SensitiveTypesTest`, `ProjectRulesTest` and `PciIntegrationTest` enforce it.
 2. **Money is `long` minor units.** No `double`, no `BigDecimal` for amounts.
 3. **Every call that moves money carries an idempotency key,** and a retry reuses it. A change to the flow needs a test that repeats, races or loses a response.
 4. **A failure never loses a captured payment.** It must end up posted, or dead-lettered with a reason, never dropped.
@@ -33,7 +33,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
   - Business policy has no default in code.
   - A fact of a standard or protocol is a named constant.
   - A demo value lives in the demo, never in a production class.
-- **Code shape** (`CleanCodeTest`, `ArchitectureTest`):
+- **Code shape** (Checkstyle, `ArchitectureTest`, `ProjectRulesTest`):
   - Every public service method opens with `log.debug("method(name=value, ...)")`, safe values only.
   - `@Service` on services, `@Component` on infrastructure.
   - At most 4 parameters and 30 lines per method, 300 lines per class.
@@ -42,16 +42,17 @@ This is a payments codebase in miniature. Treat every change as one that touches
   - Success, refusal and edge cases.
   - Spring settings from the `test` profile (`src/test/resources/application-test.properties`); test data inline. Never `.env`.
   - A configured value is proved by a test that sets another.
-  - Several inputs for one behaviour: a `@ParameterizedTest` named after its input, never a loop in one test (`CleanCodeTest`).
+  - Several inputs for one behaviour: a `@ParameterizedTest` named after its input, never a loop in one test (`ProjectRulesTest`).
+- **Standard tools hold standard rules** (Checkstyle for style and size, ArchUnit for architecture); a custom check only for what no tool can check, in `ProjectRulesTest`. Never add a checker class of your own.
 - Close the loop: every agent-log entry is cited, as `(log N)`, by the rule in `docs/engineering-standards.md` or the test that now prevents it; `tools/check_specs.py` fails otherwise. Prefer a test or a tool over a written rule: the mistakes that stopped repeating are the ones a build catches.
 
 ## Structure (see D-14)
-`api` (controllers, DTOs, error handler) -> `service` (interfaces) + `service.impl` -> `domain` (entities, `Money`, rules, exceptions), `repository`, `gateway` (ports; HTTP adapters in `gateway.http`, fakes in `gateway.fake`), `crypto`; `config` (filters, retries, the webhook relay) and `config.security` (who may call what). The operator dashboard lives in `dashboard/` (React + TypeScript) and calls only the public API. A schema change is a new Flyway migration in `src/main/resources/db/migration`, never an edit of an applied one. A controller never touches a repository; a service never touches HTTP (`ArchitectureTest` fails the build otherwise, also for encryption outside `crypto` and a mislabelled stereotype). `CodeConventionsTest` checks imports, braces, injection, console output, a display name on every test, the count of lines over 150 characters and inline versions in the pom. `CleanCodeTest` checks entry logs, safe log arguments and size limits. `SensitiveTypesTest` checks that no type prints a secret and nothing holds a CVV. The public API is versioned in the path (`ApiPaths.V1` = `/api/v1`, D-39): inside a version only additive changes; a breaking change is a new version, and the old endpoint gets `@ApiDeprecation`. Errors are RFC 9457 problem details with a stable `code` (D-29). New behaviour: interface first, impl package-private, a unit test with test doubles, and an integration test only for what needs the real database.
+`api` (controllers, DTOs, error handler) -> `service` (interfaces) + `service.impl` -> `domain` (entities, `Money`, rules, exceptions), `repository`, `gateway` (ports; HTTP adapters in `gateway.http`, fakes in `gateway.fake`), `crypto`; `config` (filters, retries, the webhook relay) and `config.security` (who may call what). The operator dashboard lives in `dashboard/` (React + TypeScript) and calls only the public API. A schema change is a new Flyway migration in `src/main/resources/db/migration`, never an edit of an applied one. A controller never touches a repository; a service never touches HTTP (ArchUnit in `ArchitectureTest` fails the build otherwise, also for encryption outside `crypto`, a mislabelled stereotype, field injection or console output). Checkstyle (`config/checkstyle/checkstyle.xml`) checks imports, braces, lines of 150 at most, method and file size, parameter count and full class names in code, in `validate`. `ProjectRulesTest` checks what no tool can: entry logs, safe log arguments, parameterized inputs, display names, versions as properties. `SensitiveTypesTest` checks that no type prints a secret and nothing holds a CVV. The public API is versioned in the path (`ApiPaths.V1` = `/api/v1`, D-39): inside a version only additive changes; a breaking change is a new version, and the old endpoint gets `@ApiDeprecation`. Errors are RFC 9457 problem details with a stable `code` (D-29). New behaviour: interface first, impl package-private, a unit test with test doubles, and an integration test only for what needs the real database.
 
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 619 backend test runs + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 612 backend test runs + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)

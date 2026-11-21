@@ -21,11 +21,14 @@ class DashboardController {
     this.auth = auth;
   }
 
-  @Operation(summary = "Overview", description = "Money captured today per currency (the hotel's day) and every queue that needs a person. Computed by the database.")
+  @Operation(summary = "Overview",
+      description = "Money captured today per currency (the hotel's day) and every queue that needs a person. Computed by the database.")
   @GetMapping("/overview")
   OverviewService.Overview overview() { return overview.overview(); }
 
-  @Operation(summary = "How the dashboard signs in", description = "Public: none (open API, demo), oidc (authority, client id and scope for authorization code with PKCE), or unavailable (the API needs credentials and no identity provider is configured). Holds no secret.")
+  @Operation(summary = "How the dashboard signs in",
+      description = "Public: none (open API, demo), oidc (authority, client id and scope for authorization code with PKCE), or unavailable "
+          + "(the API needs credentials and no identity provider is configured). Holds no secret.")
   @GetMapping("/public/dashboard-config")
   DashboardAuth.Config dashboardConfig() { return auth.config(); }
 }

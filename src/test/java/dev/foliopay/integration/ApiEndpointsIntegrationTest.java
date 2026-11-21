@@ -49,12 +49,15 @@ class ApiEndpointsIntegrationTest extends TestBase {
   void aBookingEventBecomesAPaymentLinkThatAGuestPaysAndTheLedgerShowsIt() throws Exception {
     String id = newLinkId("B-EP1", "ADVANCE_PURCHASE", 80_000);
 
-    send("GET", "/api/v1/links", null).andExpect(status().isOk()).andExpect(jsonPath("$[0].status").value("OPEN")).andExpect(jsonPath("$[0].amountMinor").value(80_000));
-    JsonNode paid = body(send("POST", "/api/v1/links/" + id + "/pay", "{\"token\":\"" + token + "\"}").andExpect(status().isOk()).andExpect(jsonPath("$.outcome").value("OK")));
+    send("GET", "/api/v1/links", null).andExpect(status().isOk()).andExpect(jsonPath("$[0].status").value("OPEN"))
+        .andExpect(jsonPath("$[0].amountMinor").value(80_000));
+    JsonNode paid = body(send("POST", "/api/v1/links/" + id + "/pay", "{\"token\":\"" + token + "\"}").andExpect(status().isOk())
+        .andExpect(jsonPath("$.outcome").value("OK")));
     send("GET", "/api/v1/links", null).andExpect(jsonPath("$[0].status").value("PAID"));
     send("GET", "/api/v1/charges", null).andExpect(jsonPath("$[0].status").value("CAPTURED"));
     send("GET", "/api/v1/postings", null).andExpect(jsonPath("$[0].status").value("POSTED"));
-    send("POST", "/api/v1/postings/" + paid.path("posting").path("id").asText() + "/replay", null).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("POSTED"));
+    send("POST", "/api/v1/postings/" + paid.path("posting").path("id").asText() + "/replay", null).andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("POSTED"));
   }
 
   @Test
@@ -91,7 +94,8 @@ class ApiEndpointsIntegrationTest extends TestBase {
       String id = newLinkId("B-R" + i, "ADVANCE_PURCHASE", 10_000L * (i + 1));
       send("POST", "/api/v1/links/" + id + "/pay", "{\"token\":\"" + token + "\"}").andExpect(status().isOk());
     }
-    send("POST", "/api/v1/reconcile", "{\"mode\":\"clean\"}").andExpect(status().isOk()).andExpect(jsonPath("$.matched").value(3)).andExpect(jsonPath("$.exceptions").isEmpty());
+    send("POST", "/api/v1/reconcile", "{\"mode\":\"clean\"}").andExpect(status().isOk()).andExpect(jsonPath("$.matched").value(3))
+        .andExpect(jsonPath("$.exceptions").isEmpty());
     JsonNode messy = body(send("POST", "/api/v1/reconcile", "{\"mode\":\"messy\"}").andExpect(status().isOk()));
     assertThat(messy.path("exceptions").fieldNames()).toIterable().contains("MISSING_IN_SETTLEMENT", "AMOUNT_DIFFERENCE", "UNKNOWN_IN_SETTLEMENT");
   }
@@ -99,7 +103,8 @@ class ApiEndpointsIntegrationTest extends TestBase {
   @Test
   @DisplayName("Shadow mode runs only with valid input and reports the comparison")
   void shadowModeRunsOnlyWithValidInputAndReportsTheComparison() throws Exception {
-    send("POST", "/api/v1/shadow", "{\"bookings\":4,\"seed\":1,\"mode\":\"compat\"}").andExpect(status().isOk()).andExpect(jsonPath("$.bookings").value(4)).andExpect(jsonPath("$.mismatched").value(0));
+    send("POST", "/api/v1/shadow", "{\"bookings\":4,\"seed\":1,\"mode\":\"compat\"}").andExpect(status().isOk()).andExpect(jsonPath("$.bookings")
+        .value(4)).andExpect(jsonPath("$.mismatched").value(0));
     send("POST", "/api/v1/shadow", "{\"bookings\":3,\"mode\":\"strict\"}").andExpect(status().isOk());
     send("POST", "/api/v1/shadow", "{\"bookings\":9999}").andExpect(status().isBadRequest());
     send("POST", "/api/v1/shadow", "{\"mode\":\"nope\"}").andExpect(status().isBadRequest());
@@ -109,9 +114,11 @@ class ApiEndpointsIntegrationTest extends TestBase {
   @DisplayName("The demo controls show state, arm faults and reset; an unknown fault is refused")
   void theDemoControlsShowStateArmFaultsAndResetAndAnUnknownFaultIsRefused() throws Exception {
     send("GET", "/api/v1/sim", null).andExpect(status().isOk()).andExpect(jsonPath("$.opera").value("NONE"));
-    send("POST", "/api/v1/sim", "{\"psp\":\"DECLINE_NEXT\",\"opera\":\"DOWN\"}").andExpect(status().isOk()).andExpect(jsonPath("$.psp").value("DECLINE_NEXT")).andExpect(jsonPath("$.opera").value("DOWN"));
+    send("POST", "/api/v1/sim", "{\"psp\":\"DECLINE_NEXT\",\"opera\":\"DOWN\"}").andExpect(status().isOk()).andExpect(jsonPath("$.psp")
+        .value("DECLINE_NEXT")).andExpect(jsonPath("$.opera").value("DOWN"));
     send("POST", "/api/v1/sim", "{\"opera\":\"NOT_A_FAULT\"}").andExpect(status().isBadRequest());
-    send("POST", "/api/v1/sim", "{\"reset\":true}").andExpect(status().isOk()).andExpect(jsonPath("$.psp").value("NONE")).andExpect(jsonPath("$.pspCaptures").value(0));
+    send("POST", "/api/v1/sim", "{\"reset\":true}").andExpect(status().isOk()).andExpect(jsonPath("$.psp").value("NONE"))
+        .andExpect(jsonPath("$.pspCaptures").value(0));
     send("GET", "/api/v1/vault", null).andExpect(status().isOk()).andExpect(jsonPath("$[0].sealedPanHex").exists());
     send("GET", "/api/v1/logs", null).andExpect(status().isOk());
   }
@@ -131,7 +138,8 @@ class ApiEndpointsIntegrationTest extends TestBase {
   void errorsAreProblemDetailsWithAStableCode() throws Exception {
     send("GET", "/api/v1/nothing-here", null)
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
-        .andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.title").value("Not Found")).andExpect(jsonPath("$.code").value("NOT_FOUND"));
+        .andExpect(jsonPath("$.status").value(404)).andExpect(jsonPath("$.title").value("Not Found")).andExpect(jsonPath("$.code")
+            .value("NOT_FOUND"));
     send("POST", "/api/v1/postings/nope/replay", null)
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.detail").value("Unknown posting")).andExpect(jsonPath("$.code").value("NOT_FOUND"));

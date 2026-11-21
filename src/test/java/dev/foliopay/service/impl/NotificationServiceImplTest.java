@@ -78,7 +78,8 @@ class NotificationServiceImplTest {
     ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
     verify(repository).saveAndFlush(saved.capture());
     assertThat(saved.getValue().getEventId()).isEqualTo("folio.dead_lettered:" + p.getId());
-    assertThat(saved.getValue().getPayload()).contains("\"failureCategory\":\"REJECTED_BY_OPERA\"", "\"reason\":\"FOLIO_CLOSED\"", "\"type\":\"folio.dead_lettered\"");
+    assertThat(saved.getValue().getPayload())
+        .contains("\"failureCategory\":\"REJECTED_BY_OPERA\"", "\"reason\":\"FOLIO_CLOSED\"", "\"type\":\"folio.dead_lettered\"");
   }
 
   @Test

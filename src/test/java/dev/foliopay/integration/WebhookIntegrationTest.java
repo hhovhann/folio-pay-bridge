@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.sun.net.httpserver.HttpServer;
 import dev.foliopay.Fixtures;
 import dev.foliopay.TestBase;
-import dev.foliopay.config.WebhookProperties;
 import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.DeliverySchedule;
 import dev.foliopay.domain.model.Money;
@@ -120,7 +119,8 @@ class WebhookIntegrationTest extends TestBase {
     assertThat(RECEIVED).extracting(Received::id)
         .containsExactlyInAnyOrder("payment.captured:" + paid.charge().getId(), "folio.posted:" + paid.posting().getId());
     for (Received r : RECEIVED) {
-      assertThat(r.signature()).as("the receiver can verify it came from us").isEqualTo(WebhookSignature.sign(SECRET, Long.parseLong(r.timestamp()), r.body()));
+      assertThat(r.signature()).as("the receiver can verify it came from us")
+          .isEqualTo(WebhookSignature.sign(SECRET, Long.parseLong(r.timestamp()), r.body()));
       assertThat(r.body()).doesNotContain(PAN).doesNotContain(token).doesNotContain("4111");
     }
     assertThat(RECEIVED.stream().filter(r -> r.id().startsWith("payment.captured")).findFirst().orElseThrow().body())
@@ -189,7 +189,9 @@ class WebhookIntegrationTest extends TestBase {
   @Test
   @DisplayName("Two relays running at once deliver each event once")
   void twoRelaysRunningAtOnceDeliverEachEventOnce() throws Exception {
-    for (int i = 0; i < 5; i++) pay("BK-R" + i);
+    for (int i = 0; i < 5; i++) {
+      pay("BK-R" + i);
+    }
     notifications.collect();
     ExecutorService pool = Executors.newFixedThreadPool(2);
     Future<Integer> a = pool.submit(notifications::deliverDue);

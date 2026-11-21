@@ -101,7 +101,8 @@ class ShadowServiceImpl implements ShadowService {
 
   private static PaymentCommand commandFor(String runId, String token, ShadowBooking booking, ShadowConfig config) {
     Money amount = new Money(Pricing.total(booking, config.rounding()), booking.currency());
-    return PaymentCommand.bridge("shadow-" + runId + "-" + booking.ref(), booking.ref(), "F-" + booking.ref(), token, amount, Pricing.businessDate(booking, config.dateRule()));
+    return PaymentCommand.bridge("shadow-" + runId + "-" + booking.ref(), booking.ref(), "F-" + booking.ref(), token, amount,
+        Pricing.businessDate(booking, config.dateRule()));
   }
 
   /**

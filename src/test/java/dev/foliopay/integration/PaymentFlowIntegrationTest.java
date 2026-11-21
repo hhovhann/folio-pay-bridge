@@ -78,8 +78,12 @@ class PaymentFlowIntegrationTest extends TestBase {
     String key = newKey();
     ExecutorService pool = Executors.newFixedThreadPool(8);
     List<Callable<PaymentService.Result>> jobs = new ArrayList<>();
-    for (int i = 0; i < 8; i++) jobs.add(() -> pay(key, "F-200", 31_000));
-    for (Future<PaymentService.Result> done : pool.invokeAll(jobs)) done.get(); // none may fail
+    for (int i = 0; i < 8; i++) {
+      jobs.add(() -> pay(key, "F-200", 31_000));
+    }
+    for (Future<PaymentService.Result> done : pool.invokeAll(jobs)) {
+      done.get(); // none may fail
+    }
     pool.shutdown();
 
     // The fake processor also deduplicates by key, so this proves the database side: the unique key and the version column.
@@ -161,7 +165,9 @@ class PaymentFlowIntegrationTest extends TestBase {
     }
     List<Future<Posting>> running = jobs.stream().map(pool::submit).toList();
     start.countDown();
-    for (Future<Posting> done : running) done.get(); // none may fail
+    for (Future<Posting> done : running) {
+      done.get(); // none may fail
+    }
     pool.shutdown();
 
     assertThat(opera.postCount()).as("one payment, one folio entry").isEqualTo(1);
@@ -191,7 +197,8 @@ class PaymentFlowIntegrationTest extends TestBase {
       expected += amount;
     }
     assertThat(psp.capturedTotalMinor()).isEqualTo(expected);
-    assertThat(charges.findAll().stream().filter(c -> c.getStatus() == Charge.Status.CAPTURED).mapToLong(Charge::getAmountMinor).sum()).isEqualTo(expected);
+    assertThat(charges.findAll().stream().filter(c -> c.getStatus() == Charge.Status.CAPTURED).mapToLong(Charge::getAmountMinor).sum())
+        .isEqualTo(expected);
     assertThat(postingRepository.findAll().stream().filter(Posting::isPosted).mapToLong(Posting::getAmountMinor).sum()).isEqualTo(expected);
   }
 

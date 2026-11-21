@@ -13,4 +13,4 @@
 
 ## The whole build
 - [x] `./mvnw clean verify` (the coverage gate), `python3 tools/check_specs.py`, `python3 tools/guard_secrets.py --repo`, `python3 tools/guard_commands.py --self-test`
-- [x] `CodeConventionsTest.theNumberOfLinesOver150CharactersOnlyGoesDown` at 202
+- [x] Checkstyle `LineLength` at 150 (`config/checkstyle/checkstyle.xml`; every longer line wrapped in phase 22) at 202

@@ -72,7 +72,8 @@ public class OperaSimulator {
   private int folioPageSize = DEFAULT_FOLIO_PAGE_SIZE;
   private static final int DEFAULT_FOLIO_PAGE_SIZE = 20;
 
-  OperaSimulator(Clock clock, @Value("${sim.opera.token-ttl-seconds:3600}") long tokenTtlSeconds, @Value("${sim.opera.app-key:demo-app-key}") String appKey,
+  OperaSimulator(Clock clock, @Value("${sim.opera.token-ttl-seconds:3600}") long tokenTtlSeconds,
+      @Value("${sim.opera.app-key:demo-app-key}") String appKey,
                  @Value("${sim.opera.client-id:fpbridge}") String clientId, @Value("${sim.opera.client-secret:fpbridge-secret}") String clientSecret,
                  @Value("${sim.opera.enterprise-id:DEMOENT}") String enterpriseId) {
     this.clock = clock;
@@ -130,11 +131,13 @@ public class OperaSimulator {
    * A reservation the PMS itself created (a booking at the front desk or from a channel). A reservation it already holds is kept as it is:
    * booking the same id again must not put a guest in house back to due-in.
    */
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public synchronized Reservation book(String id, String guest, LocalDate arrival, int nights, long totalMinor, String currency) {
     long rateMinor = totalMinor / Math.max(1, nights);
     return reservations.computeIfAbsent(id, r -> new Reservation(r, guest, Status.DUE_IN, "", arrival, nights, rateMinor, currency));
   }
 
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public synchronized Posting postPayment(String hotelId, String reservationId, int window, String method, long cashierId, long amountMinor,
                                           String currency, String reference, String remark) {
     return post(hotelId, reservationId, window, "Payment", method, "Payment " + method, amountMinor, currency, reference, remark, cashierId);
@@ -146,6 +149,7 @@ public class OperaSimulator {
         .map(r -> post("DEMO1", r.id(), 1, "Revenue", ROOM_CODE, "Room charge", r.rateMinor(), r.currency(), "", "", cashierId));
   }
 
+  @SuppressWarnings("checkstyle:ParameterNumber")
   private Posting post(String hotelId, String reservationId, int window, String type, String code, String description, long amountMinor,
                        String currency, String reference, String remark, long cashierId) {
     Posting posting = new Posting(postings.size() + 1000L, hotelId, reservationId, window, type, code, description, amountMinor, currency,

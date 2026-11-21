@@ -13,6 +13,7 @@ public interface PaymentService {
   record PaymentCommand(
       String clientId, String idempotencyKey, String bookingRef, String folioId, String cardToken, Money amount, LocalDate businessDate) {
     /** A payment under the bridge's own keys (a payment link, a shadow run): one namespace, whichever client relayed it. */
+    @SuppressWarnings("checkstyle:ParameterNumber")
     public static PaymentCommand bridge(
         String idempotencyKey, String bookingRef, String folioId, String cardToken, Money amount, LocalDate businessDate) {
       return new PaymentCommand(Charge.BRIDGE_CLIENT, idempotencyKey, bookingRef, folioId, cardToken, amount, businessDate);

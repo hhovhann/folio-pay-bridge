@@ -25,7 +25,8 @@ public final class SimulatorHarness {
     args[1] = "--spring.main.banner-mode=off";
     args[2] = "--sim.zone=Asia/Dubai";
     System.arraycopy(extraArgs, 0, args, 3, extraArgs.length);
-    ConfigurableApplicationContext context = new SpringApplicationBuilder(SimulatorApplication.class).web(WebApplicationType.SERVLET).profiles(profile).run(args);
+    ConfigurableApplicationContext context = new SpringApplicationBuilder(SimulatorApplication.class).web(WebApplicationType.SERVLET)
+        .profiles(profile).run(args);
     return new Sim(context, "http://localhost:" + context.getEnvironment().getProperty("local.server.port"));
   }
 
@@ -45,7 +46,9 @@ public final class SimulatorHarness {
         byte[] bytes = reply.body().getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "application/json");
         exchange.sendResponseHeaders(reply.status(), bytes.length == 0 ? -1 : bytes.length);
-        if (bytes.length > 0) exchange.getResponseBody().write(bytes);
+        if (bytes.length > 0) {
+          exchange.getResponseBody().write(bytes);
+        }
         exchange.close();
       });
       server.start();

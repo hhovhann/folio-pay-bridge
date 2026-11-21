@@ -234,7 +234,8 @@ class HttpAdapterRepliesTest {
   @DisplayName("A decline is final; any other 4xx is ours to fix and is not retried")
   void aDeclineIsFinalAndAnyOther4xxIsOursAndNotRetried() {
     replies.put("/v1/authorizations", new Reply(402, "{}"));
-    assertThatThrownBy(() -> psp().authorize("k:auth", new Pan("4111111111111111"), "12/29", TEN)).isInstanceOf(PspDeclinedException.class).isNotInstanceOf(PspRejectedException.class);
+    assertThatThrownBy(() -> psp().authorize("k:auth", new Pan("4111111111111111"), "12/29", TEN)).isInstanceOf(PspDeclinedException.class)
+        .isNotInstanceOf(PspRejectedException.class);
     replies.put("/v1/authorizations", new Reply(400, "{}"));
     assertThatThrownBy(() -> psp().authorize("k:auth", new Pan("4111111111111111"), "12/29", TEN))
         .isInstanceOf(PspRejectedException.class).isNotInstanceOf(PspTransientException.class).hasMessageNotContaining("4111");
@@ -247,7 +248,8 @@ class HttpAdapterRepliesTest {
     replies.put("/v1/captures", new Reply(422, "{\"code\":\"AMOUNT_MISMATCH\",\"message\":\"no\"}"));
     assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class).hasMessageContaining("AMOUNT_MISMATCH");
     replies.put("/v1/captures", new Reply(404, "{\"code\":\"UNKNOWN_AUTHORIZATION\"}"));
-    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class).hasMessageContaining("UNKNOWN_AUTHORIZATION");
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class)
+        .hasMessageContaining("UNKNOWN_AUTHORIZATION");
   }
 
   /** Fails if every 409 is retried: a key reused with a different request would keep a charge, and a payment link, pending for ever. */
@@ -255,7 +257,8 @@ class HttpAdapterRepliesTest {
   @DisplayName("A key reused with a different request is final, not waited out")
   void aKeyReusedWithADifferentRequestIsFinalNotWaitedOut() {
     replies.put("/v1/captures", new Reply(409, "{\"code\":\"IDEMPOTENCY_KEY_REUSED\"}"));
-    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class).isNotInstanceOf(PspTransientException.class);
+    assertThatThrownBy(() -> psp().capture("k:cap", "auth_1", TEN)).isInstanceOf(PspRejectedException.class)
+        .isNotInstanceOf(PspTransientException.class);
   }
 
   /**
@@ -384,8 +387,12 @@ class HttpAdapterRepliesTest {
     HttpOperaClient client = opera();
     ExecutorService pool = Executors.newFixedThreadPool(callers);
     List<Future<LocalDate>> results = new ArrayList<>();
-    for (int i = 0; i < callers; i++) results.add(pool.submit(() -> client.businessDate("H1")));
-    for (Future<LocalDate> result : results) assertThat(result.get(10, TimeUnit.SECONDS)).isEqualTo(LocalDate.of(2026, 11, 17));
+    for (int i = 0; i < callers; i++) {
+      results.add(pool.submit(() -> client.businessDate("H1")));
+    }
+    for (Future<LocalDate> result : results) {
+      assertThat(result.get(10, TimeUnit.SECONDS)).isEqualTo(LocalDate.of(2026, 11, 17));
+    }
     pool.shutdown();
 
     assertThat(tokensIssued.get()).as("the first token, and one replacement").isEqualTo(2);
@@ -397,8 +404,10 @@ class HttpAdapterRepliesTest {
   void httpModeRefusesToStartWithoutItsAddressesAndCredentials() {
     HttpGatewayProperties none =
         new HttpGatewayProperties(null, null, null, null, null, null, null, null, Duration.ofSeconds(2), Duration.ofSeconds(3));
-    assertThatThrownBy(() -> new HttpOperaClient(none, RestClient.builder(), Clock.systemUTC())).isInstanceOf(IllegalStateException.class).hasMessageContaining("opera-base-url");
-    assertThatThrownBy(() -> new HttpPspClient(none, RestClient.builder())).isInstanceOf(IllegalStateException.class).hasMessageContaining("psp-base-url");
+    assertThatThrownBy(() -> new HttpOperaClient(none, RestClient.builder(), Clock.systemUTC())).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("opera-base-url");
+    assertThatThrownBy(() -> new HttpPspClient(none, RestClient.builder())).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("psp-base-url");
     HttpGatewayProperties noSecret =
         new HttpGatewayProperties(url, "app", "client", " ", "ENT", "scope", url, "k", Duration.ofSeconds(2), Duration.ofSeconds(3));
     assertThatThrownBy(() -> new HttpOperaClient(noSecret, RestClient.builder(), Clock.systemUTC())).hasMessageContaining("opera-client-secret");

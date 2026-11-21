@@ -36,7 +36,8 @@ class PciIntegrationTest extends TestBase {
     payments.pay(PaymentCommand.bridge("pci-1", "BK-1", "F-1", token, new Money(10_000, "USD"), LocalDate.of(2026, 11, 17)));
     JdbcTemplate jdbc = new JdbcTemplate(dataSource);
 
-    List<Map<String, Object>> columns = jdbc.queryForList("select table_name, column_name from information_schema.columns where table_schema = 'PUBLIC'");
+    List<Map<String, Object>> columns = jdbc.queryForList("select table_name, column_name from information_schema.columns where table_schema "
+        + "= 'PUBLIC'");
     assertThat(columns).as("the schema was created").isNotEmpty();
     for (Map<String, Object> column : columns) {
       String sql = "select \"" + column.get("COLUMN_NAME") + "\" from \"" + column.get("TABLE_NAME") + "\"";
@@ -76,9 +77,13 @@ class PciIntegrationTest extends TestBase {
     for (ILoggingEvent event : raw.list) {
       StringBuilder everything = new StringBuilder(event.getFormattedMessage());
       if (event.getArgumentArray() != null) {
-        for (Object arg : event.getArgumentArray()) everything.append(' ').append(arg);
+        for (Object arg : event.getArgumentArray()) {
+          everything.append(' ').append(arg);
+        }
       }
-      for (IThrowableProxy t = event.getThrowableProxy(); t != null; t = t.getCause()) everything.append(' ').append(t.getMessage());
+      for (IThrowableProxy t = event.getThrowableProxy(); t != null; t = t.getCause()) {
+        everything.append(' ').append(t.getMessage());
+      }
       // The token is not card data, but whoever holds it can charge the card, so it is kept out of logs like a credential.
       assertThat(everything.toString()).as(event.getLoggerName()).doesNotContain(PAN).doesNotContain("4111 1111 1111").doesNotContain(fresh);
     }

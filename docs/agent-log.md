@@ -146,4 +146,11 @@ A pilot, not production. These are the corrections made while building it with C
     - The rule's first version missed two tables written into a local `Map.of` before the loop; it now follows a local name back to a written-out value.
     - `CleanCodeTest.aTestWithSeveralWrittenOutInputsIsParameterized` refuses a plain test that loops over an array or a `List.of` it writes out (a deliberate loop put back was caught, `var/mutate_p21.py`).
 
+68. **Hand-written checkers had grown to about 920 lines, rebuilding standard tools and missing what they catch.** `CodeConventionsTest` (regular expressions), `CleanCodeTest` (the JDK parser) and `ArchitectureTest` (import lines) each read the sources their own way, though the standards prefer a reviewed standard to a hand-written version (log 38). The owner asked why such classes exist when the rules belong in the instructions, and whether they were redundant (2026-11-21).
+    - The rules stay in the instructions; a build check is how they hold. Phase 21 showed it: a written rule and a careful review both missed a request object that printed a card token, and the build caught it.
+    - Checkstyle and ArchUnit now hold the standard rules (owner-approved). On its first run Checkstyle found four unused imports and about thirty bodies without braces that the regular expression had let through: it looked only for `if (...) return ...;`.
+    - The 182 lines over 150 characters were wrapped by a script that breaks only outside strings and comments; all 619 test runs passed before and after.
+    - `CodeConventionsTest` and `CleanCodeTest` are deleted. `ProjectRulesTest` keeps the five rules no tool can check, and `ArchitectureTest` keeps its test names on ArchUnit.
+    - A violation of each rule was put back on purpose, and the build refused each one (`var/mutate_p22.py`).
+
 Pattern: the agents are quick at the shape of the code and weak at **what the test would actually catch**, at **what is really on the screen**, and at **saying a fix is complete when it is not**. So the brief makes tests name their failure, the demo asserts every claim, and a log entry that says "fixed" names the check that proves it.

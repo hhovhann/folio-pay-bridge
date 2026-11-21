@@ -94,10 +94,13 @@ class LinkPaymentIntegrationTest extends TestBase {
       }));
     }
     start.countDown();
-    for (var done : running) done.get(); // none may fail
+    for (var done : running) {
+      done.get(); // none may fail
+    }
     pool.shutdown();
 
-    assertThat(links.findByBookingRef("B9")).as("every delivery after the first is a repeat").singleElement().satisfies(l -> assertThat(l.isOpen()).isTrue());
+    assertThat(links.findByBookingRef("B9")).as("every delivery after the first is a repeat").singleElement().satisfies(l -> assertThat(l.isOpen())
+        .isTrue());
   }
 
   @Test

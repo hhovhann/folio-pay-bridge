@@ -39,7 +39,8 @@ class PostingServiceImpl implements PostingService {
   private final Duration lease;
 
   PostingServiceImpl(
-      PostingRepository repository, OperaClient opera, OperaProperties settings, IdempotentStore store, @Qualifier("folioRetry") Retry folioRetry, Clock clock,
+      PostingRepository repository, OperaClient opera, OperaProperties settings, IdempotentStore store, @Qualifier("folioRetry") Retry folioRetry,
+          Clock clock,
       @Qualifier("postingLease") Duration lease) {
     this.repository = repository;
     this.opera = opera;
@@ -100,6 +101,7 @@ class PostingServiceImpl implements PostingService {
     return repository.findById(posting.getId()).orElseThrow();
   }
 
+  @SuppressWarnings("checkstyle:MethodLength")
   private Posting attempt(Posting posting, String owner) {
     posting.recordAttempt();
     try {

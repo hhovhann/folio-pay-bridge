@@ -5,7 +5,7 @@
 - [x] Every record that holds a secret as text prints it redacted (failed first, on `PayRequest`): `SensitiveTypesTest.everyRecordThatHoldsASecretAsTextPrintsItRedacted`
 - [x] No type and no table holds a card verification code, a PIN or track data: `SensitiveTypesTest.noTypeAndNoTableHoldsACardVerificationCodeAPinOrTrackData`
 - [x] A third-party error that echoes secrets is redacted before it becomes our message: `HttpAdapterRepliesTest.aThirdPartyErrorThatEchoesSecretsIsRedactedBeforeItBecomesOurMessage`
-- [x] No log call is handed a whole message, and exceptions reach a log only through `Redacted`: `CleanCodeTest.noLogCallIsHandedARawBodyRequestResponseOrCommand`, `CleanCodeTest.exceptionsReachALogOnlyThroughRedacted`
+- [x] No log call is handed a whole message, and exceptions reach a log only through `Redacted`: `ProjectRulesTest.noLogCallIsHandedARawBodyRequestResponseOrCommand`, `ProjectRulesTest.exceptionsReachALogOnlyThroughRedacted`
 - [x] A full flow at DEBUG still logs no card number and no card token: `PciIntegrationTest.theCardNumberAndTheCardTokenAreNeverLoggedEvenAtDebugLevel`
 
 ## The audit trail (D-43)
@@ -23,9 +23,9 @@
 ## Configuration and code rules
 - [x] A different deposit policy and a different webhook back-off are applied as configured: `PaymentRequestPolicyTest.anotherHotelsPolicyIsAppliedAsConfigured`, `WebhookPropertiesTest.theDeliveryBackOffComesFromTheSettings`
 - [x] The demo's messy statement lives in the demo service: `DemoServiceImplTest.theMessyStatementDropsOneCaptureSettlesOneShortAndAddsOneWeNeverCaptured`, `ReconciliationServiceImplTest.theAcquirersOwnStatementIsReconciledExactlyAsTheProcessorReportsIt`
-- [x] Every public service method logs its entry; the size limits hold with today's exceptions named: `CleanCodeTest.*`
+- [x] Every public service method logs its entry; the size limits hold with today's exceptions named: `ProjectRulesTest.*` and Checkstyle `MethodLength`, `ParameterNumber`, `FileLength` (`config/checkstyle/checkstyle.xml`, since phase 22)
 - [x] Services are marked `@Service` and nothing else is; encryption only in `crypto`: `ArchitectureTest.servicesAreMarkedServiceAndNothingElseIs`, `ArchitectureTest.encryptionAndKeyManagementHappenOnlyInTheCryptoPackage`
-- [x] `CodeConventionsTest.theNumberOfLinesOver150CharactersOnlyGoesDown` at 182 (from 202)
+- [x] Checkstyle `LineLength` at 150 (`config/checkstyle/checkstyle.xml`; every longer line wrapped in phase 22) at 182 (from 202)
 
 ## Findings of the code review (agent log 65)
 - [x] A payment repeated after its card was purged gets its first result (failed first): `ChargeServiceImplTest.aRepeatOfAFinishedChargeGetsItsFirstResultEvenAfterItsCardIsGone`, `CardRetentionIntegrationTest.aPaymentRepeatedAfterItsCardWasPurgedGetsItsFirstResult`
@@ -35,7 +35,7 @@
 - [x] The configuration recorded at start includes the signing-key address: `AuditTrailTest.theStartRecordsTheConfigurationByValueAndEachSecretOnlyAsSetOrNotSet`
 
 ## Parameterized tests (agent log 67)
-- [x] A plain test that loops over written-out inputs, directly or through a local, fails the build: `CleanCodeTest.aTestWithSeveralWrittenOutInputsIsParameterized`
+- [x] A plain test that loops over written-out inputs, directly or through a local, fails the build: `ProjectRulesTest.aTestWithSeveralWrittenOutInputsIsParameterized`
 - [x] Twenty-one input loops are `@ParameterizedTest`s, each run named after its input; their contrasting cases are tests of their own and cited beside them (`HttpAdapterRepliesTest`, `ApiKeysTest`, `HostAllowlistFilterTest`, `OpenApiContractTest`, `FailClosedStartupTest`, `TransportSecurityGuardTest`, `OperaPropertiesTest`, `PaymentRequestPolicyTest`, `WebhookPropertiesTest`): `HttpAdapterRepliesTest.aFolioWithNoWindowsYetProvesThePaymentAbsent`, `ApiKeysTest.aListOfOnlyBlanksAndCommasHasNoKeys`, `WebhookPropertiesTest.theShippedDeliveryScheduleStarts`
 
 ## Proof the checks can fail

@@ -33,7 +33,8 @@ class RemoteCreationIntegrationTest extends TestBase {
   private static String due(int days) { return LocalDate.now(ZoneId.of("Asia/Dubai")).plusDays(days).toString(); }
 
   private ResultActions create(String reference, long amount, String due, String description) throws Exception {
-    String body = "{\"reference\":\"" + reference + "\",\"folioId\":\"F-BRUNCH\",\"amountMinor\":" + amount + ",\"currency\":\"AED\",\"dueDate\":\"" + due + "\""
+    String body = "{\"reference\":\"" + reference + "\",\"folioId\":\"F-BRUNCH\",\"amountMinor\":" + amount + ",\"currency\":\"AED\",\"dueDate\":\""
+        + due + "\""
         + (description == null ? "" : ",\"description\":\"" + description + "\"") + "}";
     return mvc.perform(post("/api/v1/links").contentType(MediaType.APPLICATION_JSON).content(body));
   }
@@ -41,8 +42,10 @@ class RemoteCreationIntegrationTest extends TestBase {
   @Test
   @DisplayName("A payment request creates one open link, and sending it again changes nothing")
   void aRequestCreatesOneOpenLinkAndSendingItAgainChangesNothing() throws Exception {
-    create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value("Friday brunch, table for 4"));
-    create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note").value(Matchers.startsWith("No change")));
+    create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note")
+        .value("Friday brunch, table for 4"));
+    create("FNB-2026-1201", 45_000, due(3), "Friday brunch, table for 4").andExpect(status().isOk()).andExpect(jsonPath("$.note")
+        .value(Matchers.startsWith("No change")));
 
     assertThat(links.findByBookingRef("req:FNB-2026-1201")).singleElement().satisfies(l -> {
       assertThat(l.getStatus()).isEqualTo(PaymentLink.Status.OPEN);

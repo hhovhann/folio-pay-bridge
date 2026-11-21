@@ -27,7 +27,9 @@ class NotificationTest {
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofSeconds(30));
     n.recordFailure("The receiver answered 500", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofMinutes(1));
-    for (int i = 0; i < 8; i++) n.recordFailure("down", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
+    for (int i = 0; i < 8; i++) {
+      n.recordFailure("down", NOW, new DeliverySchedule(12, Duration.ofSeconds(30), Duration.ofHours(1)));
+    }
     assertThat(Duration.between(NOW, n.getNextAttemptAt())).isEqualTo(Duration.ofHours(1));
     assertThat(n.getStatus()).isEqualTo(Notification.Status.PENDING);
 

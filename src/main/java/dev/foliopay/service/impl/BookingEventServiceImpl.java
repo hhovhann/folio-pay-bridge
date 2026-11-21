@@ -78,7 +78,8 @@ class BookingEventServiceImpl implements BookingEventService {
       if (state.paid()) {
         return new Outcome(state.all(), false, "Already paid: a new amount needs a separate request");
       }
-      String reason = request.description() == null || request.description().isBlank() ? "Payment request" : SafeText.clean(request.description(), MAX_DESCRIPTION);
+      String reason = request.description() == null || request.description()
+          .isBlank() ? "Payment request" : SafeText.clean(request.description(), MAX_DESCRIPTION);
       return offer(reference, request.folioId(), amount, request.dueDate(), reason, state.open());
     });
   }
@@ -126,7 +127,8 @@ class BookingEventServiceImpl implements BookingEventService {
         throw new ConflictException("Another payment on this link is in progress");
       }
     } else if (!((link.isPaying() || link.isPaid()) && link.isHeldBy(fingerprint))) {
-      throw link.isPaying() ? new ConflictException("Another payment on this link is in progress") : new GoneException("This payment link is " + link.getStatus());
+      throw link.isPaying() ? new ConflictException("Another payment on this link is in progress") : new GoneException("This payment link is "
+          + link.getStatus());
     }
     String key = "link:" + linkId + ":" + fingerprint;
     PaymentService.Result result;
@@ -185,10 +187,12 @@ class BookingEventServiceImpl implements BookingEventService {
       return new Outcome(state.all(), true, "Already paid: a changed total needs a manual balance or refund decision");
     }
     Decision decision = policy.decide(event.ratePlan(), event.arrival(), event.total().minor(), today);
-    return offer(event.bookingRef(), event.folioId(), new Money(decision.amountMinor(), event.total().currency()), decision.dueDate(), decision.reason(), state.open());
+    return offer(event.bookingRef(), event.folioId(), new Money(decision.amountMinor(), event.total()
+        .currency()), decision.dueDate(), decision.reason(), state.open());
   }
 
   /** Keeps an open request with the same terms (a repeat changes nothing); otherwise replaces it with one on the new terms. */
+  @SuppressWarnings("checkstyle:ParameterNumber")
   private Outcome offer(String reference, String folioId, Money amount, LocalDate dueDate, String reason, PaymentLink open) {
     if (open != null && open.hasTerms(folioId, amount, dueDate)) {
       return new Outcome(links.findByBookingRef(reference), false, "No change: the open request already has these terms");
@@ -201,7 +205,8 @@ class BookingEventServiceImpl implements BookingEventService {
       }
       links.saveAndFlush(new PaymentLink(reference, folioId, amount, dueDate, reason));
     });
-    log.info("Payment request for {} is now {} {} due {}{}", reference, amount.minor(), amount.currency(), dueDate, open != null ? " (replaced the open one)" : "");
+    log.info("Payment request for {} is now {} {} due {}{}", reference, amount.minor(), amount.currency(), dueDate,
+        open != null ? " (replaced the open one)" : "");
     return new Outcome(links.findByBookingRef(reference), false, reason);
   }
 }

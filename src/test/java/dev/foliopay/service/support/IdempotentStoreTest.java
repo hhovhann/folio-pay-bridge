@@ -54,7 +54,8 @@ class IdempotentStoreTest {
   void aTwinThatLosesTheInsertReturnsTheWinnersRow() {
     transactionRunsCallback();
     AtomicInteger lookups = new AtomicInteger();
-    String result = store.findOrCreate(() -> lookups.getAndIncrement() == 0 ? Optional.empty() : Optional.of("winner"), () -> { throw new DataIntegrityViolationException("duplicate key"); });
+    String result = store.findOrCreate(() -> lookups.getAndIncrement() == 0 ? Optional.empty() : Optional.of("winner"),
+        () -> { throw new DataIntegrityViolationException("duplicate key"); });
     assertThat(result).isEqualTo("winner");
   }
 
@@ -62,7 +63,8 @@ class IdempotentStoreTest {
   @DisplayName("A constraint failure with no row to read is not hidden")
   void aConstraintFailureWithNoRowToReadIsNotHidden() {
     transactionRunsCallback();
-    assertThatThrownBy(() -> store.findOrCreate(Optional::empty, () -> { throw new DataIntegrityViolationException("other violation"); })).isInstanceOf(DataIntegrityViolationException.class);
+    assertThatThrownBy(() -> store.findOrCreate(Optional::empty, () -> { throw new DataIntegrityViolationException("other violation"); }))
+        .isInstanceOf(DataIntegrityViolationException.class);
   }
 
   @Test
@@ -87,7 +89,13 @@ class IdempotentStoreTest {
     Item stored = new Item(0);
     Item ours = new Item(2);
     AtomicInteger saves = new AtomicInteger();
-    Item result = store.saveMerging(ours, i -> { if (saves.getAndIncrement() == 0) throw lost(); return i; }, () -> stored, (s, mine) -> mine.rank > s.rank, s -> { s.rank = ours.rank; return s; });
+    Item result = store.saveMerging(ours, i -> {
+      if (saves.getAndIncrement() == 0) {
+        throw lost();
+      }
+      return i;
+    }, () -> stored,
+        (s, mine) -> mine.rank > s.rank, s -> { s.rank = ours.rank; return s; });
     assertThat(result).isSameAs(stored);
     assertThat(result.rank).as("the capture was not lost").isEqualTo(2);
     assertThat(saves).hasValue(2);

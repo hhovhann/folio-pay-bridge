@@ -38,7 +38,8 @@ public class RecentLogs {
         if (!e.getLoggerName().startsWith("dev.foliopay")) {
           return;
         }
-        add(F.format(Instant.ofEpochMilli(e.getTimeStamp())) + " " + e.getLevel() + " " + shortName(e.getLoggerName()) + " - " + LogRedactor.safe(e.getFormattedMessage()));
+        add(F.format(Instant.ofEpochMilli(e.getTimeStamp())) + " " + e.getLevel() + " " + shortName(e.getLoggerName()) + " - "
+            + LogRedactor.safe(e.getFormattedMessage()));
       }
     };
     app.setContext(root.getLoggerContext());
@@ -61,7 +62,9 @@ public class RecentLogs {
 
   public synchronized void add(String line) {
     lines.addLast(line);
-    while (lines.size() > 200) lines.removeFirst();
+    while (lines.size() > 200) {
+      lines.removeFirst();
+    }
   }
 
   public synchronized List<String> tail(int n) {

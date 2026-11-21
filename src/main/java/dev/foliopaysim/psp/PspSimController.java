@@ -77,7 +77,9 @@ class PspSimController {
       return error(HttpStatus.PAYMENT_REQUIRED, "CAPTURE_DECLINED", "Capture declined");
     }
     PspSimulator.Entry capture = psp.once(key, () -> psp.actingOn(auth.get(), "CAPTURE", request.amountMinor(), request.currency(), "CAPTURED"));
-    if (psp.consume(PspSimulator.Fault.TIMEOUT_AFTER_CAPTURE)) Thread.sleep(TIMEOUT_AFTER_CAPTURE_MILLIS); // captured, but the reply arrives too late
+    if (psp.consume(PspSimulator.Fault.TIMEOUT_AFTER_CAPTURE)) {
+      Thread.sleep(TIMEOUT_AFTER_CAPTURE_MILLIS); // captured, but the reply arrives too late
+    }
     return created(capture);
   }
 

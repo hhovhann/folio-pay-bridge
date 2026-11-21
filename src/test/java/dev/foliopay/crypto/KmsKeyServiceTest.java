@@ -31,7 +31,8 @@ class KmsKeyServiceTest {
   @DisplayName("Asks KMS for an AES-256 key bound to the token")
   void asksKmsForAnAes256KeyBoundToTheToken() {
     when(kms.generateDataKey(any(GenerateDataKeyRequest.class)))
-        .thenReturn(GenerateDataKeyResponse.builder().plaintext(SdkBytes.fromByteArray(PLAIN)).ciphertextBlob(SdkBytes.fromByteArray(WRAPPED)).keyId(KEY_ARN).build());
+        .thenReturn(GenerateDataKeyResponse.builder().plaintext(SdkBytes.fromByteArray(PLAIN)).ciphertextBlob(SdkBytes.fromByteArray(WRAPPED))
+            .keyId(KEY_ARN).build());
 
     DataKey key = service.newDataKey("tok_1");
 

@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN" "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+<!-- Files over a limit before it was checked (phase 22). Each line may only be removed: split the file, then delete its line here. -->
+<suppressions>
+  <!-- Size limits hold for production code; a test class gathers the cases of one unit and may be longer, as before phase 22. -->
+  <suppress checks="FileLength|MethodLength|ParameterNumber" files="[/\\]src[/\\]test[/\\]"/>
+  <!-- OHIP's token, posting, folio paging and reply classification in one adapter: 362 lines. -->
+  <suppress checks="FileLength" files="[/\\]gateway[/\\]http[/\\]HttpOperaClient\.java$"/>
+</suppressions>

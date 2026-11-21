@@ -69,10 +69,12 @@ public class PspSimulator {
   }
 
   /** A capture or a void of an authorisation: it travels the same network and carries the authorisation's approval code. */
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public Entry actingOn(Entry authorisation, String kind, long amountMinor, String currency, String state) {
     return entry(kind, "", authorisation.network(), authorisation.approval(), amountMinor, currency, state, authorisation.ref());
   }
 
+  @SuppressWarnings("checkstyle:ParameterNumber")
   private Entry entry(String kind, String last4, String network, String approval, long amountMinor, String currency, String state, String authRef) {
     String prefix = switch (kind) { case "AUTH" -> "auth_"; case "CAPTURE" -> "cap_"; default -> "void_"; };
     return new Entry(prefix + UUID.randomUUID().toString().substring(0, 8), kind, last4, network, approval, amountMinor, currency, state, authRef,

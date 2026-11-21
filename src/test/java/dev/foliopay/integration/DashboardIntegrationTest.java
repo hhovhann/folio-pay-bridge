@@ -44,7 +44,8 @@ class DashboardIntegrationTest extends TestBase {
 
     OverviewService.Overview o = overview.overview();
 
-    assertThat(o.capturedToday()).extracting(OverviewService.Captured::currency, OverviewService.Captured::amountMinor, OverviewService.Captured::count)
+    assertThat(o.capturedToday())
+        .extracting(OverviewService.Captured::currency, OverviewService.Captured::amountMinor, OverviewService.Captured::count)
         .containsExactly(Tuple.tuple("AED", 45_000L, 1L), Tuple.tuple("USD", 110_000L, 3L));
     assertThat(o.deadLettersReplayable()).isEqualTo(1);
     assertThat(o.deadLettersRejected()).isZero();

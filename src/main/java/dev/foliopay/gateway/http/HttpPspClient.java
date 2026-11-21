@@ -25,7 +25,8 @@ import org.springframework.web.client.RestClientException;
  * The card processor over REST. Every money call carries the Idempotency-Key, so a retry after a lost response returns the first result
  * instead of charging again. A 402 is a decline (final). A timeout, a connection error, a 5xx, a 408, a 429, a 404 that is not the
  * processor's own answer (no error code: a wrong address or a proxy), or a 409 for a request with the same key still in progress is
- * transient (retry with the same key). A success without a reference is unreadable: the charge stays pending with its hold. So are 401 and 403: our credentials were refused (a rotated key, a proxy),
+ * transient (retry with the same key). A success without a reference is unreadable: the charge stays pending with its hold. So are 401 and 403: our
+ * credentials were refused (a rotated key, a proxy),
  * which says nothing about the guest's card, so the charge must stay retryable rather than be declined for good. A 409
  * {@code IDEMPOTENCY_KEY_REUSED} and every other 4xx are a rejection of the request itself: final, never retried. The card number is in the request
  * body only for the authorisation, and is never part of an exception message. Wired only when foliopay.gateway=http.
@@ -94,7 +95,8 @@ public class HttpPspClient implements PspClient {
   }
 
   private JsonNode post(String path, String idempotencyKey, Map<String, Object> body) {
-    return guarded(() -> http.post().uri(path).header("Authorization", "Bearer " + apiKey).header("Idempotency-Key", idempotencyKey).contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(JsonNode.class));
+    return guarded(() -> http.post().uri(path).header("Authorization", "Bearer " + apiKey).header("Idempotency-Key", idempotencyKey)
+        .contentType(MediaType.APPLICATION_JSON).body(body).retrieve().body(JsonNode.class));
   }
 
   private static JsonNode guarded(Supplier<JsonNode> call) {

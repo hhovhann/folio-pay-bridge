@@ -243,6 +243,7 @@ public class HttpOperaClient implements OperaClient {
   }
 
   /** {@code rejectedToken} is null on the first try, or the token OPERA just refused (401), which is then replaced once. */
+  @SuppressWarnings("checkstyle:MethodLength")
   private JsonNode send(String hotelId, Function<RestClient, RestClient.RequestHeadersSpec<?>> request, String rejectedToken) {
     boolean freshToken = rejectedToken != null;
     String bearer = token(rejectedToken);
@@ -288,7 +289,8 @@ public class HttpOperaClient implements OperaClient {
       return new TokenExpired(bearer);
     }
     if (code == 401 || code == 403) {
-      return new OperaUnavailableException("OPERA refused our credentials (" + code + "): check the client id, secret, application key and hotel access");
+      return new OperaUnavailableException("OPERA refused our credentials (" + code
+          + "): check the client id, secret, application key and hotel access");
     }
     if (code == 408 || code == 409 || code == 429) {
       return new OperaUnavailableException("OPERA asked us to wait (" + code + ")");
@@ -307,6 +309,7 @@ public class HttpOperaClient implements OperaClient {
    * client id and secret as HTTP Basic, the application key and the enterprise id as headers, the scope in the form. Basic credentials go
    * as issued, in UTF-8 (RFC 7617, which Oracle's description of the header names), not Spring's default ISO-8859-1.
    */
+  @SuppressWarnings("checkstyle:MethodLength")
   private synchronized String token(String rejected) {
     boolean stillValid = accessToken != null && clock.instant().isBefore(tokenExpiresAt.minusSeconds(EXPIRY_MARGIN_SECONDS));
     if (stillValid && !accessToken.equals(rejected)) {

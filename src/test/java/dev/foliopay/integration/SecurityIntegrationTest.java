@@ -176,7 +176,8 @@ class SecurityIntegrationTest {
     mvc.perform(bearer(post("/api/v1/postings/p-1/replay"), valid(PREFIX + "payments:write"))).andExpect(status().isForbidden());
     mvc.perform(bearer(post("/api/v1/reconcile"), valid(PREFIX + "payments:read")).contentType(MediaType.APPLICATION_JSON).content("{}"))
         .andExpect(status().isForbidden());
-    mvc.perform(bearer(post("/api/v1/postings/p-1/replay"), valid(PREFIX + "operations"))).andExpect(status().isNotFound()); // allowed: the posting is unknown
+    // allowed: the posting is unknown
+    mvc.perform(bearer(post("/api/v1/postings/p-1/replay"), valid(PREFIX + "operations"))).andExpect(status().isNotFound());
   }
 
   /**
@@ -219,8 +220,10 @@ class SecurityIntegrationTest {
   @DisplayName("An API key is checked against its hash and carries its own scopes")
   void anApiKeyIsCheckedAgainstItsHashAndCarriesItsOwnScopes() throws Exception {
     mvc.perform(get("/api/v1/charges").header("X-Api-Key", READ_KEY)).andExpect(status().isOk());
-    mvc.perform(post("/api/v1/payments").header("X-Api-Key", READ_KEY).contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
-    mvc.perform(get("/api/v1/charges").header("X-Api-Key", "fpb_test_wrong")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    mvc.perform(post("/api/v1/payments").header("X-Api-Key", READ_KEY).contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status()
+        .isForbidden());
+    mvc.perform(get("/api/v1/charges").header("X-Api-Key", "fpb_test_wrong")).andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code")
+        .value("UNAUTHORIZED"));
   }
 
   /** Fails if a wrong key is ignored as if absent: a caller holding one valid credential could probe keys without ever being refused. */
@@ -264,9 +267,11 @@ class SecurityIntegrationTest {
   @DisplayName("Two clients using the same idempotency key get two separate payments")
   void twoClientsUsingTheSameIdempotencyKeyGetTwoSeparatePayments() throws Exception {
     String card = mvc.perform(bearer(post("/api/v1/cards"), valid(PREFIX + "cards:write")).contentType(MediaType.APPLICATION_JSON)
-        .content("{\"pan\":\"4111111111111111\",\"expiry\":\"12/29\"}")).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        .content("{\"pan\":\"4111111111111111\",\"expiry\":\"12/29\"}")).andExpect(status().isCreated()).andReturn().getResponse()
+            .getContentAsString();
     String token = card.replaceAll(".*\"token\":\"(tok_[a-f0-9]+)\".*", "$1");
-    String sameKeyFor = "{\"idempotencyKey\":\"order-1001\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + token + "\",\"amountMinor\":%d,\"currency\":\"USD\"}";
+    String sameKeyFor = "{\"idempotencyKey\":\"order-1001\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + token
+        + "\",\"amountMinor\":%d,\"currency\":\"USD\"}";
 
     String first = mvc.perform(bearer(post("/api/v1/payments"), valid(PREFIX + "payments:write")).contentType(MediaType.APPLICATION_JSON)
         .content(String.format(sameKeyFor, 10_000))).andExpect(status().isOk()).andExpect(jsonPath("$.charge.amountMinor").value(10_000))

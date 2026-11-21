@@ -178,7 +178,8 @@ class FullFlowHttpIntegrationTest {
 
     assertThat(result.outcome()).isEqualTo(Outcome.OK);
     assertThat(state(operaUrl).path("fault").asText()).as("the fault was really hit, not skipped").isEqualTo("NONE");
-    assertThat(state(operaUrl).path("payments")).as("OPERA does not deduplicate, so exactly one means the bridge looked before it retried").hasSize(1);
+    assertThat(state(operaUrl).path("payments")).as("OPERA does not deduplicate, so exactly one means the bridge looked before it retried")
+        .hasSize(1);
   }
 
   @Test
@@ -236,7 +237,9 @@ class FullFlowHttpIntegrationTest {
       }));
     }
     start.countDown();
-    for (var done : running) done.get(); // none may fail
+    for (var done : running) {
+      done.get(); // none may fail
+    }
     pool.shutdown();
 
     assertThat(state(operaUrl).path("payments")).as("one payment, one folio entry").hasSize(1);
@@ -267,7 +270,13 @@ class FullFlowHttpIntegrationTest {
   }
 
   private int statusOf(String url, String bearer, String appKey, String hotel) {
-    return CONTROL.get().uri(url).header("Authorization", "Bearer " + bearer).headers(h -> { if (appKey != null) h.add("x-app-key", appKey); h.add("x-hotelid", hotel); })
+    return CONTROL.get().uri(url).header("Authorization", "Bearer " + bearer)
+        .headers(h -> {
+          if (appKey != null) {
+            h.add("x-app-key", appKey);
+          }
+          h.add("x-hotelid", hotel);
+        })
         .exchange((request, response) -> response.getStatusCode().value());
   }
 
@@ -280,7 +289,8 @@ class FullFlowHttpIntegrationTest {
     CONTROL.post().uri(operaUrl + "/sim/night-audit").retrieve().toBodilessEntity();
 
     assertThat(businessDates.resolve(null)).isEqualTo(before.plusDays(1));
-    assertThatThrownBy(() -> businessDates.resolve(before)).as("yesterday's date is refused after the audit").isInstanceOf(InvalidRequestException.class);
+    assertThatThrownBy(() -> businessDates.resolve(before)).as("yesterday's date is refused after the audit")
+        .isInstanceOf(InvalidRequestException.class);
   }
 
   @Test
@@ -290,7 +300,8 @@ class FullFlowHttpIntegrationTest {
     fault(operaUrl, "DOWN");
 
     assertThat(businessDates.resolve(null)).isEqualTo(known);
-    var result = payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", "RES-1", token, new Money(6_000, "USD"), businessDates.resolve(null)));
+    var result = payments.pay(PaymentCommand.bridge("k-" + UUID.randomUUID(), "BK-1", "RES-1", token, new Money(6_000, "USD"),
+        businessDates.resolve(null)));
 
     assertThat(result.outcome()).isEqualTo(Outcome.CHARGED_NOT_POSTED);
     assertThat(state(pspUrl).path("capturedMinor").asLong()).isEqualTo(6_000);
@@ -325,8 +336,10 @@ class FullFlowHttpIntegrationTest {
     assertThat(pay("RES-1", 4_000).outcome()).isEqualTo(Outcome.DECLINED);
     var ledger = state(pspUrl).path("ledger");
     assertThat(ledger).extracting(e -> e.path("kind").asText()).contains("AUTH", "VOID");
-    String authorised = StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("AUTH")).reduce((a, b) -> b).orElseThrow().path("ref").asText();
-    String released = StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("VOID")).findFirst().orElseThrow().path("authRef").asText();
+    String authorised = StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("AUTH")).reduce((a, b) -> b)
+        .orElseThrow().path("ref").asText();
+    String released = StreamSupport.stream(ledger.spliterator(), false).filter(e -> e.path("kind").asText().equals("VOID")).findFirst().orElseThrow()
+        .path("authRef").asText();
     assertThat(released).as("the hold released is the one that was authorised").isEqualTo(authorised);
   }
 

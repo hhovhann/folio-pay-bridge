@@ -38,7 +38,8 @@ class ApiDeprecationInterceptor implements HandlerInterceptor {
       response.setHeader("Link", "<" + deprecation.successor() + ">; rel=\"successor-version\"");
     }
     // The route pattern, not the raw path: it names the endpoint without carrying ids or anything else the caller put in the URL.
-    log.info("Deprecated endpoint called: {} {} (sunset {})", request.getMethod(), request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE), sunset);
+    log.info("Deprecated endpoint called: {} {} (sunset {})", request.getMethod(),
+        request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE), sunset);
     return true;
   }
 }

@@ -41,11 +41,11 @@
 - [x] The full-flow demo's dry run (`DEMO_FAST=1 make_fullflow_demo.py`) against the Docker stack on the versioned API (2026-11-18)
 - [x] `demo/check_dashboard.py`: every screen in a real browser against the running app on the versioned API, no browser error (2026-11-18)
 - [x] `./mvnw clean verify`: 431 backend tests, 15 dashboard tests, 99.5% lines and 91.5% branches against the 99% and 90% gate (2026-11-18; the first push failed CI at 98.9% on the Linux runner, agent log 48)
-- [x] `CodeConventionsTest.importsAreSortedStaticFirstWithoutWildcards`
-- [x] `CodeConventionsTest.everyIfHasBraces`
-- [x] `CodeConventionsTest.classesAreImportedNotWrittenOutInFull`
-- [x] `CodeConventionsTest.dependenciesAreInjectedThroughTheConstructor`
-- [x] `CodeConventionsTest.nothingPrintsToTheConsoleDirectly`
+- [x] Checkstyle `CustomImportOrder`, `AvoidStarImport` (`config/checkstyle/checkstyle.xml`, since phase 22)
+- [x] Checkstyle `NeedBraces` (`config/checkstyle/checkstyle.xml`, since phase 22)
+- [x] Checkstyle `FullyQualifiedName` (`config/checkstyle/checkstyle.xml`, since phase 22)
+- [x] `ArchitectureTest.dependenciesAreInjectedThroughTheConstructor`
+- [x] `ArchitectureTest.nothingPrintsToTheConsoleDirectly`
 - [x] Each convention broken on purpose in a main file made its check fail: 4 of 4, after the field-injection check was widened to every spelling (agent log 49) (2026-11-18)
 - [x] `tools/check_specs.py` fails when an agent-log entry is not cited by `docs/engineering-standards.md` (checked by removing the citation of entry 26, 2026-11-18)
 - [x] `KmsWireTest.theRealClientWrapsAndUnwrapsADataKeyOverHttp` (fails with `NoClassDefFoundError` when httpclient5 is forced to 5.1.4, checked 2026-11-18)

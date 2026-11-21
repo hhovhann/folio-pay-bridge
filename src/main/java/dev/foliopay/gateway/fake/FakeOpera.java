@@ -67,7 +67,8 @@ public class FakeOpera implements OperaClient {
         Optional.of(businessDate(p.hotelId())));
     posts.putIfAbsent(p.externalRef(), posted);
     postCount.incrementAndGet();
-    log.info("OPERA post {} reservation {} {} {} window {} (ref {})", posted.operaRef(), p.reservationId(), p.amount().toDecimalString(), p.amount().currency(), p.folioWindow(), p.externalRef());
+    log.info("OPERA post {} reservation {} {} {} window {} (ref {})", posted.operaRef(), p.reservationId(), p.amount().toDecimalString(), p.amount()
+        .currency(), p.folioWindow(), p.externalRef());
     if (fault.compareAndSet(Fault.TIMEOUT_AFTER_POST, Fault.NONE)) {
       throw new OperaUnavailableException("Read timed out after post");
     }

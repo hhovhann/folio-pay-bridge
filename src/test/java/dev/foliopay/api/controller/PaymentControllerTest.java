@@ -67,7 +67,8 @@ class PaymentControllerTest {
 
   private static final String TOKEN = "tok_" + "c".repeat(32);
   private static final String VALID =
-      "{\"idempotencyKey\":\"k-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + TOKEN + "\",\"amountMinor\":12345,\"currency\":\"USD\"}";
+      "{\"idempotencyKey\":\"k-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + TOKEN
+          + "\",\"amountMinor\":12345,\"currency\":\"USD\"}";
 
   private ResultActions pay(String body) throws Exception {
     return mvc.perform(post("/api/v1/payments").contentType(MediaType.APPLICATION_JSON).content(body));
@@ -190,7 +191,8 @@ class PaymentControllerTest {
 
     Mockito.reset(payments);
     when(payments.pay(any())).thenThrow(new IdempotencyKeyReusedException());
-    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED")).andExpect(header().doesNotExist("Retry-After"));
+    pay(VALID).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED")).andExpect(header()
+        .doesNotExist("Retry-After"));
   }
 
   @Test

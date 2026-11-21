@@ -10,6 +10,7 @@ class CardRequestTest {
   @Test
   @DisplayName("A card number never appears when the request object is printed")
   void aCardNumberNeverAppearsWhenTheRequestObjectIsPrinted() {
-    assertThat(new CardRequest("4111111111111111", "12/29").toString()).isEqualTo("CardRequest[redacted]").doesNotContain("4111").doesNotContain("12/29");
+    assertThat(new CardRequest("4111111111111111", "12/29").toString()).isEqualTo("CardRequest[redacted]").doesNotContain("4111")
+        .doesNotContain("12/29");
   }
 }

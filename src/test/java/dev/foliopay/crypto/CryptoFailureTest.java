@@ -33,7 +33,8 @@ class CryptoFailureTest {
     DataKey key = service.newDataKey("tok_1");
     assertThat(key.keyId()).isEqualTo("local-demo-master-key");
     assertThat(service.unwrap(key.wrapped(), "tok_1", key.keyId())).isEqualTo(key.plaintext());
-    assertThatThrownBy(() -> service.unwrap(key.wrapped(), "tok_2", key.keyId())).as("another token's context cannot unwrap it").isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> service.unwrap(key.wrapped(), "tok_2", key.keyId())).as("another token's context cannot unwrap it")
+        .isInstanceOf(IllegalStateException.class);
   }
 
   @Test
@@ -41,7 +42,9 @@ class CryptoFailureTest {
   void theKmsClientIsBuiltFromTheDefaultAwsChainWithNoKeysInConfiguration() {
     String[] names = {"aws.region", "aws.accessKeyId", "aws.secretAccessKey"};
     String[] before = new String[names.length];
-    for (int i = 0; i < names.length; i++) before[i] = System.getProperty(names[i]);
+    for (int i = 0; i < names.length; i++) {
+      before[i] = System.getProperty(names[i]);
+    }
     System.setProperty("aws.region", "eu-west-1");
     System.setProperty("aws.accessKeyId", "test");
     System.setProperty("aws.secretAccessKey", "test");
@@ -49,7 +52,11 @@ class CryptoFailureTest {
       assertThat(client).isNotNull();
     } finally {
       for (int i = 0; i < names.length; i++) {
-        if (before[i] == null) System.clearProperty(names[i]); else System.setProperty(names[i], before[i]);
+        if (before[i] == null) {
+          System.clearProperty(names[i]);
+        } else {
+          System.setProperty(names[i], before[i]);
+        }
       }
     }
   }

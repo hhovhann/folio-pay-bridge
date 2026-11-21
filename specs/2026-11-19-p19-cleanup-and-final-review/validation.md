@@ -18,7 +18,7 @@
 - [x] `tools/check_specs.py` counts a name as passed only if every run of it passed (shown on a report with a failing first run when the fix was made)
 
 ## Every rule called enforced checks what it says (agent log 60)
-- [x] The style rules read the tests too, and a class written out in full in a test fails the build: `CodeConventionsTest.classesAreImportedNotWrittenOutInFull` (a deliberate break caught)
+- [x] The style rules read the tests too, and a class written out in full in a test fails the build: Checkstyle `FullyQualifiedName` (`config/checkstyle/checkstyle.xml`, since phase 22) (a deliberate break caught)
 - [x] Every operation is refused without credentials and to every scope but its own, and an operation without a stated scope fails: `SecurityIntegrationTest.everyOperationTheApiDescribesIsRefusedWithoutCredentialsAndToEveryScopeButItsOwn` (two deliberate breaks caught: a reading client allowed to create requests, an operations endpoint left open)
 - [x] Sending again an event that does not exist is a not-found problem: `WebhookIntegrationTest.sendingAgainAnEventThatDoesNotExistIsANotFoundProblem` (a deliberate break caught)
 - [x] `python3 tools/check_specs.py` fails on an operation never seen succeed or refused, and on one that takes input refused only for credentials (three deliberate edits of the recorded calls, each caught)

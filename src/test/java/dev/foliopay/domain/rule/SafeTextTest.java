@@ -10,7 +10,8 @@ class SafeTextTest {
   @Test
   @DisplayName("Flattens line breaks and control characters")
   void flattensLineBreaksAndControlCharacters() {
-    assertThat(SafeText.clean("a\nb\r\nc\td\u0000e f")).startsWith("a b c d e f").doesNotContain("\n").doesNotContain("\r").doesNotContain("\u0000").doesNotContain(" ");
+    assertThat(SafeText.clean("a\nb\r\nc\td\u0000e f")).startsWith("a b c d e f").doesNotContain("\n").doesNotContain("\r").doesNotContain("\u0000")
+        .doesNotContain(" ");
   }
 
   /**

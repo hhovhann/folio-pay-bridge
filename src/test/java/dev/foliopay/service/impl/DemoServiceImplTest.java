@@ -113,7 +113,8 @@ class DemoServiceImplTest {
   void whenTheOutsideWorldIsSeparateTheStateSaysSoAndTheFaultsCannotBeArmedHere() {
     DemoServiceImpl service = withoutFakes();
     assertThat(service.state().opera()).isEqualTo("EXTERNAL");
-    assertThatThrownBy(() -> service.apply(new SimCommand("DOWN", null, false))).isInstanceOf(InvalidRequestException.class).hasMessageContaining("separate services");
+    assertThatThrownBy(() -> service.apply(new SimCommand("DOWN", null, false))).isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining("separate services");
   }
 
   @Test

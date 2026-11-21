@@ -12,7 +12,6 @@ import dev.foliopay.domain.model.Charge;
 import dev.foliopay.domain.model.Money;
 import dev.foliopay.domain.model.Posting;
 import dev.foliopay.service.ChargeService;
-import dev.foliopay.service.ChargeService.ChargeCommand;
 import dev.foliopay.service.PaymentService.Outcome;
 import dev.foliopay.service.PaymentService.PaymentCommand;
 import dev.foliopay.service.PostingService;
@@ -32,8 +31,12 @@ class PaymentServiceImplTest {
 
   private Charge charge(Charge.Status status) {
     Charge charge = Fixtures.charge("k", "BK-1", "tok_1", AMOUNT);
-    if (status == Charge.Status.CAPTURED) charge.markCaptured("cap_1");
-    if (status == Charge.Status.DECLINED) charge.markDeclined("no");
+    if (status == Charge.Status.CAPTURED) {
+      charge.markCaptured("cap_1");
+    }
+    if (status == Charge.Status.DECLINED) {
+      charge.markDeclined("no");
+    }
     when(charges.charge(Fixtures.command("k", "BK-1", "tok_1", AMOUNT))).thenReturn(charge);
     return charge;
   }

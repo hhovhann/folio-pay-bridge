@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 
 import dev.foliopay.Fixtures;
 import dev.foliopay.service.NotificationService;
-import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;

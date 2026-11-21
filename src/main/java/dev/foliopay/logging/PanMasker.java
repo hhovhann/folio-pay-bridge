@@ -30,6 +30,7 @@ public final class PanMasker {
     return out.toString();
   }
 
+  @SuppressWarnings("checkstyle:MethodLength")
   private static String maskRun(String run) {
     // Code points, not chars: a digit outside the Basic Multilingual Plane (mathematical or other script digits) is two chars.
     int[] points = run.codePoints().toArray();

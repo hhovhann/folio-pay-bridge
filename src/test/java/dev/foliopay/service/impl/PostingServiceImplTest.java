@@ -65,7 +65,8 @@ class PostingServiceImplTest {
   void setUp() {
     TransactionTemplate tx = mock(TransactionTemplate.class);
     when(tx.execute(any())).thenAnswer(call -> ((TransactionCallback<Object>) call.getArgument(0)).doInTransaction(null));
-    Retry retry = Retry.of("folio", RetryConfig.custom().maxAttempts(3).intervalFunction(IntervalFunction.of(1)).retryExceptions(OperaUnavailableException.class).build());
+    Retry retry = Retry.of("folio", RetryConfig.custom().maxAttempts(3).intervalFunction(IntervalFunction.of(1))
+        .retryExceptions(OperaUnavailableException.class).build());
     service = new PostingServiceImpl(repository, opera, SETTINGS, new IdempotentStore(tx), retry, Clock.fixed(NOW, ZoneOffset.UTC), LEASE);
     when(repository.saveAndFlush(any(Posting.class))).thenAnswer(call -> keep(call.getArgument(0)));
     when(repository.findById(anyString())).thenAnswer(call -> Optional.ofNullable(rows.get(call.<String>getArgument(0))));
@@ -281,9 +282,11 @@ class PostingServiceImplTest {
     newPosting();
     when(opera.postPayment(any())).thenReturn("OP-1");
     Posting storedPending = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
-    when(repository.save(any(Posting.class))).thenThrow(new ObjectOptimisticLockingFailureException(Posting.class, "id")).thenAnswer(call -> call.getArgument(0));
+    when(repository.save(any(Posting.class))).thenThrow(new ObjectOptimisticLockingFailureException(Posting.class, "id"))
+        .thenAnswer(call -> call.getArgument(0));
     // Our attempt works on its own copy; the reload after the lost race sees the row another request saved meanwhile.
-    when(repository.findById(anyString())).thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPending));
+    when(repository.findById(anyString()))
+        .thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPending));
 
     Posting result = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");
 
@@ -300,7 +303,8 @@ class PostingServiceImplTest {
     Posting storedPosted = Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY);
     storedPosted.markPosted("OP-OTHER");
     when(repository.save(any(Posting.class))).thenThrow(new ObjectOptimisticLockingFailureException(Posting.class, "id"));
-    when(repository.findById(anyString())).thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPosted));
+    when(repository.findById(anyString()))
+        .thenReturn(Optional.of(Fixtures.posting("post:ch-1", "ch-1", "RES-1", AMOUNT, DAY)), Optional.of(storedPosted));
 
     Posting result = service.post("ch-1", "RES-1", AMOUNT, DAY, "cap_1");
 

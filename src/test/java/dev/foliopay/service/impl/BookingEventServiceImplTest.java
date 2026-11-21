@@ -81,7 +81,9 @@ class BookingEventServiceImplTest {
   }
 
   private PaymentLink add(PaymentLink link) {
-    if (!store.contains(link)) store.add(link);
+    if (!store.contains(link)) {
+      store.add(link);
+    }
     return link;
   }
 
@@ -105,8 +107,12 @@ class BookingEventServiceImplTest {
 
   private Charge chargeWith(String status, PaymentLink link) {
     Charge charge = Fixtures.charge("k", "B1", CARD_A, link.amount());
-    if (status.equals("CAPTURED")) charge.markCaptured("cap_1");
-    if (status.equals("DECLINED")) charge.markDeclined("Do not honor");
+    if (status.equals("CAPTURED")) {
+      charge.markCaptured("cap_1");
+    }
+    if (status.equals("DECLINED")) {
+      charge.markDeclined("Do not honor");
+    }
     return charge;
   }
 
@@ -291,7 +297,8 @@ class BookingEventServiceImplTest {
     PaymentLink link = openLink(80_000);
     when(links.claim(eq(link.getId()), anyString())).thenReturn(1);
     when(payments.pay(any())).thenThrow(new ConflictException("Idempotency key was already used with different parameters"));
-    when(charges.find(Charge.BRIDGE_CLIENT, "link:" + link.getId() + ":" + Fingerprint.of(CARD_A))).thenReturn(Optional.of(chargeWith("PENDING", link)));
+    when(charges.find(Charge.BRIDGE_CLIENT, "link:" + link.getId() + ":" + Fingerprint.of(CARD_A)))
+        .thenReturn(Optional.of(chargeWith("PENDING", link)));
 
     assertThatThrownBy(() -> service.pay(link.getId(), CARD_A, TODAY)).isInstanceOf(ConflictException.class);
     verify(links, never()).release(anyString(), anyString());
@@ -418,7 +425,8 @@ class BookingEventServiceImplTest {
   @Test
   @DisplayName("A remote request due in the past or for nothing is refused")
   void aRemoteRequestDueInThePastOrForNothingIsRefused() {
-    assertThatThrownBy(() -> service.request(new BookingEventService.PaymentRequest("B1", "RES-B1", new Money(5_000, "USD"), TODAY.minusDays(1), null), TODAY))
+    assertThatThrownBy(() -> service.request(new BookingEventService.PaymentRequest("B1", "RES-B1", new Money(5_000, "USD"), TODAY.minusDays(1),
+        null), TODAY))
         .isInstanceOf(InvalidRequestException.class);
     assertThatThrownBy(() -> service.request(remote(0, null), TODAY)).isInstanceOf(InvalidRequestException.class);
   }

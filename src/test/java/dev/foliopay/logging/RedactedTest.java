@@ -25,16 +25,21 @@ class RedactedTest {
     String printed = printed(Redacted.of(top));
 
     assertThat(printed).doesNotContain("4111").doesNotContain("Unrecognized token").doesNotContain("while handling");
-    assertThat(printed).contains("java.lang.RuntimeException", "java.lang.IllegalStateException", "RedactedTest.theStackTraceAndTheCauseChainAreKeptButNoMessageIsEver");
+    assertThat(printed).contains("java.lang.RuntimeException", "java.lang.IllegalStateException",
+        "RedactedTest.theStackTraceAndTheCauseChainAreKeptButNoMessageIsEver");
   }
 
   @Test
   @DisplayName("A self-referencing or very deep cause chain ends")
   void aSelfReferencingOrVeryDeepCauseChainEnds() {
     RuntimeException deep = new RuntimeException("0");
-    for (int i = 1; i < 50; i++) deep = new RuntimeException(String.valueOf(i), deep);
+    for (int i = 1; i < 50; i++) {
+      deep = new RuntimeException(String.valueOf(i), deep);
+    }
     int depth = 0;
-    for (Throwable t = Redacted.of(deep); t != null; t = t.getCause()) depth++;
+    for (Throwable t = Redacted.of(deep); t != null; t = t.getCause()) {
+      depth++;
+    }
     assertThat(depth).isEqualTo(10);
     assertThat(Redacted.of(null)).isNull();
   }

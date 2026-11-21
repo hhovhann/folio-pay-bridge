@@ -45,7 +45,8 @@ class BusinessDateServiceImplTest {
   @DisplayName("A different date from the client is refused")
   void aDifferentDateFromTheClientIsRefused() {
     when(opera.businessDate("H1")).thenReturn(PMS_DATE);
-    assertThatThrownBy(() -> service(Clock.systemUTC()).resolve(PMS_DATE.plusDays(1))).isInstanceOf(InvalidRequestException.class).hasMessageContaining(PMS_DATE.toString());
+    assertThatThrownBy(() -> service(Clock.systemUTC()).resolve(PMS_DATE.plusDays(1))).isInstanceOf(InvalidRequestException.class)
+        .hasMessageContaining(PMS_DATE.toString());
   }
 
   @Test

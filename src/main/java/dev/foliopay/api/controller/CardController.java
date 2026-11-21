@@ -23,7 +23,8 @@ class CardController {
 
   CardController(CardVault vault) { this.vault = vault; }
 
-  @Operation(summary = "Tokenise a card", description = "Returns a token and the display digits (first six, last four). The number is never returned or stored in clear.")
+  @Operation(summary = "Tokenise a card",
+      description = "Returns a token and the display digits (first six, last four). The number is never returned or stored in clear.")
   @PostMapping
   @ResponseStatus(HttpStatus.CREATED)
   CardResponse tokenise(@Valid @RequestBody CardRequest request) {

@@ -21,7 +21,8 @@ class KeyModeGuard {
   private final boolean allowEphemeralKeysOnPersistentDatabase;
 
   KeyModeGuard(
-      @Value("${foliopay.keys:}") String keys, @Value("${spring.datasource.url:}") String datasourceUrl, @Value("${foliopay.allow-ephemeral-keys:false}") boolean allow) {
+      @Value("${foliopay.keys:}") String keys, @Value("${spring.datasource.url:}") String datasourceUrl,
+          @Value("${foliopay.allow-ephemeral-keys:false}") boolean allow) {
     this.keys = keys;
     this.datasourceUrl = datasourceUrl;
     this.allowEphemeralKeysOnPersistentDatabase = allow;
@@ -32,11 +33,13 @@ class KeyModeGuard {
     boolean inMemory = datasourceUrl.startsWith("jdbc:h2:mem:");
     if ("local".equals(keys) && !inMemory && !allowEphemeralKeysOnPersistentDatabase) {
       throw new IllegalStateException(
-          "foliopay.keys=local is only for in-memory demos: its master key is lost on restart. Use foliopay.keys=kms, or set foliopay.allow-ephemeral-keys=true for a throwaway database.");
+          "foliopay.keys=local is only for in-memory demos: its master key is lost on restart. Use foliopay.keys=kms, or set "
+              + "foliopay.allow-ephemeral-keys=true for a throwaway database.");
     }
     if ("kms".equals(keys) && inMemory) {
       throw new IllegalStateException(
-          "foliopay.keys=kms with an in-memory database: payment state would be lost at the next restart. Activate the postgres profile (SPRING_PROFILES_ACTIVE=postgres) with DB_URL set.");
+          "foliopay.keys=kms with an in-memory database: payment state would be lost at the next restart. Activate the postgres profile "
+              + "(SPRING_PROFILES_ACTIVE=postgres) with DB_URL set.");
     }
   }
 }

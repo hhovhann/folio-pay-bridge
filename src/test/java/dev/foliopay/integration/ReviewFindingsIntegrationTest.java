@@ -146,7 +146,8 @@ class ReviewFindingsIntegrationTest extends TestBase {
   @DisplayName("A business date that is not the hotel's is refused, and the default comes from the PMS")
   void aBusinessDateThatIsNotTheHotelsIsRefusedAndTheDefaultComesFromThePms() throws Exception {
     opera.setBusinessDate(LocalDate.of(2026, 11, 16)); // after midnight but before night audit
-    String body = "{\"idempotencyKey\":\"bd-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + token + "\",\"amountMinor\":500,\"currency\":\"USD\"%s}";
+    String body = "{\"idempotencyKey\":\"bd-1\",\"bookingRef\":\"BK-1\",\"folioId\":\"F-1\",\"token\":\"" + token
+        + "\",\"amountMinor\":500,\"currency\":\"USD\"%s}";
 
     mvc.perform(post("/api/v1/payments").contentType(MediaType.APPLICATION_JSON).content(String.format(body, ",\"businessDate\":\"2026-11-17\"")))
         .andExpect(status().isBadRequest());

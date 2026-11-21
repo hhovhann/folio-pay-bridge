@@ -29,7 +29,8 @@ import org.springframework.web.client.RestClient;
 /** The HTTP adapters against the simulators and against stubs that answer with exactly one awkward status. */
 @DisplayName("HTTP adapters: against the simulators and against one awkward status at a time")
 class HttpAdaptersTest {
-  private static final RestClient CONTROL = RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory()).build(); // HTTP/1.1, like the real adapters: the JDK client may retry a cleartext POST over h2c
+  // HTTP/1.1, like the real adapters: the JDK client may retry a cleartext POST over h2c
+  private static final RestClient CONTROL = RestClient.builder().requestFactory(new SimpleClientHttpRequestFactory()).build();
   private static Sim opera;
   private static Sim psp;
   /** The simulator's own business date, read after each reset: a date computed once at class load breaks across Dubai midnight. */
@@ -59,9 +60,11 @@ class HttpAdaptersTest {
         Duration.ofSeconds(1), Duration.ofSeconds(1));
   }
 
-  private HttpOperaClient operaClient(String url) { return new HttpOperaClient(props(url, psp.url(), "fpbridge-secret", "demo-psp-key"), RestClient.builder(), Clock.systemUTC()); }
+  private HttpOperaClient operaClient(String url) { return new HttpOperaClient(props(url, psp.url(), "fpbridge-secret", "demo-psp-key"),
+      RestClient.builder(), Clock.systemUTC()); }
 
-  private HttpPspClient pspClient(String url, String key) { return new HttpPspClient(props(opera.url(), url, "fpbridge-secret", key), RestClient.builder()); }
+  private HttpPspClient pspClient(String url,
+      String key) { return new HttpPspClient(props(opera.url(), url, "fpbridge-secret", key), RestClient.builder()); }
 
   private static OperaPayment payment(String reservation, Money amount) {
     return new OperaPayment("DEMO1", reservation, 1, "CC", 9001, amount, "ref-" + reservation + amount.currency(), "cap_1");
@@ -86,7 +89,8 @@ class HttpAdaptersTest {
   @Test
   @DisplayName("An OPERA that cannot be reached is unavailable at the token step")
   void anOperaThatCannotBeReachedIsUnavailableAtTheTokenStep() {
-    assertThatThrownBy(() -> operaClient("http://127.0.0.1:1").businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("token service");
+    assertThatThrownBy(() -> operaClient("http://127.0.0.1:1").businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class)
+        .hasMessageContaining("token service");
   }
 
   @Test
@@ -115,21 +119,28 @@ class HttpAdaptersTest {
   @DisplayName("A token that is always refused is reported as \"wait\", not as a bad request")
   void aTokenThatIsAlwaysRefusedIsReportedAsWaitNotAsABadRequest() {
     try (Sim shortLived = SimulatorHarness.start("opera", "--sim.opera.token-ttl-seconds=0")) {
-      assertThatThrownBy(() -> operaClient(shortLived.url()).businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("401");
+      assertThatThrownBy(() -> operaClient(shortLived.url()).businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class)
+          .hasMessageContaining("401");
     }
   }
 
   @Test
   @DisplayName("A server error from OPERA is unavailable; a client error is a rejection, with or without a reason")
   void aServerErrorFromOperaIsUnavailableAndAClientErrorIsARejectionWithOrWithoutAReason() {
-    try (var down = SimulatorHarness.stub((m, path) -> path.contains("tokens") ? new Reply(200, "{\"access_token\":\"t\",\"expires_in\":60}") : new Reply(503, "{}"))) {
-      assertThatThrownBy(() -> operaClient(down.url()).businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class).hasMessageContaining("503");
+    try (var down = SimulatorHarness.stub((m, path) -> path.contains("tokens") ? new Reply(200,
+        "{\"access_token\":\"t\",\"expires_in\":60}") : new Reply(503, "{}"))) {
+      assertThatThrownBy(() -> operaClient(down.url()).businessDate("DEMO1")).isInstanceOf(OperaUnavailableException.class)
+          .hasMessageContaining("503");
     }
-    try (var coded = SimulatorHarness.stub((m, path) -> path.contains("tokens") ? new Reply(200, "{\"access_token\":\"t\",\"expires_in\":60}") : new Reply(400, "{\"code\":\"BAD_THING\"}"))) {
-      assertThatThrownBy(() -> operaClient(coded.url()).businessDate("DEMO1")).isInstanceOf(OperaRejectedException.class).hasMessageContaining("BAD_THING");
+    try (var coded = SimulatorHarness.stub((m, path) -> path.contains("tokens") ? new Reply(200,
+        "{\"access_token\":\"t\",\"expires_in\":60}") : new Reply(400, "{\"code\":\"BAD_THING\"}"))) {
+      assertThatThrownBy(() -> operaClient(coded.url()).businessDate("DEMO1")).isInstanceOf(OperaRejectedException.class)
+          .hasMessageContaining("BAD_THING");
     }
-    try (var bare = SimulatorHarness.stub((m, path) -> path.contains("tokens") ? new Reply(200, "{\"access_token\":\"t\",\"expires_in\":60}") : new Reply(400, ""))) {
-      assertThatThrownBy(() -> operaClient(bare.url()).businessDate("DEMO1")).isInstanceOf(OperaRejectedException.class).hasMessageContaining("no reason given");
+    try (var bare = SimulatorHarness.stub((m, path) -> path.contains("tokens") ? new Reply(200,
+        "{\"access_token\":\"t\",\"expires_in\":60}") : new Reply(400, ""))) {
+      assertThatThrownBy(() -> operaClient(bare.url()).businessDate("DEMO1")).isInstanceOf(OperaRejectedException.class)
+          .hasMessageContaining("no reason given");
     }
   }
 
@@ -154,8 +165,10 @@ class HttpAdaptersTest {
   @DisplayName("A decline is final, and a processor that cannot be reached is transient")
   void aDeclineIsFinalAndAProcessorThatCannotBeReachedIsTransient() {
     CONTROL.post().uri(psp.url() + "/sim/faults").body(Map.of("fault", "DECLINE_NEXT")).retrieve().toBodilessEntity();
-    assertThatThrownBy(() -> pspClient(psp.url(), "demo-psp-key").authorize("d", new Pan("4111111111111111"), "12/29", new Money(1, "USD"))).isInstanceOf(PspDeclinedException.class);
-    assertThatThrownBy(() -> pspClient("http://127.0.0.1:1", "k").capture("c", "a", new Money(1, "USD"))).isInstanceOf(PspTransientException.class).hasMessageContaining("did not answer");
+    assertThatThrownBy(() -> pspClient(psp.url(), "demo-psp-key").authorize("d", new Pan("4111111111111111"), "12/29", new Money(1, "USD")))
+        .isInstanceOf(PspDeclinedException.class);
+    assertThatThrownBy(() -> pspClient("http://127.0.0.1:1", "k").capture("c", "a", new Money(1, "USD"))).isInstanceOf(PspTransientException.class)
+        .hasMessageContaining("did not answer");
   }
 
   @Test
@@ -169,14 +182,16 @@ class HttpAdaptersTest {
   @DisplayName("A server error from the processor is transient")
   void aServerErrorFromTheProcessorIsTransient() {
     try (var broken = SimulatorHarness.stub((m, path) -> new Reply(503, "{}"))) {
-      assertThatThrownBy(() -> pspClient(broken.url(), "k").capture("c", "a", new Money(1, "USD"))).isInstanceOf(PspTransientException.class).hasMessageContaining("503");
+      assertThatThrownBy(() -> pspClient(broken.url(), "k").capture("c", "a", new Money(1, "USD"))).isInstanceOf(PspTransientException.class)
+          .hasMessageContaining("503");
     }
   }
 
   @Test
   @DisplayName("The settlement file is parsed from whatever the processor sends")
   void theSettlementFileIsParsedFromWhateverTheProcessorSends() {
-    try (var stub = SimulatorHarness.stub((m, path) -> new Reply(200, "{\"lines\":[{\"pspRef\":\"cap_1\",\"amountMinor\":250,\"currency\":\"EUR\"}]}"))) {
+    try (var stub = SimulatorHarness.stub((m, path) -> new Reply(200,
+        "{\"lines\":[{\"pspRef\":\"cap_1\",\"amountMinor\":250,\"currency\":\"EUR\"}]}"))) {
       assertThat(pspClient(stub.url(), "k").settlementStatement()).singleElement().satisfies(l -> assertThat(l.currency()).isEqualTo("EUR"));
     }
   }

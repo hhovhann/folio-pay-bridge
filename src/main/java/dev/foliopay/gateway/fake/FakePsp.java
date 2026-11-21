@@ -19,7 +19,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/** In-memory processor with the failure that matters: it captures the money, then the response is lost. Synthetic; no network. Wired only when foliopay.gateway=fake. */
+/**
+ * In-memory processor with the failure that matters: it captures the money, then the response is lost. Synthetic; no network. Wired only when
+ * foliopay.gateway=fake.
+ */
 @Component
 @ConditionalOnProperty(name = "foliopay.gateway", havingValue = "fake")
 public class FakePsp implements PspClient {

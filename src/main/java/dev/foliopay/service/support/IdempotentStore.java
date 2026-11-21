@@ -46,6 +46,7 @@ public class IdempotentStore {
    * Saves {@code ours}. On a lost optimistic race, reloads the stored state; if ours knows more ({@code oursIsAhead}), carries our result onto
    * the stored row ({@code carry}) and saves again; otherwise returns what is stored.
    */
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public <E> E saveMerging(E ours, UnaryOperator<E> save, Supplier<E> reload, BiPredicate<E, E> oursIsAhead, UnaryOperator<E> carry) {
     E candidate = ours;
     for (int attempt = 0; attempt < MAX_MERGES; attempt++) {

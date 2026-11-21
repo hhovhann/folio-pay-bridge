@@ -32,7 +32,8 @@ class ShadowServiceImplTest {
       new ShadowServiceImpl(payments, vault, opera, new OperaProperties("H1", 1, "CC", 9001, Duration.ofHours(24)));
 
   private void tokeniseReturnsAToken() {
-    when(vault.tokenise(any(Pan.class), anyString())).thenReturn(new CardToken("tok_1", new byte[1], new byte[1], "k", new Pan("4111111111111111"), "12/29", Instant.EPOCH));
+    when(vault.tokenise(any(Pan.class), anyString()))
+        .thenReturn(new CardToken("tok_1", new byte[1], new byte[1], "k", new Pan("4111111111111111"), "12/29", Instant.EPOCH));
   }
 
   private Posting posted(String key) {
@@ -70,7 +71,8 @@ class ShadowServiceImplTest {
   @DisplayName("A posting OPERA cannot find is a mismatch on both fields, and the samples are bounded")
   void aPostingOperaCannotFindIsAMismatchOnBothFieldsAndTheSamplesAreBounded() {
     tokeniseReturnsAToken();
-    when(payments.pay(any())).thenAnswer(call -> new PaymentService.Result(Outcome.OK, Fixtures.charge("k", "b", "t", new Money(1, "USD")), posted("post:x")));
+    when(payments.pay(any()))
+        .thenAnswer(call -> new PaymentService.Result(Outcome.OK, Fixtures.charge("k", "b", "t", new Money(1, "USD")), posted("post:x")));
     when(opera.find(anyString(), anyString(), anyString())).thenReturn(Optional.empty());
 
     var report = service.run(1, 10, ShadowConfig.legacyCompatible());

@@ -43,7 +43,8 @@ class PanMaskerTest {
   @Test
   @DisplayName("Masks two numbers written back to back as one long run")
   void masksTwoNumbersWrittenBackToBackAsOneLongRun() {
-    assertThat(PanMasker.mask("4111111111111111 4242424242424242")).doesNotContain("4111111111111111").doesNotContain("4242424242424242").doesNotContain("4111").doesNotContain("4242424242").endsWith("4242");
+    assertThat(PanMasker.mask("4111111111111111 4242424242424242")).doesNotContain("4111111111111111").doesNotContain("4242424242424242")
+        .doesNotContain("4111").doesNotContain("4242424242").endsWith("4242");
   }
 
   /** Review finding M5: a separator of three or four characters used to hide a number from the masker. */
@@ -68,7 +69,8 @@ class PanMaskerTest {
     assertThat(PanMasker.mask("4111.1111.1111.1111")).doesNotContain("4111.1111");
     assertThat(PanMasker.mask("4111  1111  1111  1111")).doesNotContain("4111  1111");
     assertThat(PanMasker.mask("4111/1111/1111/1111")).doesNotContain("4111/1111");
-    assertThat(PanMasker.mask("\uFF14\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11")).doesNotContain("\uFF14\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11");
+    assertThat(PanMasker.mask("\uFF14\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11"))
+        .doesNotContain("\uFF14\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11\uFF11");
   }
 
   @Test

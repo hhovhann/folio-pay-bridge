@@ -69,10 +69,13 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler({OperaUnavailableException.class, PspTransientException.class, PspUnreadableReplyException.class})
   ResponseEntity<ProblemDetail> downstreamUnavailable(RuntimeException e) {
     log.warn("Downstream unavailable: {}", e.getClass().getSimpleName());
-    return reply(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.DOWNSTREAM_UNAVAILABLE, "A downstream system is unavailable: try again with the same idempotency key");
+    return reply(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.DOWNSTREAM_UNAVAILABLE,
+        "A downstream system is unavailable: try again with the same idempotency key");
   }
 
-  /** Another request changed the same record first (two booking events for one booking, an event racing a payment): nothing was lost, send it again. */
+  /**
+   * Another request changed the same record first (two booking events for one booking, an event racing a payment): nothing was lost, send it again.
+   */
   @ExceptionHandler(OptimisticLockingFailureException.class)
   ResponseEntity<ProblemDetail> concurrentChange(RuntimeException e) {
     log.info("Concurrent change: {}", e.getClass().getSimpleName());
@@ -91,8 +94,10 @@ class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   /** Field names only: the rejected value may be a card number, so it is never echoed. */
   @Override
-  protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException e, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-    String fields = e.getBindingResult().getFieldErrors().stream().map(f -> f.getField() + " " + f.getDefaultMessage()).collect(Collectors.joining("; "));
+  protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException e, HttpHeaders headers, HttpStatusCode status,
+      WebRequest request) {
+    String fields = e.getBindingResult().getFieldErrors().stream().map(f -> f.getField() + " " + f.getDefaultMessage())
+        .collect(Collectors.joining("; "));
     return ResponseEntity.status(status).body(Problems.of(status, ErrorCode.INVALID_REQUEST, fields.isEmpty() ? "Invalid request" : fields));
   }
 

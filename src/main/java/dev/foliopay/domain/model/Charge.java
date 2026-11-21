@@ -101,6 +101,7 @@ public class Charge {
    * goes. A repeat that names no business date means "the date this charge was taken", so a charge left pending is still resumable after
    * night audit; a repeat that names a different date is a different request.
    */
+  @SuppressWarnings("checkstyle:ParameterNumber")
   public boolean matches(String bookingRef, String folioId, LocalDate businessDate, String token, Money amount) {
     return this.bookingRef.equals(bookingRef) && this.folioId.equals(folioId) && (businessDate == null || this.businessDate.equals(businessDate))
         && cardToken.equals(token) && amountMinor == amount.minor() && currency.equals(amount.currency());

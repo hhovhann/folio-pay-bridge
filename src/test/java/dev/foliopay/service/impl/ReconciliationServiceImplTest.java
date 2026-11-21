@@ -263,7 +263,8 @@ class ReconciliationServiceImplTest {
   @DisplayName("An unknown reference in two currencies is reported per currency")
   void anUnknownReferenceInTwoCurrenciesIsReportedPerCurrency() {
     ReconReport report = reconcile(new SettlementLine("cap_x", 500, "USD"), new SettlementLine("cap_x", 700, "EUR"));
-    assertThat(report.items()).extracting(ReconReport.Item::settledCurrency, ReconReport.Item::settledMinor).containsExactly(Tuple.tuple("EUR", 700L), Tuple.tuple("USD", 500L));
+    assertThat(report.items()).extracting(ReconReport.Item::settledCurrency, ReconReport.Item::settledMinor)
+        .containsExactly(Tuple.tuple("EUR", 700L), Tuple.tuple("USD", 500L));
   }
 
   @Test
@@ -280,7 +281,9 @@ class ReconciliationServiceImplTest {
   @Test
   @DisplayName("Large id lists are queried in slices of at most a thousand")
   void largeIdListsAreQueriedInSlicesOfAtMostAThousand() {
-    for (int i = 0; i < 2_500; i++) capture("cap_" + i, 100, true);
+    for (int i = 0; i < 2_500; i++) {
+      capture("cap_" + i, 100, true);
+    }
 
     reconcile();
 

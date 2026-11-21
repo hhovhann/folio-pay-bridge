@@ -52,8 +52,10 @@ class SecurityConfigTest {
   @Test
   @DisplayName("A configuration with neither audience nor scope prefix is refused at start-up")
   void aConfigurationWithNeitherAudienceNorScopePrefixIsRefusedAtStartup() {
-    assertThatThrownBy(() -> SecurityConfig.tokenValidator(ISSUER, "", "")).isInstanceOf(IllegalStateException.class).hasMessageContaining("audience");
-    assertThatThrownBy(() -> SecurityConfig.tokenValidator("", "folio-pay-bridge", "")).isInstanceOf(IllegalStateException.class).hasMessageContaining("issuer");
+    assertThatThrownBy(() -> SecurityConfig.tokenValidator(ISSUER, "", "")).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("audience");
+    assertThatThrownBy(() -> SecurityConfig.tokenValidator("", "folio-pay-bridge", "")).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("issuer");
   }
 
   /** Fails if, with a prefix configured, an unprefixed scope still counts: another API on the same server could name a scope "operations". */

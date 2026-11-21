@@ -32,7 +32,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @DisplayName("OpenAPI: the published description is what the code serves")
 class OpenApiContractTest {
   private static final Path COMMITTED = Path.of("docs", "openapi.json");
-  private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
+  private final ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
+      .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
   @Autowired MockMvc mvc;
 
   private JsonNode served() throws Exception {
@@ -59,7 +60,9 @@ class OpenApiContractTest {
     doc.path("paths").fields().forEachRemaining(path -> path.getValue().fields().forEachRemaining(op -> {
       String schemaRef = op.getValue().path("requestBody").path("content").path("application/json").path("schema").path("$ref").asText("");
       JsonNode schema = doc.path("components").path("schemas").path(schemaRef.substring(schemaRef.lastIndexOf('/') + 1));
-      if (schema.path("properties").has("pan")) acceptingPan.add(op.getKey().toUpperCase() + " " + path.getKey());
+      if (schema.path("properties").has("pan")) {
+        acceptingPan.add(op.getKey().toUpperCase() + " " + path.getKey());
+      }
     }));
     assertThat(acceptingPan).containsExactly("POST /api/v1/cards");
   }
@@ -80,7 +83,9 @@ class OpenApiContractTest {
   @DisplayName("Payment operations are documented")
   void paymentOperationsAreDocumented() throws Exception {
     JsonNode paths = served().path("paths");
-    assertThat(paths.fieldNames()).toIterable().contains("/api/v1/cards", "/api/v1/payments", "/api/v1/postings/{id}/replay", "/api/v1/booking-events", "/api/v1/links/{id}/pay", "/api/v1/reconcile");
+    assertThat(paths.fieldNames()).toIterable()
+        .contains("/api/v1/cards", "/api/v1/payments", "/api/v1/postings/{id}/replay", "/api/v1/booking-events", "/api/v1/links/{id}/pay",
+            "/api/v1/reconcile");
     assertThat(paths.path("/api/v1/payments").path("post").path("description").asText()).contains("never charges twice");
   }
 }

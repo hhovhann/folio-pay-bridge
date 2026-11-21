@@ -47,6 +47,7 @@ class ReconciliationServiceImpl implements ReconciliationService {
   }
 
   @Override
+  @SuppressWarnings("checkstyle:MethodLength")
   public ReconReport reconcile(List<SettlementLine> statement, Period period) {
     log.debug("reconcile(lines={}, from={}, to={})", statement.size(), period.from(), period.to());
     Map<String, List<SettlementLine>> linesByRef =

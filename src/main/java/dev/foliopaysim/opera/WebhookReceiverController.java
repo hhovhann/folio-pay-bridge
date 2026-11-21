@@ -38,14 +38,17 @@ class WebhookReceiverController {
   synchronized ResponseEntity<Void> receive(@RequestHeader("Webhook-Id") String id, @RequestHeader("Webhook-Timestamp") long timestamp,
                                             @RequestHeader("Webhook-Signature") String signature, @RequestBody String body) throws Exception {
     boolean fresh = Math.abs(Instant.now().getEpochSecond() - timestamp) <= MAX_AGE_SECONDS;
-    boolean verified = !secret.isBlank() && fresh && MessageDigest.isEqual(sign(timestamp, body).getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
+    boolean verified = !secret.isBlank() && fresh && MessageDigest.isEqual(sign(timestamp, body)
+        .getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8));
     if (!verified) {
       return ResponseEntity.status(401).build();
     }
     boolean duplicate = received.stream().anyMatch(e -> id.equals(e.get("id")));
     if (!duplicate) {
       received.addFirst(Map.of("id", id, "receivedAt", Instant.now().toString(), "body", body));
-      while (received.size() > 50) received.removeLast();
+      while (received.size() > 50) {
+        received.removeLast();
+      }
     }
     return ResponseEntity.noContent().build();
   }

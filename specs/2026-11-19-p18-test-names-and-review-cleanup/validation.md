@@ -1,12 +1,12 @@
 # Phase 18 Validation - Readable test names, and the review's smaller findings
 
 ## Every test says what it proves
-- [x] `CodeConventionsTest.everyTestAndTestClassSaysWhatItProvesInADisplayName`: 444 tests and 69 classes, each with a sentence. Its first run found `LuhnTest.rejectsNull`, which the rewrite had missed (a fully qualified `@Test`).
+- [x] `ProjectRulesTest.everyTestAndTestClassSaysWhatItProvesInADisplayName`: 444 tests and 69 classes, each with a sentence. Its first run found `LuhnTest.rejectsNull`, which the rewrite had missed (a fully qualified `@Test`).
 - [x] The surefire reports still carry method names. `tools/check_specs.py` reads the class from the test-suite name and finds every ticked test.
 
 ## The other conventions, enforced
-- [x] `CodeConventionsTest.theNumberOfLinesOver150CharactersOnlyGoesDown`: failed at 296; 73 lines from phase 16 wrapped; 221 left
-- [x] `CodeConventionsTest.everyVersionTheBuildDeclaresForADependencyOrAPluginIsAProperty`: failed on the schema validator's inline 2.0.4
+- [x] Checkstyle `LineLength` at 150 (`config/checkstyle/checkstyle.xml`; every longer line wrapped in phase 22): failed at 296; 73 lines from phase 16 wrapped; 221 left
+- [x] `ProjectRulesTest.everyVersionTheBuildDeclaresForADependencyOrAPluginIsAProperty`: failed on the schema validator's inline 2.0.4
 
 ## The review's smaller findings
 - [x] `HttpAdapterRepliesTest.theClientIdAndSecretReachOhipAsBasicCredentialsInUtf8ExactlyAsIssued`: failed on the old code ("cannot be encoded to ISO-8859-1")

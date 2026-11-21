@@ -104,14 +104,18 @@ Status: done 2026-11-21
 - PCI DSS v4.0.1 mapped requirement by requirement in `SECURITY.md`: card retention (D-44), verified TLS outside the process (D-45), dependency scanning in CI (D-46).
 - Policy values are configuration, demo values stay in the demo, and `CleanCodeTest` and `ArchitectureTest` hold the size limits, the entry logs, the stereotypes and one encryption service.
 
+## Phase 22 - Standard tools for the coding rules
+Status: done 2026-11-21
+- Checkstyle holds imports, braces, line, method and file length, parameter count and full class names; ArchUnit holds the architecture; `ProjectRulesTest` holds the few rules no tool can check. About 920 lines of hand-written checkers are gone.
+
 ## Next
 1. Multi-tenancy: operators and properties on every row, credential and webhook; per-property settings; data residency (`docs/architecture.md` section 9).
 2. Hosted card entry and 3-D Secure, so the card number never reaches the service; chargeback evidence. The acquirer's own hosted checkout (for example Visa Acceptance Solutions' Unified Checkout, with its pay-by-link and 3-D Secure) takes the card in its fields and gives the bridge a token. The bridge's payment links become the acquirer's links, the vault holds no card numbers, and the bridge leaves most of PCI DSS scope (`SECURITY.md`, "Scope"). Until then, card retention counts from a card's last use; with the booking known to the vault it could count from check-out (D-44).
 3. A sweeper for payments stranded by a crash between two steps; alarms on dead letters and failed webhooks.
 4. Real adapters: OHIP sandbox, an acquirer's test environment, KMS and Cognito in an AWS account. For OHIP, the first sandbox session settles what Oracle's specification leaves open (D-42): whether a folio window's `totalResults` counts postings or folios (phase 19); does `postBillingPayment`'s 201 carry the postings or only a `Location`; the sign of a payment on a folio; whether payments before arrival must be deposits (`action: Deposit`, `getDepositFolio`) at each hotel; the status OHIP gives a locked reservation; the rate limits; how `getFolio` pages (does `offset` count postings, the default page size, the order of postings while the front desk is posting); whether postings billed to a generated folio are listed without `includeFolioHistory=true` (the OHIP review's third finding: if not, a replay after the folio is billed could post again). Then run Oracle's Postman collections against the sandbox, and point the bridge at it by configuration (`FOLIOPAY_HTTP_OPERA_*`).
 5. Store the business date OPERA posted on (read back by `find`) beside the bridge's own, so reconciliation can explain a charge booked before night audit and posted after it.
-6. CI quality and security gates beyond OSV-Scanner (D-46), each a new CI dependency for the owner to approve:
+6. CI quality and security gates beyond OSV-Scanner (D-46) and Checkstyle and ArchUnit (phase 22), each a new dependency for the owner to approve:
    - static analysis with a quality gate (SonarQube or SonarCloud);
-   - a formatter that checks style (Spotless with google-java-format, proposed in phase 15), which would also retire the long-line ratchet;
+   - a formatter that rewrites the code to Google style (Spotless with google-java-format, proposed in phase 15);
    - GitHub's CodeQL code scanning, and secret scanning with push protection;
    - mutation testing over the whole code (PIT) instead of the per-fix mutation scripts.

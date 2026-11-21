@@ -41,7 +41,8 @@ class KmsWireTest {
       bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
       Base64.Encoder b64 = Base64.getEncoder();
       String reply = target.endsWith("GenerateDataKey")
-          ? "{\"KeyId\":\"" + KEY_ARN + "\",\"Plaintext\":\"" + b64.encodeToString(PLAIN) + "\",\"CiphertextBlob\":\"" + b64.encodeToString(WRAPPED) + "\"}"
+          ? "{\"KeyId\":\"" + KEY_ARN + "\",\"Plaintext\":\"" + b64.encodeToString(PLAIN) + "\",\"CiphertextBlob\":\"" + b64.encodeToString(WRAPPED)
+              + "\"}"
           : "{\"KeyId\":\"" + KEY_ARN + "\",\"Plaintext\":\"" + b64.encodeToString(PLAIN) + "\"}";
       byte[] body = reply.getBytes(StandardCharsets.UTF_8);
       exchange.getResponseHeaders().add("Content-Type", "application/x-amz-json-1.1");

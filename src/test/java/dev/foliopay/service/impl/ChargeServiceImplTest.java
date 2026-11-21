@@ -90,7 +90,8 @@ class ChargeServiceImplTest {
   void setUp() {
     TransactionTemplate tx = mock(TransactionTemplate.class);
     when(tx.execute(any())).thenAnswer(call -> ((TransactionCallback<Object>) call.getArgument(0)).doInTransaction(null));
-    Retry retry = Retry.of("psp", RetryConfig.custom().maxAttempts(3).intervalFunction(IntervalFunction.of(1)).retryExceptions(PspTransientException.class).build());
+    Retry retry = Retry.of("psp", RetryConfig.custom().maxAttempts(3).intervalFunction(IntervalFunction.of(1))
+        .retryExceptions(PspTransientException.class).build());
     service = new ChargeServiceImpl(repository, vault, psp, new IdempotentStore(tx), retry, businessDates);
     when(repository.saveAndFlush(any(Charge.class))).thenAnswer(call -> call.getArgument(0));
     when(repository.save(any(Charge.class))).thenAnswer(call -> call.getArgument(0));
@@ -121,7 +122,8 @@ class ChargeServiceImplTest {
   void aTransientFailureIsRetriedWithTheSameKeyUntilItSucceeds() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
-    when(psp.capture(endsWith(":cap"), eq("auth_1"), eq(TEN))).thenThrow(new PspTransientException("timeout")).thenThrow(new PspTransientException("timeout")).thenReturn(new PspResult("cap_1"));
+    when(psp.capture(endsWith(":cap"), eq("auth_1"), eq(TEN))).thenThrow(new PspTransientException("timeout"))
+        .thenThrow(new PspTransientException("timeout")).thenReturn(new PspResult("cap_1"));
 
     Charge charge = service.charge(command());
 
@@ -218,7 +220,8 @@ class ChargeServiceImplTest {
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
     when(psp.capture(anyString(), anyString(), any())).thenReturn(new PspResult("cap_1"));
     Charge storedPending = Fixtures.charge("key-1", "BK-1", "tok_1", TEN);
-    when(repository.save(any(Charge.class))).thenThrow(new ObjectOptimisticLockingFailureException(Charge.class, "id")).thenAnswer(call -> call.getArgument(0));
+    when(repository.save(any(Charge.class))).thenThrow(new ObjectOptimisticLockingFailureException(Charge.class, "id"))
+        .thenAnswer(call -> call.getArgument(0));
     when(repository.findById(anyString())).thenReturn(Optional.of(storedPending));
 
     Charge result = service.charge(command());
@@ -254,11 +257,15 @@ class ChargeServiceImplTest {
   @Test
   @DisplayName("The same key with a different folio or business date is a conflict, not a silent replay of the first")
   void theSameKeyWithADifferentFolioOrBusinessDateIsAConflictNotASilentReplayOfTheFirst() {
-    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1"))
+        .thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
 
-    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-OTHER", Fixtures.DAY, "tok_1", TEN))).isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-1", Fixtures.DAY.plusDays(1), "tok_1", TEN))).isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-OTHER", "F-1", Fixtures.DAY, "tok_1", TEN))).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-OTHER", Fixtures.DAY, "tok_1", TEN)))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-1", "F-1", Fixtures.DAY.plusDays(1), "tok_1", TEN)))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.charge(new ChargeCommand(Charge.BRIDGE_CLIENT, "key-1", "BK-OTHER", "F-1", Fixtures.DAY, "tok_1", TEN)))
+        .isInstanceOf(ConflictException.class);
     verifyNoInteractions(psp);
   }
 
@@ -312,7 +319,8 @@ class ChargeServiceImplTest {
     when(psp.authorize(anyString(), any(), anyString(), any()))
         .thenAnswer(call -> { assertThat(vault.lent).as("card lent during authorise").hasValue(1); throw new PspTransientException("timeout"); })
         .thenReturn(new PspResult("auth_1"));
-    when(psp.capture(anyString(), anyString(), any())).thenAnswer(call -> { assertThat(vault.lent).as("card not lent during capture").hasValue(0); return new PspResult("cap_1"); });
+    when(psp.capture(anyString(), anyString(), any())).thenAnswer(call -> { assertThat(vault.lent).as("card not lent during capture")
+        .hasValue(0); return new PspResult("cap_1"); });
 
     service.charge(command());
 
@@ -345,14 +353,16 @@ class ChargeServiceImplTest {
   @Test
   @DisplayName("The same key with a different card is a conflict")
   void theSameKeyWithADifferentCardIsAConflict() {
-    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1")).thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
+    when(repository.findByClientIdAndIdempotencyKey(Charge.BRIDGE_CLIENT, "key-1"))
+        .thenReturn(Optional.of(Fixtures.charge("key-1", "BK-1", "tok_1", TEN)));
     assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_other", TEN))).isInstanceOf(ConflictException.class);
   }
 
   @Test
   @DisplayName("A zero amount is refused before anything is stored")
   void aZeroAmountIsRefusedBeforeAnythingIsStored() {
-    assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_1", new Money(0, "USD")))).isInstanceOf(InvalidRequestException.class);
+    assertThatThrownBy(() -> service.charge(Fixtures.command("key-1", "BK-1", "tok_1", new Money(0, "USD"))))
+        .isInstanceOf(InvalidRequestException.class);
     verifyNoInteractions(repository, psp);
   }
 
@@ -362,7 +372,8 @@ class ChargeServiceImplTest {
   void aCaptureTheProcessorRefusesIsFinalAndReleasesTheHold() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
-    when(psp.capture(anyString(), anyString(), any())).thenThrow(new PspRejectedException("The processor refused the request (422): AMOUNT_MISMATCH"));
+    when(psp.capture(anyString(), anyString(), any()))
+        .thenThrow(new PspRejectedException("The processor refused the request (422): AMOUNT_MISMATCH"));
 
     Charge charge = service.charge(command());
 
@@ -395,7 +406,8 @@ class ChargeServiceImplTest {
   void aCaptureAnsweredWithoutAReferenceStaysPendingAndKeepsTheHold() {
     noExistingCharge();
     when(psp.authorize(anyString(), any(), anyString(), any())).thenReturn(new PspResult("auth_1"));
-    when(psp.capture(anyString(), anyString(), any())).thenThrow(new PspUnreadableReplyException("The processor accepted the capture but sent no reference"));
+    when(psp.capture(anyString(), anyString(), any()))
+        .thenThrow(new PspUnreadableReplyException("The processor accepted the capture but sent no reference"));
 
     Charge charge = service.charge(command());
 
