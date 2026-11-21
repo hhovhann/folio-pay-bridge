@@ -5,7 +5,7 @@
 - [x] `ChargeServiceImplTest.aStoredChargeIsFoundUnderItsClientAndKey`
 - [x] `ChargeServiceImplTest.authorisesThenCapturesAndStoresTheProcessorReference` (the processor's keys are the charge's own id)
 - [x] `SecurityIntegrationTest.anAppThatMayAskForMoneyCannotTakeItAndAPayerCannotCreateRequests`
-- [x] `HttpAdapterRepliesTest.operaRefusingOurCredentialsIsReplayableNotARejectionOfTheFolio`
+- [x] `HttpAdapterRepliesTest.operaRefusingOurCredentialsIsReplayableNotARejectionOfTheFolio`, `HttpAdapterRepliesTest.operaAnsweringWithoutATokenOrRefusingTheApplicationIsReplayableToo`
 - [x] `HttpAdaptersTest.wrongCredentialsAreOursToFixAndReplayableNotARejectionOfTheFolio`
 - [x] `HttpAdapterRepliesTest.a404WithoutTheirOwnErrorCodeIsAWrongAddressNotARefusal`
 - [x] `HttpAdapterRepliesTest.aProcessorSuccessWithoutAReferenceIsUnreadableNeverABlankReference`

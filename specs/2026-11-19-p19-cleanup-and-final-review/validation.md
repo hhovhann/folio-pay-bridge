@@ -7,8 +7,8 @@
 - [x] Every page draws its icons from one sprite, and the demo still renders them: the full-flow dry run with a still per scene
 
 ## The review's findings, each test failing first
-- [x] `HttpAdapterRepliesTest.aReplyThatIsNotAFolioIsUnavailableButAFolioWithNoWindowsProvesThePaymentAbsent`, with its twin `HttpAdapterRepliesTest.aFolioWithNoContentIsNotFound`
-- [x] `HttpAdapterRepliesTest.aSettlementStatementThatCannotBeReadIsUnreadableNeverLinesWithBlankReferencesOrZeroAmounts`
+- [x] `HttpAdapterRepliesTest.aReplyThatIsNotAFolioIsUnavailableButAFolioWithNoWindowsProvesThePaymentAbsent`, `HttpAdapterRepliesTest.aFolioWithNoWindowsYetProvesThePaymentAbsent`, with its twin `HttpAdapterRepliesTest.aFolioWithNoContentIsNotFound`
+- [x] `HttpAdapterRepliesTest.aSettlementStatementThatCannotBeReadIsUnreadableNeverLinesWithBlankReferencesOrZeroAmounts`, `HttpAdapterRepliesTest.anEmptyStatementIsNothingSettledAndAReadableLineIsReadExactly`
 - [x] `PaymentControllerTest.anAnswerFromOutsideThatCannotBeReadIsA503ToRetryNotAServerError`
 - [x] `WebhookPropertiesTest.theSendLeaseCoversTwoWholeSendsAndIsNeverUnderAMinute`
 - [x] `NotificationServiceImplTest.aLostRaceOnOneEventDoesNotHoldUpTheRestOfTheBatch`

@@ -10,7 +10,7 @@
 
 ## The review's smaller findings
 - [x] `HttpAdapterRepliesTest.theClientIdAndSecretReachOhipAsBasicCredentialsInUtf8ExactlyAsIssued`: failed on the old code ("cannot be encoded to ISO-8859-1")
-- [x] `HttpAdapterRepliesTest.operaRefusingOurCredentialsIsReplayableNotARejectionOfTheFolio`: the stored reason names the enterprise id and scope; failed on the old text
+- [x] `HttpAdapterRepliesTest.operaRefusingOurCredentialsIsReplayableNotARejectionOfTheFolio`, `HttpAdapterRepliesTest.operaAnsweringWithoutATokenOrRefusingTheApplicationIsReplayableToo`: the stored reason names the enterprise id and scope; failed on the old text
 - [x] `OperaSimulatorTest.aGuestCheckingInGetsARoomNoGuestInHouseHoldsEvenAfterAnotherGuestHasLeft`: failed on the old code (two guests in one room)
 - [x] `OperaSimulatorTest.bookingAReservationThePmsAlreadyHoldsChangesNothing`: failed on the old code (back to due-in, no room)
 - [x] Agent log 52 names `OhipContractTest.aPaymentIsPostedAndFoundBackThroughOraclesOperationsInEachCurrency`

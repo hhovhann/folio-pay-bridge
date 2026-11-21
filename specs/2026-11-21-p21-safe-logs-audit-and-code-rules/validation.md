@@ -18,24 +18,28 @@
 - [x] A card unused past its period is destroyed; one with a payment pending, one used within the period and one opened since the search are kept; a backlog drains: `CardRetentionIntegrationTest.*`
 - [x] A retention under a day is refused: `VaultPropertiesTest.aRetentionPeriodUnderADayIsRefused`
 - [x] Plain HTTP to OPERA or the processor, and PostgreSQL without `verify-full`, stop the start: `TransportSecurityGuardTest.*`, `FailClosedStartupTest.withARealGatewayOverPlainHttpItDoesNotStart`
-- [ ] (manual) OSV-Scanner runs green in CI on the first push (`.github/workflows/osv-scanner.yml`)
+- [x] (manual) OSV-Scanner runs green in CI on the first push (`.github/workflows/osv-scanner.yml`; run 44871474797 on 22ea57f, success)
 
 ## Configuration and code rules
 - [x] A different deposit policy and a different webhook back-off are applied as configured: `PaymentRequestPolicyTest.anotherHotelsPolicyIsAppliedAsConfigured`, `WebhookPropertiesTest.theDeliveryBackOffComesFromTheSettings`
 - [x] The demo's messy statement lives in the demo service: `DemoServiceImplTest.theMessyStatementDropsOneCaptureSettlesOneShortAndAddsOneWeNeverCaptured`, `ReconciliationServiceImplTest.theAcquirersOwnStatementIsReconciledExactlyAsTheProcessorReportsIt`
 - [x] Every public service method logs its entry; the size limits hold with today's exceptions named: `CleanCodeTest.*`
 - [x] Services are marked `@Service` and nothing else is; encryption only in `crypto`: `ArchitectureTest.servicesAreMarkedServiceAndNothingElseIs`, `ArchitectureTest.encryptionAndKeyManagementHappenOnlyInTheCryptoPackage`
-- [x] `CodeConventionsTest.theNumberOfLinesOver150CharactersOnlyGoesDown` at 184 (from 202)
+- [x] `CodeConventionsTest.theNumberOfLinesOver150CharactersOnlyGoesDown` at 182 (from 202)
 
 ## Findings of the code review (agent log 65)
 - [x] A payment repeated after its card was purged gets its first result (failed first): `ChargeServiceImplTest.aRepeatOfAFinishedChargeGetsItsFirstResultEvenAfterItsCardIsGone`, `CardRetentionIntegrationTest.aPaymentRepeatedAfterItsCardWasPurgedGetsItsFirstResult`
 - [x] A card purged before the first attempt is a final refusal, never a charge pending for ever (failed first): `ChargeServiceImplTest.aCardGoneBeforeTheFirstAttemptIsAFinalRefusal`
-- [x] A URL that names verify-full but switches the check off, and signing keys over plain HTTP, stop the start: `TransportSecurityGuardTest.aUrlThatNamesVerifyFullButSwitchesTheCheckOffStopsTheStart`, `TransportSecurityGuardTest.theSigningKeysOverPlainHttpStopTheStart`
+- [x] A URL that names verify-full but switches the check off, and signing keys over plain HTTP, stop the start: `TransportSecurityGuardTest.aUrlThatNamesVerifyFullButSwitchesTheCheckOffStopsTheStart`, `TransportSecurityGuardTest.aPoolSettingThatLowersSslmodeStopsTheStart`, `TransportSecurityGuardTest.theSigningKeysOverPlainHttpStopTheStart`
 - [x] A business date staleness of zero or less is refused: `OperaPropertiesTest.aStalenessOfZeroOrLessIsRefused`
 - [x] The configuration recorded at start includes the signing-key address: `AuditTrailTest.theStartRecordsTheConfigurationByValueAndEachSecretOnlyAsSetOrNotSet`
 
+## Parameterized tests (agent log 67)
+- [x] A plain test that loops over written-out inputs, directly or through a local, fails the build: `CleanCodeTest.aTestWithSeveralWrittenOutInputsIsParameterized`
+- [x] Twenty-one input loops are `@ParameterizedTest`s, each run named after its input; their contrasting cases are tests of their own and cited beside them (`HttpAdapterRepliesTest`, `ApiKeysTest`, `HostAllowlistFilterTest`, `OpenApiContractTest`, `FailClosedStartupTest`, `TransportSecurityGuardTest`, `OperaPropertiesTest`, `PaymentRequestPolicyTest`, `WebhookPropertiesTest`): `HttpAdapterRepliesTest.aFolioWithNoWindowsYetProvesThePaymentAbsent`, `ApiKeysTest.aListOfOnlyBlanksAndCommasHasNoKeys`, `WebhookPropertiesTest.theShippedDeliveryScheduleStarts`
+
 ## Proof the checks can fail
-- [x] `var/mutate_p21.py`: each deliberate bug is caught by its named test, and each test is confirmed to have run (26 cases, all caught; the first run caught 17 of 19, and the two misses became two new tests, agent log 63)
+- [x] `var/mutate_p21.py`: each deliberate bug is caught by its named test, and each test is confirmed to have run (28 cases, all caught; the first run caught 17 of 19, and the two misses became two new tests, agent log 63)
 
 ## The whole build
 - [x] `./mvnw clean verify` (the coverage gate), `python3 tools/check_specs.py`, `python3 tools/guard_secrets.py --repo`, `python3 tools/guard_commands.py --self-test`

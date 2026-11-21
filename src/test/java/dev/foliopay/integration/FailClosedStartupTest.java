@@ -9,10 +9,11 @@ import dev.foliopay.FolioPayApplication;
 import dev.foliopay.logging.AuditLog;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -62,16 +63,14 @@ class FailClosedStartupTest {
    * Fails if the hotel's OPERA settings have defaults. They used to default to the simulator's own (hotel DEMO1, payment method CC, cashier
    * 9001), so a deployment that left one out would post real payments under another cashier or card type, with no error (OHIP review, D-17).
    */
-  @Test
+  @ParameterizedTest(name = "without foliopay.opera.{0}")
+  @CsvSource({"hotel-id, hotelId", "payment-method, paymentMethod", "cashier-id, cashierId"})
   @DisplayName("Without each of the hotel's OPERA settings, the application does not start")
-  void withoutEachOfTheHotelsOperaSettingsItDoesNotStart() {
-    Map<String, String> fieldOf = Map.of("hotel-id", "hotelId", "payment-method", "paymentMethod", "cashier-id", "cashierId");
-    fieldOf.forEach((setting, field) -> {
-      List<String> allButOne = Stream.concat(HOTEL.stream().filter(p -> !p.startsWith("foliopay.opera." + setting + "=")),
-          Stream.of("foliopay.keys=local", "foliopay.gateway=fake")).toList();
-      assertThatThrownBy(() -> run(WebApplicationType.NONE, allButOne).close()).as(setting).hasStackTraceContaining("foliopay.opera")
-          .hasStackTraceContaining(field);
-    });
+  void withoutEachOfTheHotelsOperaSettingsItDoesNotStart(String setting, String field) {
+    List<String> allButOne = Stream.concat(HOTEL.stream().filter(p -> !p.startsWith("foliopay.opera." + setting + "=")),
+        Stream.of("foliopay.keys=local", "foliopay.gateway=fake")).toList();
+    assertThatThrownBy(() -> run(WebApplicationType.NONE, allButOne).close()).hasStackTraceContaining("foliopay.opera")
+        .hasStackTraceContaining(field);
   }
 
   /** Fails if a real gateway can start with an open API (D-17, D-30): anyone could test stolen cards against the acquirer. */

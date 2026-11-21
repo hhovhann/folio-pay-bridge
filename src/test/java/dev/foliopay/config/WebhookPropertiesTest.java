@@ -6,9 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.foliopay.Fixtures;
 import java.time.Duration;
-import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 @DisplayName("Webhook settings: the signing secret is never printed, and the send lease follows the timeouts")
 class WebhookPropertiesTest {
@@ -48,14 +49,18 @@ class WebhookPropertiesTest {
   }
 
   /** Fails if a schedule that can never send starts: a batch of none would throw on every relay run, and no webhook would ever leave. */
-  @Test
+  @ParameterizedTest(name = "first retry {0}, longest wait {1}, batch {2}")
+  @CsvSource({"PT30S, PT1H, 0", "PT30S, PT1H, 1001", "PT0S, PT1H, 100", "PT2H, PT1H, 100"})
   @DisplayName("A delivery schedule that could never send stops the start, naming the settings")
-  void aDeliveryScheduleThatCouldNeverSendStopsTheStart() {
-    for (WebhookProperties wrong : List.of(
-        schedule(Duration.ofSeconds(30), Duration.ofHours(1), 0), schedule(Duration.ofSeconds(30), Duration.ofHours(1), 1_001),
-        schedule(Duration.ZERO, Duration.ofHours(1), 100), schedule(Duration.ofHours(2), Duration.ofHours(1), 100))) {
-      assertThatThrownBy(wrong::requireUsable).isInstanceOf(IllegalStateException.class).hasMessageContaining("foliopay.webhook");
-    }
+  void aDeliveryScheduleThatCouldNeverSendStopsTheStart(String firstRetry, String longestWait, int batchSize) {
+    WebhookProperties wrong = schedule(Duration.parse(firstRetry), Duration.parse(longestWait), batchSize);
+    assertThatThrownBy(wrong::requireUsable).isInstanceOf(IllegalStateException.class).hasMessageContaining("foliopay.webhook");
+  }
+
+  /** Split from the test above in phase 21: the shipped schedule starts. */
+  @Test
+  @DisplayName("The shipped delivery schedule starts")
+  void theShippedDeliveryScheduleStarts() {
     assertThatCode(() -> schedule(Duration.ofSeconds(30), Duration.ofHours(1), 100).requireUsable()).doesNotThrowAnyException();
   }
 

@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.foliopay.service.support.Fingerprint;
 import java.util.HexFormat;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @DisplayName("API keys: found by their hash, with their scopes")
 class ApiKeysTest {
@@ -27,12 +30,21 @@ class ApiKeysTest {
   }
 
   /** Fails if a mistyped entry is skipped: the operator would believe a client can call in, or worse, that a removed key is gone. */
-  @Test
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("malformedEntries")
   @DisplayName("An API key entry that is not name:hash:scopes stops start-up")
-  void anEntryThatIsNotNameHashScopesStopsStartUp() {
-    for (String bad : new String[] {"pms:" + hash("k"), "pms:not-a-hash:payments:read", ":" + hash("k") + ":payments:read", "pms:" + hash("k") + ": "}) {
-      assertThatThrownBy(() -> new ApiKeys(bad)).as(bad).isInstanceOf(IllegalStateException.class).hasMessageContaining("name:sha256hex:scope");
-    }
+  void anEntryThatIsNotNameHashScopesStopsStartUp(String bad) {
+    assertThatThrownBy(() -> new ApiKeys(bad)).isInstanceOf(IllegalStateException.class).hasMessageContaining("name:sha256hex:scope");
+  }
+
+  static Stream<String> malformedEntries() {
+    return Stream.of("pms:" + hash("k"), "pms:not-a-hash:payments:read", ":" + hash("k") + ":payments:read", "pms:" + hash("k") + ": ");
+  }
+
+  /** Split from the test above in phase 21: blanks and commas alone configure no key, without an error. */
+  @Test
+  @DisplayName("A list of only blanks and commas has no keys, and is not an error")
+  void aListOfOnlyBlanksAndCommasHasNoKeys() {
     assertThat(new ApiKeys(" , ").isEmpty()).isTrue();
   }
 }

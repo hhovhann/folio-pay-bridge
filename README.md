@@ -24,7 +24,7 @@ You need a JDK 17 and Docker.
 git clone https://github.com/hhovhann/folio-pay-bridge && cd folio-pay-bridge
 export JAVA_HOME=<path to a JDK 17>
 
-# 1. Prove it: 557 backend tests + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
+# 1. Prove it: 619 backend test runs + the dashboard's tests, coverage gate (99% lines, 90% branches), then the spec checker
 ./mvnw clean verify && python3 tools/check_specs.py
 
 # 2. See the whole flow over real HTTP: bridge + PostgreSQL (Flyway) + OPERA simulator + processor simulator
@@ -99,7 +99,7 @@ Scopes: `cards:write`, `payments:write`, `links:write`, `bookings:write`, `payme
 | OPERA, the processor and PostgreSQL are reached over verified TLS, or the app does not start (PCI DSS 4.2.1) | `TransportSecurityGuardTest` |
 | Policy is configuration (a different deposit rule or back-off is applied); services log their entry; methods and classes stay small; services are `@Service`; only `crypto` encrypts | `PaymentRequestPolicyTest`, `WebhookPropertiesTest`, `CleanCodeTest`, `ArchitectureTest` |
 
-**557 backend tests**, each named by a sentence that says what it proves, and 16 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.8% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes, 11 of 11 in its cleanup, 14 of 14 in the final review, 26 of 26 in the safe-logs phase and its review). Every API operation is tested both succeeding and refused, counted from the requests the tests really send (`tools/check_specs.py`). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
+**619 backend test runs** (each input of a parameterized test counted on its own), each named by a sentence that says what it proves, and 16 dashboard tests; backend coverage measured, not claimed: **99.4% of lines, 91.8% of branches** (JaCoCo, gate in `./mvnw verify`, `python3 tools/coverage.py` lists what is uncovered). The key tests were **mutation-checked**: each fix was broken on purpose and its test had to fail (39 of 39 in phase 14, 14 of 14 in the production-readiness review, 9 of 9 in the OHIP review's fixes, 11 of 11 in its cleanup, 14 of 14 in the final review, 28 of 28 in the safe-logs phase and its review). Every API operation is tested both succeeding and refused, counted from the requests the tests really send (`tools/check_specs.py`). [`docs/edge-cases.md`](docs/edge-cases.md) lists every edge case, its test, and what is not covered.
 
 ## Honest limits (read before you trust it)
 - **Simulators, not integrations.** No real OPERA Cloud (OHIP) or acquirer. OPERA cannot be run locally by anyone (OPERA Cloud is Oracle's hosted service; OPERA 5 is licensed to hotels), so the OPERA side follows Oracle's published contract and a test holds the adapter and the simulator to it; what the contract leaves open is a list of questions for the first sandbox session (`specs/roadmap.md`). Running for real needs OHIP partner access, which comes with the employer, and an acquirer's test environment.

@@ -3,7 +3,7 @@
 ## Finding 1: a long folio stopped its guest being paid
 - [x] `HttpAdapterRepliesTest.aLongFolioIsReadPageByPageSoItsGuestCanBePaid`: failed on the old code ("OPERA returned only part of the folio")
 - [x] `OhipContractTest.aPaymentOnALongFolioIsFoundOnALaterPage`: every page, asked and answered, on Oracle's contract
-- [x] `HttpAdapterRepliesTest.aFolioPageThatCannotProveOurPaymentAbsentIsUnavailableNeverNotFound`: the fail-safe kept for each of these:
+- [x] `HttpAdapterRepliesTest.aFolioPageThatCannotProveOurPaymentAbsentIsUnavailableNeverNotFound`, `HttpAdapterRepliesTest.aWindowWithoutItsNumberCannotBeAskedForItsNextPage`, `HttpAdapterRepliesTest.aWindowThatNeverEndsIsReadForAtMostFiftyPages`: the fail-safe kept for each of these:
   - an empty page after a promise of more;
   - no folio;
   - the wrong window;

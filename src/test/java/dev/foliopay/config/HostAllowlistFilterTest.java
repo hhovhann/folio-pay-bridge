@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
@@ -19,14 +21,13 @@ class HostAllowlistFilterTest {
     return request;
   }
 
-  @Test
+  @ParameterizedTest(name = "Host {0}")
+  @ValueSource(strings = {"127.0.0.1", "10.0.3.17"})
   @DisplayName("A health probe by IP or loopback is answered whatever the Host header")
-  void aHealthProbeByIpOrLoopbackIsAnsweredWhateverTheHost() throws Exception {
-    for (String host : new String[] {"127.0.0.1", "10.0.3.17"}) {
-      AtomicBoolean reached = new AtomicBoolean();
-      filter.doFilter(to(host, "/actuator/health/readiness"), new MockHttpServletResponse(), (req, res) -> reached.set(true));
-      assertThat(reached).as(host).isTrue();
-    }
+  void aHealthProbeByIpOrLoopbackIsAnsweredWhateverTheHost(String host) throws Exception {
+    AtomicBoolean reached = new AtomicBoolean();
+    filter.doFilter(to(host, "/actuator/health/readiness"), new MockHttpServletResponse(), (req, res) -> reached.set(true));
+    assertThat(reached).isTrue();
   }
 
   @Test
@@ -46,13 +47,12 @@ class HostAllowlistFilterTest {
   }
 
   /** Fails if the exemption matches a prefix of the raw path: a rebinding page could reach the API through it. */
-  @Test
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {"/actuator/health/../../api/charges", "/actuator/healthX", "/actuator/health/..;/api"})
   @DisplayName("Only the probe itself is exempt, not a path that merely starts like it")
-  void onlyTheProbeItselfIsExemptNotAPathThatMerelyStartsLikeIt() throws Exception {
-    for (String path : new String[] {"/actuator/health/../../api/charges", "/actuator/healthX", "/actuator/health/..;/api"}) {
-      MockHttpServletResponse response = new MockHttpServletResponse();
-      filter.doFilter(to("10.0.3.17", path), response, (req, res) -> { throw new AssertionError("reached " + path); });
-      assertThat(response.getStatus()).as(path).isEqualTo(400);
-    }
+  void onlyTheProbeItselfIsExemptNotAPathThatMerelyStartsLikeIt(String path) throws Exception {
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    filter.doFilter(to("10.0.3.17", path), response, (req, res) -> { throw new AssertionError("reached " + path); });
+    assertThat(response.getStatus()).isEqualTo(400);
   }
 }

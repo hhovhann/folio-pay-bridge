@@ -12,7 +12,7 @@
 - [x] `HttpAdapterRepliesTest.aFolioReturnedOnlyInPartIsUnavailableNotAbsent`
 - [x] `HttpAdapterRepliesTest.aPaymentListedAsACreditIsFoundAndAChargeWithOurReferenceIsNot`
 - [x] `HttpAdapterRepliesTest.aFolioWithNoContentIsNotFound`
-- [x] `HttpAdapterRepliesTest.anOperaReplyWithoutATransactionNumberIsNotRecordedAsPostedWithABlankReference` (empty 201, a generated charge, a blank number)
+- [x] `HttpAdapterRepliesTest.anOperaReplyWithoutATransactionNumberIsNotRecordedAsPostedWithABlankReference`, `HttpAdapterRepliesTest.ourPaymentIsFoundAmongThePostingsOperaGeneratedWithIt` (empty 201, a generated charge, a blank number)
 - [x] `HttpAdapterRepliesTest.aFoundPaymentIsFoundByItsTransactionNumberEvenWhenItsAmountOrDateCannotBeRead` (including a fraction of a cent; phase 17 reversed what this box first pinned, as aFoundPaymentWeCannotReadIsAnOutageNotACrash: agent log 54)
 - [x] `HttpAdapterRepliesTest.aBusinessDateWeCannotReadIsAnOutageNotACrash` (including another hotel's date)
 - [x] `HttpAdapterRepliesTest.httpModeRefusesToStartWithoutItsAddressesAndCredentials` (enterprise id and scope)

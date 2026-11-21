@@ -139,4 +139,11 @@ A pilot, not production. These are the corrections made while building it with C
     - The check now also refuses a picture that stands still longer than any scene does (`still_picture`, ffmpeg `freezedetect`). It refused this file ("stands still for 274 s from 149 s") and passed the previous day's good one.
     - The video was recorded again under `caffeinate -i`, and the new file passes the check.
 
+67. **Twenty-one tests looped over the inputs they wrote out, six of them written in this phase.** A loop inside one test stops at the first failing input, and the report says the test failed, not for which input. The owner asked whether tests used parameters where the same thing is tested with different values (2026-11-21); the JDK parser listed every plain test that asserts inside a loop.
+    - All twenty-one were "one behaviour, several inputs" (status codes, malformed replies, database URLs, settings out of bounds). They are `@ParameterizedTest`s now, each run named after its input; `HttpAdapterRepliesTest` reports 47 cases, not 24.
+    - Ten of them also checked a contrasting input after the loop (a folio with no windows proves the payment absent; an empty statement is nothing settled). That case is a test of its own now, cited beside the old one.
+    - Five loops over one outcome (every log event of a flow, every row of every table, every concurrent reply, every webhook received) stay loops: they are one case.
+    - The rule's first version missed two tables written into a local `Map.of` before the loop; it now follows a local name back to a written-out value.
+    - `CleanCodeTest.aTestWithSeveralWrittenOutInputsIsParameterized` refuses a plain test that loops over an array or a `List.of` it writes out (a deliberate loop put back was caught, `var/mutate_p21.py`).
+
 Pattern: the agents are quick at the shape of the code and weak at **what the test would actually catch**, at **what is really on the screen**, and at **saying a fix is complete when it is not**. So the brief makes tests name their failure, the demo asserts every claim, and a log entry that says "fixed" names the check that proves it.

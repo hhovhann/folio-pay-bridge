@@ -6,7 +6,7 @@
 - [x] `FullFlowHttpIntegrationTest.parallelReplaysAgainstANonDeduplicatingOperaPostOnce` (8 posts without the lease)
 - [x] `PaymentFlowIntegrationTest.parallelReplaysOfOneDeadLetteredPostingPostItOnce`
 - [x] `PostingServiceImplTest.anUnexpectedErrorIsDeadLetteredAsReplayableNeverLeftPending`
-- [x] `HttpAdapterRepliesTest.anOperaReplyWithoutATransactionNumberIsNotRecordedAsPostedWithABlankReference`
+- [x] `HttpAdapterRepliesTest.anOperaReplyWithoutATransactionNumberIsNotRecordedAsPostedWithABlankReference`, `HttpAdapterRepliesTest.ourPaymentIsFoundAmongThePostingsOperaGeneratedWithIt`
 - [x] `HttpAdapterRepliesTest.aProcessorRateLimitOrAParallelRequestWithTheSameKeyIsWaitedOutNotTreatedAsOurBug`
 - [x] `BusinessDateServiceImplTest.aSlowPmsAnswerForOneRequestDoesNotHoldUpAnother` (fails if `resolve` is synchronized again)
 - [x] `RequestSizeFilterTest.aChunkedBodyOverTheLimitIsRefusedWithoutReachingTheController`

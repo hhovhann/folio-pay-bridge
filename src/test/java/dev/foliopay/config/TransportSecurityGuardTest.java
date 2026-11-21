@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.mock.env.MockEnvironment;
 
 @DisplayName("Transport security: everything outside the process is reached over verified TLS")
@@ -35,39 +37,39 @@ class TransportSecurityGuardTest {
     assertThatCode(() -> check(httpGateway("https://opera.example.test", "https://psp.example.test"))).doesNotThrowAnyException();
   }
 
-  @Test
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {RDS, RDS + "?sslmode=require", RDS + "?sslmode=verify-ca", RDS + "?ssl=true"})
   @DisplayName("PostgreSQL without verified TLS stops the start; encryption that accepts any server is not enough")
-  void postgresWithoutVerifiedTlsStopsTheStart() {
-    for (String url : new String[] {RDS, RDS + "?sslmode=require", RDS + "?sslmode=verify-ca", RDS + "?ssl=true"}) {
-      assertThatThrownBy(() -> check(new MockEnvironment().withProperty("spring.datasource.url", url)))
-          .as(url).hasMessageContaining("spring.datasource.url");
-    }
+  void postgresWithoutVerifiedTlsStopsTheStart(String url) {
+    assertThatThrownBy(() -> check(new MockEnvironment().withProperty("spring.datasource.url", url))).hasMessageContaining("spring.datasource.url");
   }
 
-  @Test
-  @DisplayName("PostgreSQL with sslmode=verify-full starts, wherever the option stands in the URL")
-  void postgresWithVerifyFullStarts() {
-    for (String url : new String[] {RDS + "?sslmode=verify-full", RDS + "?sslmode=verify-full&sslrootcert=/app/rds-ca.pem",
-        RDS + "?sslrootcert=/app/rds-ca.pem&sslmode=verify-full"}) {
-      assertThatCode(() -> check(new MockEnvironment().withProperty("spring.datasource.url", url))).as(url).doesNotThrowAnyException();
-    }
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {RDS + "?sslmode=verify-full", RDS + "?sslmode=verify-full&sslrootcert=/app/rds-ca.pem",
+      RDS + "?sslrootcert=/app/rds-ca.pem&sslmode=verify-full",
+      "jdbc:aws-wrapper:postgresql://db.example.test:5432/folio?sslmode=verify-full"})
+  @DisplayName("PostgreSQL with sslmode=verify-full starts, wherever the option stands and through a wrapped driver")
+  void postgresWithVerifyFullStarts(String url) {
+    assertThatCode(() -> check(new MockEnvironment().withProperty("spring.datasource.url", url))).doesNotThrowAnyException();
   }
 
   /** Fails if a URL that names verify-full can still connect without checking the server (code review finding, phase 21). */
-  @Test
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {RDS + "?sslmode=verify-full&sslfactory=org.postgresql.ssl.NonValidatingFactory",
+      RDS + "?sslmode=verify-full&sslmode=disable", RDS + "?sslmode=verify-full&ssl=false",
+      "jdbc:aws-wrapper:postgresql://db.example.test:5432/folio?sslmode=require"})
   @DisplayName("A URL that names verify-full but switches the check off, or overrides it, stops the start")
-  void aUrlThatNamesVerifyFullButSwitchesTheCheckOffStopsTheStart() {
-    for (String url : new String[] {RDS + "?sslmode=verify-full&sslfactory=org.postgresql.ssl.NonValidatingFactory",
-        RDS + "?sslmode=verify-full&sslmode=disable", RDS + "?sslmode=verify-full&ssl=false",
-        "jdbc:aws-wrapper:postgresql://db.example.test:5432/folio?sslmode=require"}) {
-      assertThatThrownBy(() -> check(new MockEnvironment().withProperty("spring.datasource.url", url)))
-          .as(url).hasMessageContaining("spring.datasource.url");
-    }
+  void aUrlThatNamesVerifyFullButSwitchesTheCheckOffStopsTheStart(String url) {
+    assertThatThrownBy(() -> check(new MockEnvironment().withProperty("spring.datasource.url", url))).hasMessageContaining("spring.datasource.url");
+  }
+
+  /** Split from the test above in phase 21: the pool's own data source properties can lower what the URL asks for. */
+  @Test
+  @DisplayName("A pool setting that lowers sslmode below verify-full stops the start")
+  void aPoolSettingThatLowersSslmodeStopsTheStart() {
     MockEnvironment pooled = new MockEnvironment().withProperty("spring.datasource.url", RDS + "?sslmode=verify-full")
         .withProperty("spring.datasource.hikari.data-source-properties.sslmode", "require");
-    assertThatThrownBy(() -> check(pooled)).as("a pool setting that lowers it").hasMessageContaining("spring.datasource.url");
-    assertThatCode(() -> check(new MockEnvironment().withProperty("spring.datasource.url",
-        "jdbc:aws-wrapper:postgresql://db.example.test:5432/folio?sslmode=verify-full"))).as("a wrapped driver, verified").doesNotThrowAnyException();
+    assertThatThrownBy(() -> check(pooled)).hasMessageContaining("spring.datasource.url");
   }
 
   /** Fails if the signing keys can be fetched in the clear: whoever answers on that path could serve their own key and mint any token. */

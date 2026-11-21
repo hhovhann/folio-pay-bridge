@@ -14,6 +14,8 @@ import java.util.Iterator;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -62,16 +64,15 @@ class OpenApiContractTest {
     assertThat(acceptingPan).containsExactly("POST /api/v1/cards");
   }
 
-  @Test
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(strings = {"CardResponse", "ChargeView", "PostingView", "PaymentResponse", "LinkView"})
   @DisplayName("No response schema carries a card number or the card token")
-  void noResponseSchemaCarriesACardNumberOrTheCardToken() throws Exception {
-    JsonNode schemas = served().path("components").path("schemas");
-    for (String name : List.of("CardResponse", "ChargeView", "PostingView", "PaymentResponse", "LinkView")) {
-      assertThat(schemas.has(name)).as("%s is documented", name).isTrue();
-      Iterator<String> fields = schemas.path(name).path("properties").fieldNames();
-      while (fields.hasNext()) {
-        assertThat(fields.next().toLowerCase()).as("%s must not expose card data", name).isNotIn("pan", "cardnumber", "cardtoken", "cvv");
-      }
+  void noResponseSchemaCarriesACardNumberOrTheCardToken(String name) throws Exception {
+    JsonNode schema = served().path("components").path("schemas").path(name);
+    assertThat(schema.isMissingNode()).as("%s is documented", name).isFalse();
+    Iterator<String> fields = schema.path("properties").fieldNames();
+    while (fields.hasNext()) {
+      assertThat(fields.next().toLowerCase()).isNotIn("pan", "cardnumber", "cardtoken", "cvv");
     }
   }
 

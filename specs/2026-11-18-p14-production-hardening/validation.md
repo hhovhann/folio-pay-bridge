@@ -4,7 +4,7 @@
 - [x] `ChargeServiceImplTest.anUnexpectedErrorIsSavedAsPendingAndKeepsTheHoldBecauseTheCaptureMayHaveHappened`
 - [x] `HttpAdapterRepliesTest.aCaptureTheProcessorRefusesIsARejectionWithItsCodeSoTheChargeCanReleaseTheHold`
 - [x] `HttpAdapterRepliesTest.aKeyReusedWithADifferentRequestIsFinalNotWaitedOut`
-- [x] `HttpAdapterRepliesTest.aTruncatedOrNonJsonRejectionFromOperaIsStillARejectionNotACrash`
+- [x] `HttpAdapterRepliesTest.aTruncatedOrNonJsonRejectionFromOperaIsStillARejectionNotACrash`, `HttpAdapterRepliesTest.aProblemDetailRejectionFromOperaKeepsItsErrorCode`
 - [x] `HttpAdapterRepliesTest.aFoundPaymentWithoutATransactionNumberIsNeitherPostedAgainNorRecordedAsPosted`
 - [x] `PostingServiceImplTest.aRequestWhoseLeaseRanOutAndWasTakenOverDoesNotPostAndDoesNotOverwriteTheNewHolder`
 - [x] `PostingServiceImplTest.theLeaseIsRenewedByItsOwnerRightBeforeEveryPostIncludingRetries`

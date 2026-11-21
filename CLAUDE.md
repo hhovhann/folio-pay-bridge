@@ -42,6 +42,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
   - Success, refusal and edge cases.
   - Spring settings from the `test` profile (`src/test/resources/application-test.properties`); test data inline. Never `.env`.
   - A configured value is proved by a test that sets another.
+  - Several inputs for one behaviour: a `@ParameterizedTest` named after its input, never a loop in one test (`CleanCodeTest`).
 - Close the loop: every agent-log entry is cited, as `(log N)`, by the rule in `docs/engineering-standards.md` or the test that now prevents it; `tools/check_specs.py` fails otherwise. Prefer a test or a tool over a written rule: the mistakes that stopped repeating are the ones a build catches.
 
 ## Structure (see D-14)
@@ -50,7 +51,7 @@ This is a payments codebase in miniature. Treat every change as one that touches
 ## Commands
 ```bash
 export JAVA_HOME=<a JDK 17>
-./mvnw test                      # 557 backend tests + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
+./mvnw test                      # 619 backend test runs + the dashboard's tests; ./mvnw verify adds the coverage gate; -DskipDashboard=true for a backend-only loop
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=demo   # http://127.0.0.1:8081 (demo profile: local keys, fake PSP/PMS controls)
 python3 tools/check_specs.py     # needs the test reports from ./mvnw test
 python3 tools/guard_secrets.py --repo   # no card number or secret anywhere (also a Claude Code hook and a CI step)

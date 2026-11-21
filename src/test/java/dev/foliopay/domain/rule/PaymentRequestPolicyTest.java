@@ -9,6 +9,8 @@ import java.time.LocalDate;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 @DisplayName("Payment request policy: how much is asked, and when, for each rate plan")
 class PaymentRequestPolicyTest {
@@ -80,12 +82,11 @@ class PaymentRequestPolicyTest {
         .as("inside its own 14-day window, not the default 7").isEqualTo(100_000);
   }
 
-  @Test
+  @ParameterizedTest(name = "{0}% due {1} days before arrival")
+  @CsvSource({"0, 7", "101, 7", "20, 0"})
   @DisplayName("A policy that asks nothing, more than everything, or on the day of arrival is refused at start-up")
-  void aPolicyOutsideItsBoundsIsRefused() {
-    for (int[] wrong : new int[][] {{0, 7}, {101, 7}, {20, 0}}) {
-      Assertions.assertThatThrownBy(() -> new PaymentRequestPolicy(wrong[0], wrong[1])).isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("foliopay.payment-request");
-    }
+  void aPolicyOutsideItsBoundsIsRefused(int percent, int leadDays) {
+    Assertions.assertThatThrownBy(() -> new PaymentRequestPolicy(percent, leadDays)).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("foliopay.payment-request");
   }
 }

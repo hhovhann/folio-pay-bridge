@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionStatementTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.IdentifierTree;
@@ -11,8 +12,10 @@ import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.NewArrayTree;
 import com.sun.source.tree.StatementTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.VariableTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.SourcePositions;
 import com.sun.source.util.TreeScanner;
@@ -22,6 +25,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -42,6 +46,9 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Clean code and safe logging: what the syntax tree of the main code must show")
 class CleanCodeTest {
   private static final Path MAIN = Path.of("src/main/java");
+  private static final Path TEST = Path.of("src/test/java");
+  /** Methods that make a list out of the values written in their arguments. */
+  private static final Set<String> WRITTEN_OUT = Set.of("List.of", "Set.of", "Stream.of", "Arrays.asList", "Map.of");
   static final int MAX_PARAMETERS = 4;
   static final int MAX_METHOD_LINES = 30;
   static final int MAX_CLASS_LINES = 300;
@@ -81,7 +88,7 @@ class CleanCodeTest {
     }
 
     String path() {
-      return tree.getSourceFile().getName().replaceAll(".*src/main/java/", "");
+      return tree.getSourceFile().getName().replaceAll(".*src/(main|test)/java/", "");
     }
   }
 
@@ -232,6 +239,70 @@ class CleanCodeTest {
         && call.getMethodSelect() instanceof MemberSelectTree select && select.getIdentifier().contentEquals("debug")
         && !call.getArguments().isEmpty() && call.getArguments().get(0) instanceof LiteralTree text
         && String.valueOf(text.getValue()).startsWith(method + "(");
+  }
+
+  /**
+   * Fails if a plain test loops over inputs it writes out (an array, a {@code List.of}) and asserts in the loop. Each input is then a case
+   * of its own: a {@code @ParameterizedTest} reports each one and fails for each one, where a loop stops at the first failing input and
+   * hides which it was. A loop over one outcome (every row a query returned, every log event of one flow) is one case and stays a loop.
+   */
+  @Test
+  @DisplayName("A test with several written-out inputs is parameterized, so each input is reported on its own")
+  void aTestWithSeveralWrittenOutInputsIsParameterized() {
+    List<String> loops = new ArrayList<>();
+    eachMethod(parse(TEST), (unit, type, method) -> {
+      boolean plainTest = method.getModifiers().getAnnotations().stream()
+          .anyMatch(a -> a.getAnnotationType().toString().equals("Test") || a.getAnnotationType().toString().endsWith(".Test"));
+      if (!plainTest || method.getBody() == null) {
+        return;
+      }
+      // A table of inputs is often written into a local first: a loop over that name is a loop over written-out inputs too.
+      Set<String> tables = new HashSet<>();
+      new TreeScanner<Void, Void>() {
+        @Override
+        public Void visitVariable(VariableTree variable, Void nothing) {
+          if (variable.getInitializer() != null && writtenOut(variable.getInitializer())) {
+            tables.add(variable.getName().toString());
+          }
+          return super.visitVariable(variable, nothing);
+        }
+      }.scan(method.getBody(), null);
+      new TreeScanner<Void, Void>() {
+        boolean inputs(ExpressionTree values) {
+          return writtenOut(values) || values instanceof IdentifierTree name && tables.contains(name.getName().toString());
+        }
+
+        @Override
+        public Void visitEnhancedForLoop(EnhancedForLoopTree loop, Void nothing) {
+          if (inputs(loop.getExpression()) && asserts(loop.getStatement())) {
+            loops.add(unit.path() + ":" + unit.line(loop) + " " + type + "." + method.getName());
+          }
+          return super.visitEnhancedForLoop(loop, nothing);
+        }
+
+        @Override
+        public Void visitMethodInvocation(MethodInvocationTree call, Void nothing) {
+          if (call.getMethodSelect() instanceof MemberSelectTree select && select.getIdentifier().contentEquals("forEach")
+              && inputs(select.getExpression()) && call.getArguments().stream().anyMatch(CleanCodeTest::asserts)) {
+            loops.add(unit.path() + ":" + unit.line(call) + " " + type + "." + method.getName());
+          }
+          return super.visitMethodInvocation(call, nothing);
+        }
+      }.scan(method.getBody(), null);
+    });
+    assertThat(loops).as("make each a @ParameterizedTest with its inputs as the source").isEmpty();
+  }
+
+  static boolean writtenOut(ExpressionTree values) {
+    if (values instanceof NewArrayTree array) {
+      return array.getInitializers() != null;
+    }
+    return values instanceof MethodInvocationTree call && call.getMethodSelect() instanceof MemberSelectTree select
+        && WRITTEN_OUT.contains(select.getExpression() + "." + select.getIdentifier());
+  }
+
+  private static boolean asserts(Tree body) {
+    return body != null && body.toString().contains("assert");
   }
 
   @Test

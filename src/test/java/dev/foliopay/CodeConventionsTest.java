@@ -28,7 +28,7 @@ class CodeConventionsTest {
   private static final Path MAIN = Path.of("src/main/java");
   private static final Path TEST = Path.of("src/test/java");
   /** Lines over 150 characters in src/main and src/test today. New code stays under 150 (section 3), so this may only go down. */
-  private static final int LINES_OVER_150_TODAY = 184;
+  private static final int LINES_OVER_150_TODAY = 182;
   private static final Pattern TEST_ANNOTATION = Pattern.compile("@(?:[\\w.]+\\.)?(?:Test|ParameterizedTest|RepeatedTest|TestFactory)(?![\\w.])");
   private static final Pattern DISPLAY_NAME = Pattern.compile("@(?:[\\w.]+\\.)?DisplayName\\(\"((?:\\\\.|[^\"\\\\])*)\"\\)");
   private static final Pattern MEMBER_NAME = Pattern.compile("(?<![@\\w.])(\\w+)\\s*\\(");
