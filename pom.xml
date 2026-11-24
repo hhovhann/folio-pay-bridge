@@ -14,14 +14,14 @@
   <description>Hotel payments slice: virtual-card charging and folio posting, PCI-minded, with shadow mode against a legacy stand-in</description>
   <properties>
     <java.version>17</java.version>
-    <awssdk.version>2.54.10</awssdk.version>
-    <resilience4j.version>2.2.0</resilience4j.version>
-    <springdoc.version>2.10.0</springdoc.version>
+    <awssdk.version>2.59.7</awssdk.version>
+    <resilience4j.version>2.4.0</resilience4j.version>
+    <springdoc.version>2.10.1</springdoc.version>
     <jacoco.version>0.8.16</jacoco.version>
     <json-schema-validator.version>2.0.4</json-schema-validator.version>
     <!-- Rule checks on every build (phase 22, owner-approved): ArchUnit reads the compiled classes for the architecture rules; its
          slf4j-api is the version Spring Boot manages. Checkstyle 12 is the newest line that runs on Java 17 (13 and later need 21). -->
-    <archunit.version>1.5.0</archunit.version>
+    <archunit.version>1.5.1</archunit.version>
     <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
     <checkstyle.version>12.3.1</checkstyle.version>
     <!-- The operator dashboard (dashboard/, React + TypeScript) is built and tested with a pinned Node by frontend-maven-plugin. -->
